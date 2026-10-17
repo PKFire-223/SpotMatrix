@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
+import React, { useState } from 'react';
 import { fallbackMemoryNodes } from '../Database/MongoConnection';
 import { BookingPayloadItem, WorkspaceNodeItem } from '../Types/GlobalSystemTypes';
 import { ErrorBoundaryLayout } from '../../Error/Layout/ErrorBoundaryLayout';
@@ -58,16 +58,21 @@ export const AppRouter: React.FC = () => {
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
         <header className="sticky top-0 z-30 backdrop-blur-md bg-slate-950/85 border-b border-slate-800 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-  <SpotMatrixLogo theme="dark" variant="full" />
-  <div className="hidden md:block pl-3 border-l border-slate-800">
-    <p className="text-xs font-semibold text-slate-300">
-      2D Interactive Floorplan & Workspace Reservation
-    </p>
-    <p className="text-[10px] text-slate-500">
-      Real-Time Matrix State • Concurrency Control • Mobile / iPad / Desktop
-    </p>
-  </div>
-</div>
+            <SpotMatrixLogo theme="dark" variant="full" />
+            <div className="hidden md:block pl-3 border-l border-slate-800">
+              <p className="text-xs font-semibold text-slate-300">
+                2D Interactive Floorplan & Workspace Reservation
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Real-Time Matrix State • Concurrency Control • Mobile / iPad / Desktop
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              System Online
+            </span>
+          </div>
         </header>
 
         <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-5">

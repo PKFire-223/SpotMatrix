@@ -2,7 +2,7 @@
   "name": "spotmatrix-workspace-platform",
   "version": "1.0.0",
   "private": true,
-  "description": "Enterprise Data Management & 2D/3D Interactive Workspace Booking System (Feature-Driven Architecture)",
+  "description": "SpotMatrix — Enterprise Data Management & 2D Interactive Workspace Booking System with Real-Time Matrix Concurrency",
   "type": "module",
   "scripts": {
     "dev": "concurrently -n \"CLIENT,SERVER\" -c \"cyan,green\" \"vite\" \"tsx watch Shared/Runtime/ServerEntry.ts\"",
