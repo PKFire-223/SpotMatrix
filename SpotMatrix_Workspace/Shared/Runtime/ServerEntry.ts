@@ -10,10 +10,12 @@ import { datamanagerRouter } from '../../Main/Datamanager/Function/Routes/Datama
 import { authRouter } from '../../Main/Auth/Function/Routes/AuthRoutes';
 import { healthCheckRouter } from '../../Error/Function/Routes/HealthCheckRoutes';
 import { handleGlobalException } from '../../Error/Function/Middlewares/GlobalErrorMiddleware';
+import { seedDefaultAccountsToMongo } from '../../Main/Auth/Function/Services/AuthService';
 
 async function bootstrapBackendServer(): Promise<void> {
   const envConfig = loadSystemEnvConfig();
   await connectMongoDatabase();
+  await seedDefaultAccountsToMongo();
 
   const appServer = express();
 
@@ -37,7 +39,7 @@ async function bootstrapBackendServer(): Promise<void> {
 
   appServer.listen(envConfig.serverPort, () => {
     console.log(
-      `[SmartSpace Backend] Server dang chay tai http://localhost:${envConfig.serverPort}/api/v1/system/health`
+      `[SpotMatrix Backend] Server dang chay tai http://localhost:${envConfig.serverPort}/api/v1/system/health`
     );
   });
 }
