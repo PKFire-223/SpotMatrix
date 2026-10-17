@@ -15,12 +15,11 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
     "paths": {
-      "@Main/*": ["Main/*"],
-      "@Ai/*": ["Ai/*"],
-      "@Error/*": ["Error/*"],
-      "@Shared/*": ["Shared/*"]
+      "@Main/*": ["./Main/*"],
+      "@Ai/*": ["./Ai/*"],
+      "@Error/*": ["./Error/*"],
+      "@Shared/*": ["./Shared/*"]
     }
   },
   "include": ["Main", "Ai", "Error", "Shared"]
