@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -7,7 +7,6 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
-import { fallbackMemoryNodes } from '../Database/MongoConnection';
 import { BookingPayloadItem, WorkspaceNodeItem } from '../Types/GlobalSystemTypes';
 import { ErrorBoundaryLayout } from '../../Error/Layout/ErrorBoundaryLayout';
 import { ToastAlertBanner } from '../../Error/Function/Components/ToastAlertBanner';
@@ -17,8 +16,76 @@ import { FloorplanMainPages } from '../../Main/Floorplan/Pages/FloorplanMainPage
 import { BookingCalendarPages } from '../../Main/Booking/Pages/BookingCalendarPages';
 import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/LoginPages';
 
-// Dung sessionStorage de moi lan mo trinh duyet moi se luon bat dau tu trang /login
 const SESSION_STORAGE_KEY = 'spotmatrix_active_session_v2';
+
+// Du lieu khoi tao an toan cho Trinh duyet (Khong import tu MongoConnection cua Backend)
+const INITIAL_BROWSER_NODES: WorkspaceNodeItem[] = [
+  {
+    nodeId: 'NODE-A01',
+    nodeCode: 'A-01',
+    nodeLabel: 'Bàn Dev Dual-Monitor A01',
+    zoneType: 'DESK_POD',
+    floorLevel: 1,
+    position2D: { posX: 90, posY: 110 },
+    position3D: { coordX: -2.2, coordY: 0.4, coordZ: -1.2 },
+    capacityCount: 1,
+    status: 'AVAILABLE',
+    amenitiesList: ['Màn hình 4K', 'Cổng Type-C 100W', 'Ghế Công thái học'],
+    aiScore: 96,
+  },
+  {
+    nodeId: 'NODE-A02',
+    nodeCode: 'A-02',
+    nodeLabel: 'Bàn Thiết kế Đồ họa A02',
+    zoneType: 'DESK_POD',
+    floorLevel: 1,
+    position2D: { posX: 220, posY: 110 },
+    position3D: { coordX: 0, coordY: 0.4, coordZ: -1.2 },
+    capacityCount: 1,
+    status: 'OCCUPIED',
+    amenitiesList: ['Màn hình Chuẩn màu', 'Bảng vẽ Wacom'],
+    aiScore: 78,
+  },
+  {
+    nodeId: 'NODE-M01',
+    nodeCode: 'M-01',
+    nodeLabel: 'Phòng Họp Kính 3D Boardroom',
+    zoneType: 'MEETING_ROOM',
+    floorLevel: 1,
+    position2D: { posX: 370, posY: 130 },
+    position3D: { coordX: 2.2, coordY: 0.6, coordZ: -0.8 },
+    capacityCount: 8,
+    status: 'AVAILABLE',
+    amenitiesList: ['Tivi 85 inch', 'Camera AI 360', 'Bảng trắng KTS'],
+    aiScore: 92,
+  },
+  {
+    nodeId: 'NODE-F01',
+    nodeCode: 'F-01',
+    nodeLabel: 'Silent Focus Booth F01',
+    zoneType: 'FOCUS_BOOTH',
+    floorLevel: 1,
+    position2D: { posX: 140, posY: 250 },
+    position3D: { coordX: -1.4, coordY: 0.5, coordZ: 1.4 },
+    capacityCount: 1,
+    status: 'RESERVED',
+    amenitiesList: ['Cách âm 40dB', 'Đèn đổi nhiệt độ màu'],
+    aiScore: 88,
+  },
+  {
+    nodeId: 'NODE-C01',
+    nodeCode: 'C-01',
+    nodeLabel: 'Không gian Sáng tạo Collab Hub',
+    zoneType: 'COLLAB_HUB',
+    floorLevel: 1,
+    position2D: { posX: 310, posY: 255 },
+    position3D: { coordX: 1.5, coordY: 0.45, coordZ: 1.4 },
+    capacityCount: 6,
+    status: 'AVAILABLE',
+    amenitiesList: ['Sofa Module', 'Máy chiếu Laser', 'Ổ cắm âm sàn'],
+    aiScore: 94,
+  },
+];
 
 const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
@@ -36,9 +103,10 @@ const MainWorkspaceRoutes: React.FC = () => {
     'OVERVIEW' | 'FLOORPLAN' | 'BOOKING'
   >('OVERVIEW');
 
-  const [workspaceNodes, setWorkspaceNodes] = useState<WorkspaceNodeItem[]>(fallbackMemoryNodes);
+  const [workspaceNodes, setWorkspaceNodes] =
+    useState<WorkspaceNodeItem[]>(INITIAL_BROWSER_NODES);
   const [selectedNode, setSelectedNode] = useState<WorkspaceNodeItem | null>(
-    fallbackMemoryNodes[0]
+    INITIAL_BROWSER_NODES[0]
   );
   const [bookingsList, setBookingsList] = useState<BookingPayloadItem[]>([
     {
@@ -52,6 +120,22 @@ const MainWorkspaceRoutes: React.FC = () => {
     },
   ]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Dong bo danh sach ban tu Backend API khi da dang nhap
+  useEffect(() => {
+    if (!userSession) return;
+    fetch('/api/v1/floorplan/nodes')
+      .then((res) => res.json())
+      .then((payload) => {
+        if (payload?.success && Array.isArray(payload.data) && payload.data.length > 0) {
+          setWorkspaceNodes(payload.data);
+          setSelectedNode(payload.data[0]);
+        }
+      })
+      .catch(() => {
+        // Giu nguyen INITIAL_BROWSER_NODES neu API dang ban
+      });
+  }, [userSession]);
 
   const handleLoginSuccess = (sessionData: AuthenticatedUserSession) => {
     setUserSession(sessionData);
@@ -107,7 +191,6 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   return (
     <Routes>
-      {/* 1. TRANG MO DAU TIEN: /login */}
       <Route
         path="/login"
         element={
@@ -119,7 +202,6 @@ const MainWorkspaceRoutes: React.FC = () => {
         }
       />
 
-      {/* 2. TRANG TONG QUAN SAU KHI DANG NHAP: /dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -194,7 +276,6 @@ const MainWorkspaceRoutes: React.FC = () => {
               </header>
 
               <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-5">
-                {/* Banner Chao mung tren Trang Tong Quan */}
                 <div className="bg-gradient-to-r from-slate-900 via-indigo-950/50 to-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
@@ -271,7 +352,6 @@ const MainWorkspaceRoutes: React.FC = () => {
         }
       />
 
-      {/* 3. MAC DINH MOI DUONG DAN GOC (/) SE CHUYEN VE /login NEU CHUA DANG NHAP */}
       <Route
         path="*"
         element={<Navigate to={userSession ? '/dashboard' : '/login'} replace />}

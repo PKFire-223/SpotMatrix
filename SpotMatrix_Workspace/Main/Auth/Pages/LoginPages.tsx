@@ -1,4 +1,25 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Sun,
+  Moon,
+  Sparkles,
+  ShieldCheck,
+  Clock,
+  QrCode,
+  Layers,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  Lock,
+  Mail,
+  User,
+  Building2,
+  KeyRound,
+  Activity,
+  Zap,
+} from 'lucide-react';
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 import { UserRoleType } from '../../../Shared/Types/GlobalSystemTypes';
 
@@ -21,12 +42,97 @@ interface LoginPagesProps {
 
 type AuthTabMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
 
+interface SimulatedSpotCell {
+  code: string;
+  label: string;
+  zone: string;
+  status: 'AVAILABLE' | 'HOLDING' | 'BOOKED' | 'OCCUPIED';
+  timerText?: string;
+  aiMatch: number;
+}
+
+const INITIAL_MATRIX_CELLS: SimulatedSpotCell[] = [
+  { code: 'A-01', label: 'Desk Pod 4K', zone: 'Zone A', status: 'AVAILABLE', aiMatch: 98 },
+  { code: 'A-02', label: 'Dev Station', zone: 'Zone A', status: 'OCCUPIED', aiMatch: 89 },
+  { code: 'A-03', label: 'Ergo Desk', zone: 'Zone A', status: 'HOLDING', timerText: '04:42', aiMatch: 94 },
+  { code: 'M-01', label: 'Boardroom 8P', zone: 'Zone M', status: 'AVAILABLE', aiMatch: 96 },
+  { code: 'F-01', label: 'Focus Booth', zone: 'Silent', status: 'BOOKED', timerText: '14:00', aiMatch: 91 },
+  { code: 'C-01', label: 'Collab Hub 6P', zone: 'Creative', status: 'AVAILABLE', aiMatch: 95 },
+  { code: 'B-01', label: 'Design Wacom', zone: 'Zone B', status: 'AVAILABLE', aiMatch: 92 },
+  { code: 'B-02', label: 'Dual Screen', zone: 'Zone B', status: 'HOLDING', timerText: '03:18', aiMatch: 87 },
+  { code: 'M-02', label: 'Pitch Room', zone: 'Zone M', status: 'OCCUPIED', aiMatch: 90 },
+];
+
 export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
+  // Mac dinh la che do SANG ('light'), cho phep chuyen doi SANG / TOI muot ma
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('spotmatrix_theme_mode');
+    return saved === 'dark' ? 'dark' : 'light';
+  });
+
+  const isDark = themeMode === 'dark';
+
+  const toggleThemeMode = () => {
+    const nextTheme = isDark ? 'light' : 'dark';
+    setThemeMode(nextTheme);
+    localStorage.setItem('spotmatrix_theme_mode', nextTheme);
+  };
+
   const [activeTab, setActiveTab] = useState<AuthTabMode>('LOGIN');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  // Hieu ung dong cho Ma tran 2D ben trai (tu dong chuyen trang thai de mo phong Real-time SSE)
+  const [matrixCells, setMatrixCells] = useState<SimulatedSpotCell[]>(INITIAL_MATRIX_CELLS);
+  const [activeFeedIndex, setActiveFeedIndex] = useState(0);
+
+  const liveActivityFeeds = [
+    {
+      icon: Zap,
+      badge: 'Optimistic Lock v2',
+      text: 'Nguyễn Minh Quân vừa giữ chỗ bàn A-03 (Đếm ngược 05:00 phút)',
+      color: 'text-amber-500',
+    },
+    {
+      icon: QrCode,
+      badge: 'QR Check-in +2đ',
+      text: 'Lê Thu Hà quét QR đúng giờ tại Phòng họp M-02 (Tín nhiệm: 100đ)',
+      color: 'text-emerald-500',
+    },
+    {
+      icon: ShieldCheck,
+      badge: 'Auto-Release Cron',
+      text: 'Hệ thống tự động giải phóng bàn B-01 do quá 15 phút không Check-in',
+      color: 'text-indigo-500',
+    },
+  ];
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setActiveFeedIndex((prev) => (prev + 1) % liveActivityFeeds.length);
+      setMatrixCells((prevCells) =>
+        prevCells.map((cell, idx) => {
+          if (idx === 0) {
+            return {
+              ...cell,
+              status: cell.status === 'AVAILABLE' ? 'HOLDING' : 'AVAILABLE',
+              timerText: cell.status === 'AVAILABLE' ? '04:59' : undefined,
+            };
+          }
+          if (idx === 5) {
+            return {
+              ...cell,
+              status: cell.status === 'AVAILABLE' ? 'BOOKED' : 'AVAILABLE',
+            };
+          }
+          return cell;
+        })
+      );
+    }, 3200);
+    return () => clearInterval(intervalId);
+  }, [liveActivityFeeds.length]);
 
   // Login State
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -72,7 +178,7 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
   const handleQuickFillDemoAccount = (username: string, pass: string) => {
     setActiveTab('LOGIN');
     setErrorBanner(null);
-    setSuccessBanner(null);
+    setSuccessBanner(`Đã điền nhanh tài khoản mẫu "${username}". Bấm Đăng nhập để vào hệ thống!`);
     setLoginIdentifier(username);
     setLoginPassword(pass);
   };
@@ -209,127 +315,322 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const CurrentFeedIcon = liveActivityFeeds[activeFeedIndex].icon;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center relative overflow-hidden py-8 px-4 sm:px-6 lg:px-8">
-      {/* Hieu ung anh sang nen (Ambient Matrix Glow) */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl" />
-        <div className="absolute top-1/3 -right-32 w-96 h-96 rounded-full bg-emerald-500/15 blur-3xl" />
-        <div className="absolute -bottom-40 left-1/3 w-96 h-96 rounded-full bg-blue-600/15 blur-3xl" />
-      </div>
+    <div
+      className={`min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 transition-colors duration-300 ${
+        isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+      }`}
+    >
+      {/* =====================================================================
+          NUA BEN TRAI (7/12 COT): KHONG GIAN GIOI THIEU DAC BIET + HIEU UNG DONG
+         ===================================================================== */}
+      <div
+        className={`lg:col-span-7 relative overflow-hidden flex flex-col justify-between p-6 sm:p-10 xl:p-14 border-b lg:border-b-0 lg:border-r transition-colors duration-300 ${
+          isDark
+            ? 'bg-gradient-to-br from-slate-900 via-indigo-950/80 to-slate-950 border-slate-800'
+            : 'bg-gradient-to-br from-indigo-50/90 via-white to-emerald-50/70 border-slate-200/80'
+        }`}
+      >
+        {/* Luoi Toa do Matrix Trang tri Toan Man Hinh */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            backgroundImage: isDark
+              ? 'radial-gradient(rgba(99, 102, 241, 0.28) 1.5px, transparent 1.5px)'
+              : 'radial-gradient(rgba(79, 70, 229, 0.18) 1.5px, transparent 1.5px)',
+            backgroundSize: '28px 28px',
+          }}
+        />
 
-      <div className="relative z-10 max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 bg-slate-900/80 backdrop-blur-xl border border-slate-800/90 rounded-3xl shadow-2xl overflow-hidden">
-        {/* COT TRAI: BRAND SHOWCASE & DEMO ROLE MATRIX */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 via-indigo-950/60 to-slate-950 p-6 sm:p-10 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800">
-          <div className="space-y-6">
-            <SpotMatrixLogo theme="dark" variant="full" />
+        {/* Qua cau anh sang chuyen dong mem mai phia sau */}
+        <div
+          className={`pointer-events-none absolute -top-24 -left-24 w-96 h-96 rounded-full blur-3xl animate-float-slow ${
+            isDark ? 'bg-indigo-600/25' : 'bg-indigo-400/25'
+          }`}
+        />
+        <div
+          className={`pointer-events-none absolute bottom-10 right-10 w-80 h-80 rounded-full blur-3xl animate-float-reverse ${
+            isDark ? 'bg-emerald-500/20' : 'bg-emerald-400/25'
+          }`}
+        />
 
-            <div className="space-y-2 pt-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                Spatial Workspace Matrix v2.0
+        {/* HANG TREN CUNG: LOGO SPOTMATRIX & TRANG THAI SERVER */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+          <SpotMatrixLogo theme={isDark ? 'dark' : 'light'} variant="full" />
+
+          <div
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border shadow-sm backdrop-blur-md ${
+              isDark
+                ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300'
+                : 'bg-white/90 border-emerald-200 text-emerald-700'
+            }`}
+          >
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            MongoDB Atlas Online • Real-Time 2D Engine
+          </div>
+        </div>
+
+        {/* KHU VUC TRUNG TAM: TIEU DE LON + BAN DO MA TRAN 2D TUONG TAC DONG */}
+        <div className="relative z-10 my-8 space-y-6">
+          <div className="max-w-2xl space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              Smart Workspace & Floorplan Matrix Platform
+            </div>
+            <h1
+              className={`text-3xl sm:text-4xl xl:text-5xl font-black tracking-tight leading-[1.15] ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              Đặt chỗ Không gian Làm việc Trực tiếp trên{' '}
+              <span className="bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 bg-clip-text text-transparent">
+                Sơ đồ Mặt bằng 2D
               </span>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight leading-snug">
-                Quản lý Dữ liệu & Đặt chỗ Mặt bằng 2D Thời gian thực
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Hệ thống kiểm soát đồng thời (Optimistic Locking), giữ chỗ thông minh 5 phút, tự động thu hồi No-Show sau 15 phút và tính điểm tín nhiệm người dùng.
-              </p>
-            </div>
-
-            {/* Minh hoa truc quan Ma tran trang thai ghe */}
-            <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-200">Trạng thái Sơ đồ Tầng 1 (Live)</span>
-                <span className="text-emerald-400 font-semibold">MongoDB Connected</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[11px]">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-semibold">
-                  <div className="text-base font-extrabold text-white">A-01</div>
-                  Trống • AI 96%
-                </div>
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-semibold">
-                  <div className="text-base font-extrabold text-white">F-01</div>
-                  Giữ chỗ (04:12)
-                </div>
-                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-semibold">
-                  <div className="text-base font-extrabold text-white">M-01</div>
-                  Phòng họp 8P
-                </div>
-              </div>
-            </div>
+            </h1>
+            <p
+              className={`text-sm sm:text-base leading-relaxed ${
+                isDark ? 'text-slate-300' : 'text-slate-600'
+              }`}
+            >
+              Giải quyết triệt để bài toán đặt trùng ghế bằng <strong>Optimistic Locking</strong>, tự động giữ chỗ tạm thời <strong>5 phút</strong>, quét mã <strong>QR Check-in</strong> cộng điểm tín nhiệm và thu hồi vị trí bỏ trống sau <strong>15 phút</strong>.
+            </p>
           </div>
 
-          {/* KHU VUC DIEN NHANH TAI KHOAN MAU CHO DEV TEST */}
-          <div className="mt-8 pt-6 border-t border-slate-800/80 space-y-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-              Chế độ Điền nhanh Tài khoản Mẫu (1-Click Test)
-            </p>
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFillDemoAccount('Systemadmin123', 'Password123')}
-                className="w-full text-left px-3.5 py-2.5 rounded-xl bg-slate-950/90 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
-              >
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-indigo-300">
-                    1. Admin Hệ thống (SYS_ADMIN)
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    TK: <code className="text-emerald-300">Systemadmin123</code> • MK:{' '}
-                    <code className="text-emerald-300">Password123</code>
-                  </p>
+          {/* MO HINH MA TRAN SO DO 2D DONG (LIVE INTERACTIVE RADAR SHOWCASE) */}
+          <div className="relative">
+            {/* The Floating Card 1: Thong bao Real-time ben tren */}
+            <div
+              className={`mb-3 p-3.5 rounded-2xl border shadow-lg backdrop-blur-md flex items-center gap-3 transition-all duration-500 animate-float-slow ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-700/80 text-slate-100'
+                  : 'bg-white/95 border-indigo-100 text-slate-800 shadow-indigo-500/5'
+              }`}
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-600/10 flex items-center justify-center shrink-0">
+                <CurrentFeedIcon className={`w-5 h-5 ${liveActivityFeeds[activeFeedIndex].color}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    {liveActivityFeeds[activeFeedIndex].badge}
+                  </span>
+                  <span className="text-[10px] text-slate-400">• Vừa xong</span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold">
-                  FULL QUYỀN
-                </span>
-              </button>
+                <p className="text-xs sm:text-sm font-semibold truncate">
+                  {liveActivityFeeds[activeFeedIndex].text}
+                </p>
+              </div>
+            </div>
 
-              <button
-                type="button"
-                onClick={() => handleQuickFillDemoAccount('Managerlead123', 'Password123')}
-                className="w-full text-left px-3.5 py-2.5 rounded-xl bg-slate-950/90 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
-              >
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-indigo-300">
-                    2. Quản lý Không gian (MANAGER)
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    TK: <code className="text-cyan-300">Managerlead123</code> • MK:{' '}
-                    <code className="text-cyan-300">Password123</code>
-                  </p>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
-                  QUẢN LÝ
-                </span>
-              </button>
+            {/* Khung Ban do Mat bang 2D co Tia Quet Radar */}
+            <div
+              className={`relative rounded-3xl border p-4 sm:p-5 overflow-hidden shadow-xl transition-colors ${
+                isDark
+                  ? 'bg-slate-900/85 border-slate-800 shadow-black/40'
+                  : 'bg-white/90 border-slate-200/90 shadow-indigo-500/10'
+              }`}
+            >
+              {/* Tia quet Radar chuyen dong doc */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-transparent via-indigo-500/10 to-emerald-500/20 border-b border-emerald-400/40 animate-radar-sweep" />
 
-              <button
-                type="button"
-                onClick={() => handleQuickFillDemoAccount('Employeedev123', 'Password123')}
-                className="w-full text-left px-3.5 py-2.5 rounded-xl bg-slate-950/90 hover:bg-indigo-950/60 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
-              >
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-indigo-300">
-                    3. Nhân viên Văn phòng (EMPLOYEE)
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    TK: <code className="text-indigo-300">Employeedev123</code> • MK:{' '}
-                    <code className="text-indigo-300">Password123</code>
-                  </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider">
+                    Mô phỏng Mặt bằng Tầng 1 — Live Matrix 2D
+                  </span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                  NHÂN VIÊN
-                </span>
-              </button>
+                <div className="flex items-center gap-3 text-[11px] font-semibold">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" /> Trống
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" /> Giữ 5p
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> Đã đặt
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" /> Đang ngồi
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+                {matrixCells.map((cell) => {
+                  const statusStyles = {
+                    AVAILABLE: isDark
+                      ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                      : 'bg-emerald-50/90 border-emerald-300 text-emerald-900',
+                    HOLDING: isDark
+                      ? 'bg-amber-950/60 border-amber-500/60 text-amber-200 animate-pulse'
+                      : 'bg-amber-50 border-amber-300 text-amber-900 animate-pulse',
+                    BOOKED: isDark
+                      ? 'bg-indigo-950/60 border-indigo-500/50 text-indigo-200'
+                      : 'bg-indigo-50/90 border-indigo-300 text-indigo-900',
+                    OCCUPIED: isDark
+                      ? 'bg-rose-950/50 border-rose-500/40 text-rose-200'
+                      : 'bg-rose-50/80 border-rose-200 text-rose-900',
+                  };
+
+                  const dotColor = {
+                    AVAILABLE: 'bg-emerald-500',
+                    HOLDING: 'bg-amber-500',
+                    BOOKED: 'bg-indigo-500',
+                    OCCUPIED: 'bg-rose-500',
+                  };
+
+                  return (
+                    <div
+                      key={cell.code}
+                      className={`p-3 rounded-2xl border transition-all duration-500 hover:scale-[1.02] flex flex-col justify-between ${statusStyles[cell.status]}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs sm:text-sm font-black tracking-tight">
+                          {cell.code}
+                        </span>
+                        <span className={`w-2.5 h-2.5 rounded-full ${dotColor[cell.status]}`} />
+                      </div>
+                      <p className="text-[11px] font-semibold opacity-85 truncate mt-0.5">
+                        {cell.label}
+                      </p>
+                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-current/10 text-[10px] font-bold">
+                        <span>{cell.zone}</span>
+                        <span>{cell.timerText ? `⏱ ${cell.timerText}` : `AI ${cell.aiMatch}%`}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* COT PHAI: FORM DANG NHAP / DANG KY / QUEN MAT KHAU */}
-        <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
-          {/* Thanh chuyen Tab */}
-          <div className="flex rounded-2xl bg-slate-950 p-1.5 border border-slate-800 mb-6">
+        {/* HANG DUOI CUNG: 3 THE DIEN NHANH TAI KHOAN MAU (1-CLICK DEMO FILL) */}
+        <div className="relative z-10 space-y-2.5 pt-4 border-t border-slate-300/60 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <span
+              className={`text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 ${
+                isDark ? 'text-indigo-400' : 'text-indigo-700'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              Chế độ Điền nhanh Tài khoản Mẫu (Click để tự điền vào ô Đăng nhập)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <button
+              type="button"
+              onClick={() => handleQuickFillDemoAccount('Systemadmin123', 'Password123')}
+              className={`p-3 rounded-2xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800 hover:border-rose-500/60'
+                  : 'bg-white border-slate-200/90 hover:border-rose-400 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-300">
+                  SYS_ADMIN
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-50" />
+              </div>
+              <p className="text-xs font-bold truncate">Systemadmin123</p>
+              <p className="text-[11px] opacity-70">MK: Password123</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickFillDemoAccount('Managerlead123', 'Password123')}
+              className={`p-3 rounded-2xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800 hover:border-amber-500/60'
+                  : 'bg-white border-slate-200/90 hover:border-amber-400 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-300">
+                  MANAGER
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-50" />
+              </div>
+              <p className="text-xs font-bold truncate">Managerlead123</p>
+              <p className="text-[11px] opacity-70">MK: Password123</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleQuickFillDemoAccount('Employeedev123', 'Password123')}
+              className={`p-3 rounded-2xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800 hover:border-emerald-500/60'
+                  : 'bg-white border-slate-200/90 hover:border-emerald-400 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                  EMPLOYEE
+                </span>
+                <ArrowRight className="w-3.5 h-3.5 opacity-50" />
+              </div>
+              <p className="text-xs font-bold truncate">Employeedev123</p>
+              <p className="text-[11px] opacity-70">MK: Password123</p>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* =====================================================================
+          NUA BEN PHAI (5/12 COT): BIEU MAU XAC THUC + NUT CHUYEN SANG / TOI
+         ===================================================================== */}
+      <div
+        className={`lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 xl:p-14 transition-colors duration-300 ${
+          isDark ? 'bg-slate-950' : 'bg-white'
+        }`}
+      >
+        {/* THANH CONG CU PHIA TREN BEN PHAI: CHUYEN CHE DO SANG / TOI */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs font-semibold opacity-75">
+            <Activity className="w-4 h-4 text-indigo-600" />
+            <span>Bảo mật PBKDF2 / Scrypt + JWT Role Guard</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all ${
+              isDark
+                ? 'bg-slate-900 border-slate-800 text-amber-300 hover:bg-slate-800'
+                : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200/70'
+            }`}
+          >
+            {isDark ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-400" />
+                Chế độ Sáng
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4 text-indigo-600" />
+                Chế độ Tối
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* KHU VUC FORM CHINH O GIUA */}
+        <div className="my-auto py-6 max-w-md w-full mx-auto space-y-6">
+          {/* Thanh Chuyen Tab: Dang nhap | Dang ky | Quen mat khau */}
+          <div
+            className={`flex rounded-2xl p-1.5 border ${
+              isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200/80'
+            }`}
+          >
             <button
               type="button"
               onClick={() => {
@@ -337,10 +638,12 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                 setErrorBanner(null);
                 setSuccessBanner(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+              className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
                 activeTab === 'LOGIN'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Đăng nhập
@@ -352,13 +655,15 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                 setErrorBanner(null);
                 setSuccessBanner(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+              className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
                 activeTab === 'REGISTER'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Đăng ký Tài khoản
+              Đăng ký Mới
             </button>
             <button
               type="button"
@@ -367,239 +672,352 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                 setErrorBanner(null);
                 setSuccessBanner(null);
               }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+              className={`flex-1 py-2.5 rounded-xl text-xs font-extrabold transition-all ${
                 activeTab === 'FORGOT_PASSWORD'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Quên mật khẩu
             </button>
           </div>
 
-          {/* Thong bao Loi / Thanh cong */}
+          {/* Banner Thong bao Loi / Thanh cong */}
           {errorBanner && (
-            <div className="mb-4 p-3.5 rounded-xl bg-rose-950/90 border border-rose-500/60 text-rose-200 text-xs font-medium flex items-center justify-between">
-              <span>⚠️ {errorBanner}</span>
-              <button onClick={() => setErrorBanner(null)} className="text-rose-300 font-bold ml-2">
+            <div
+              className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-start justify-between gap-2 ${
+                isDark
+                  ? 'bg-rose-950/80 border-rose-500/50 text-rose-200'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{errorBanner}</span>
+              </div>
+              <button onClick={() => setErrorBanner(null)} className="font-bold opacity-70">
                 ✕
               </button>
             </div>
           )}
 
           {successBanner && (
-            <div className="mb-4 p-3.5 rounded-xl bg-emerald-950/90 border border-emerald-500/60 text-emerald-200 text-xs font-medium flex items-center justify-between">
-              <span>✓ {successBanner}</span>
-              <button
-                onClick={() => setSuccessBanner(null)}
-                className="text-emerald-300 font-bold ml-2"
-              >
+            <div
+              className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-start justify-between gap-2 ${
+                isDark
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                <span>{successBanner}</span>
+              </div>
+              <button onClick={() => setSuccessBanner(null)} className="font-bold opacity-70">
                 ✕
               </button>
             </div>
           )}
 
-          {/* TAB 1: FORM DANG NHAP */}
+          {/* ===============================================================
+              TAB 1: FORM DANG NHAP
+             =============================================================== */}
           {activeTab === 'LOGIN' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4">
+            <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
-                <h2 className="text-xl font-extrabold text-white">Đăng nhập Hệ thống SpotMatrix</h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Nhập Tên tài khoản (VD: <code className="text-indigo-300">Systemadmin123</code>) hoặc địa chỉ Email của bạn
+                <h2 className="text-2xl font-black tracking-tight">
+                  Chào mừng trở lại SpotMatrix
+                </h2>
+                <p
+                  className={`text-xs sm:text-sm mt-1 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                >
+                  Đăng nhập bằng Tên tài khoản (VD:{' '}
+                  <code className="font-bold text-indigo-600 dark:text-indigo-400">
+                    Systemadmin123
+                  </code>
+                  ) hoặc Email công việc của bạn.
                 </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Tên đăng nhập hoặc Email
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Systemadmin123 hoặc email@spotmatrix.vn"
-                  value={loginIdentifier}
-                  onChange={(e) => setLoginIdentifier(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-sm text-white"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-300">Mật khẩu bảo mật</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
-                  >
-                    {showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                  </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold mb-1.5">
+                    Tên đăng nhập hoặc Email
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="Systemadmin123 hoặc email@spotmatrix.vn"
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      className={`w-full pl-10 pr-4 py-3.5 rounded-2xl border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                      }`}
+                    />
+                  </div>
                 </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Nhập mật khẩu (VD: Password123)"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-sm text-white"
-                />
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold">Mật khẩu bảo mật</label>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('FORGOT_PASSWORD')}
+                      className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      Quên mật khẩu?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Nhập mật khẩu (VD: Password123)"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className={`w-full pl-10 pr-11 py-3.5 rounded-2xl border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:bg-white'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-500"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 transition disabled:opacity-50"
+                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-600 hover:from-indigo-500 hover:to-blue-500 text-white font-extrabold text-sm shadow-xl shadow-indigo-600/25 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                {isLoading ? 'Đang xác thực dữ liệu...' : 'Đăng nhập vào Không gian Làm việc'}
+                <span>
+                  {isLoading ? 'Đang xác thực phiên làm việc...' : 'Đăng nhập vào Bảng Tổng quan'}
+                </span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           )}
 
-          {/* TAB 2: FORM DANG KY TAI KHOAN MOI (LUU VAO MONGODB) */}
+          {/* ===============================================================
+              TAB 2: FORM DANG KY TAI KHOAN MOI (LUU VAO MONGODB)
+             =============================================================== */}
           {activeTab === 'REGISTER' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            <form onSubmit={handleRegisterSubmit} className="space-y-4">
               <div>
-                <h2 className="text-xl font-extrabold text-white">Tạo Tài khoản SpotMatrix Mới</h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Dữ liệu được chuẩn hóa và lưu trực tiếp vào bảng <code className="text-emerald-400">spotmatrix_user_accounts</code> trong MongoDB (Khởi đầu với 100 điểm Tín nhiệm)
+                <h2 className="text-2xl font-black tracking-tight">Khởi tạo Tài khoản Mới</h2>
+                <p
+                  className={`text-xs mt-1 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                >
+                  Tài khoản mới được cấp ngay <strong>100 điểm Tín nhiệm</strong> và lưu chuẩn hóa vào bảng{' '}
+                  <code className="font-bold text-emerald-600 dark:text-emerald-400">
+                    spotmatrix_user_accounts
+                  </code>
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Tên đăng nhập (Username) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: Quangdev123"
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
-                  />
+                  <label className="block text-xs font-bold mb-1">Tên đăng nhập *</label>
+                  <div className="relative">
+                    <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      placeholder="VD: Quangdev123"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      className={`w-full pl-9 pr-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                      }`}
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Địa chỉ Email *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="quang@spotmatrix.vn"
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
-                  />
+                  <label className="block text-xs font-bold mb-1">Email công việc *</label>
+                  <div className="relative">
+                    <Mail className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="quang@spotmatrix.vn"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className={`w-full pl-9 pr-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-1">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Họ và Tên *
-                  </label>
+                  <label className="block text-xs font-bold mb-1">Họ và Tên *</label>
                   <input
                     type="text"
                     required
                     placeholder="Nguyễn Văn Quang"
                     value={regFullName}
                     onChange={(e) => setRegFullName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-800 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Phòng ban / Nhóm
-                  </label>
-                  <input
-                    type="text"
-                    value={regDepartment}
-                    onChange={(e) => setRegDepartment(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
-                  />
+                  <label className="block text-xs font-bold mb-1">Phòng ban</label>
+                  <div className="relative">
+                    <Building2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={regDepartment}
+                      onChange={(e) => setRegDepartment(e.target.value)}
+                      className={`w-full pl-8 pr-2.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                      }`}
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Vai trò đăng ký
-                  </label>
+                  <label className="block text-xs font-bold mb-1">Vai trò (Role)</label>
                   <select
                     value={regRole}
                     onChange={(e) => setRegRole(e.target.value as UserRoleType)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
+                    className={`w-full px-2.5 py-2.5 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-800 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
                   >
-                    <option value="EMPLOYEE">Nhân viên (EMPLOYEE)</option>
-                    <option value="MANAGER">Quản lý (MANAGER)</option>
+                    <option value="EMPLOYEE">EMPLOYEE (Nhân viên)</option>
+                    <option value="MANAGER">MANAGER (Quản lý)</option>
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Mật khẩu mới *
-                  </label>
+                  <label className="block text-xs font-bold mb-1">Mật khẩu *</label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Tối thiểu 8 ký tự, Hoa, thường, số"
+                    placeholder="Từ 8 ký tự, Hoa, thường, số"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-800 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Nhập lại mật khẩu *
-                  </label>
+                  <label className="block text-xs font-bold mb-1">Xác nhận mật khẩu *</label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="Xác nhận lại mật khẩu"
+                    placeholder="Nhập lại mật khẩu"
                     value={regConfirmPassword}
                     onChange={(e) => setRegConfirmPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-xs text-white"
+                    className={`w-full px-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-800 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                    }`}
                   />
                 </div>
               </div>
 
-              {/* Thanh do do manh mat khau 4 tieu chi */}
-              <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-slate-300">
-                    Tiêu chuẩn Bảo mật Mật khẩu:
-                  </span>
-                  <span className="font-bold text-indigo-400">
-                    Đạt {passwordStrengthCount}/4 điều kiện
+              {/* Thanh Tien trinh & 4 Dieu kien Mat khau */}
+              <div
+                className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold">Độ mạnh mật khẩu:</span>
+                  <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                    {passwordStrengthCount}/4 tiêu chuẩn
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+
+                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden flex gap-1">
+                  {[1, 2, 3, 4].map((step) => (
+                    <div
+                      key={step}
+                      className={`flex-1 h-full transition-all duration-300 ${
+                        passwordStrengthCount >= step
+                          ? passwordStrengthCount === 4
+                            ? 'bg-emerald-500'
+                            : 'bg-indigo-500'
+                          : 'bg-transparent'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[11px] font-semibold">
                   <div
                     className={
-                      passwordRulesStatus.hasMinLength ? 'text-emerald-400 font-semibold' : 'text-slate-500'
+                      passwordRulesStatus.hasMinLength
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400'
                     }
                   >
                     {passwordRulesStatus.hasMinLength ? '✓' : '○'} Ít nhất 8 ký tự
                   </div>
                   <div
                     className={
-                      passwordRulesStatus.hasUppercase ? 'text-emerald-400 font-semibold' : 'text-slate-500'
+                      passwordRulesStatus.hasUppercase
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400'
                     }
                   >
                     {passwordRulesStatus.hasUppercase ? '✓' : '○'} Có chữ viết hoa (A-Z)
                   </div>
                   <div
                     className={
-                      passwordRulesStatus.hasLowercase ? 'text-emerald-400 font-semibold' : 'text-slate-500'
+                      passwordRulesStatus.hasLowercase
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400'
                     }
                   >
                     {passwordRulesStatus.hasLowercase ? '✓' : '○'} Có chữ viết thường (a-z)
                   </div>
                   <div
                     className={
-                      passwordRulesStatus.hasNumber ? 'text-emerald-400 font-semibold' : 'text-slate-500'
+                      passwordRulesStatus.hasNumber
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-slate-400'
                     }
                   >
-                    {passwordRulesStatus.hasNumber ? '✓' : '○'} Có ít nhất 1 chữ số (0-9)
+                    {passwordRulesStatus.hasNumber ? '✓' : '○'} Có chữ số (0-9)
                   </div>
                 </div>
               </div>
@@ -607,28 +1025,34 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 transition disabled:opacity-50"
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/25 transition-all hover:-translate-y-0.5"
               >
-                {isLoading ? 'Đang ghi vào MongoDB...' : 'Hoàn tất Đăng ký & Đăng nhập'}
+                {isLoading ? 'Đang đồng bộ lên MongoDB...' : 'Hoàn tất Đăng ký & Vào Hệ thống'}
               </button>
             </form>
           )}
 
-          {/* TAB 3: QUEN MAT KHAU 2 BUOC */}
+          {/* ===============================================================
+              TAB 3: QUEN MAT KHAU 2 BUOC (OTP 6 SO)
+             =============================================================== */}
           {activeTab === 'FORGOT_PASSWORD' && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-xl font-extrabold text-white">Khôi phục Mật khẩu Bảo mật</h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Bước {forgotStep}/2: Hệ thống sinh mã OTP 6 số lưu trong MongoDB (Sẵn sàng tích hợp gửi Gmail SMTP ở bản mở rộng)
+                <h2 className="text-2xl font-black tracking-tight">Khôi phục Mật khẩu</h2>
+                <p
+                  className={`text-xs mt-1 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                >
+                  Bước {forgotStep}/2: Xác thực bằng mã OTP 6 chữ số có thời hạn 10 phút
                 </p>
               </div>
 
               {forgotStep === 1 ? (
                 <form onSubmit={handleRequestOtpSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      Nhập Tên đăng nhập hoặc Email của bạn
+                    <label className="block text-xs font-bold mb-1.5">
+                      Tên đăng nhập hoặc Email đã đăng ký
                     </label>
                     <input
                       type="text"
@@ -636,44 +1060,59 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                       placeholder="VD: Systemadmin123 hoặc employee.dev@spotmatrix.vn"
                       value={forgotIdentifier}
                       onChange={(e) => setForgotIdentifier(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:outline-none text-sm text-white"
+                      className={`w-full px-4 py-3.5 rounded-2xl border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900 focus:bg-white'
+                      }`}
                     />
                   </div>
                   <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition"
+                    className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/25 transition"
                   >
-                    {isLoading ? 'Đang tạo mã OTP...' : 'Nhận Mã Xác Nhận OTP (6 chữ số)'}
+                    {isLoading ? 'Đang khởi tạo mã OTP...' : 'Nhận Mã Xác Thực OTP (6 chữ số)'}
                   </button>
                 </form>
               ) : (
                 <form onSubmit={handleConfirmResetSubmit} className="space-y-3.5">
                   {simulatedOtpDisplay && (
-                    <div className="p-3 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-xs text-indigo-200">
-                      <span className="font-bold text-emerald-300">[Chế độ Giả lập Gmail Dev]</span> Mã OTP 6 số của bạn là:{' '}
-                      <code className="px-2 py-0.5 rounded bg-slate-900 text-white font-extrabold text-sm">
+                    <div
+                      className={`p-3.5 rounded-2xl border text-xs ${
+                        isDark
+                          ? 'bg-indigo-950/70 border-indigo-500/40 text-indigo-200'
+                          : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+                      }`}
+                    >
+                      <span className="font-extrabold text-indigo-600 dark:text-indigo-300">
+                        [Chế độ Giả lập Gmail Dev]
+                      </span>{' '}
+                      Mã OTP của bạn là:{' '}
+                      <code className="px-2 py-0.5 rounded bg-indigo-600 text-white font-black text-sm">
                         {simulatedOtpDisplay}
                       </code>
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Mã OTP 6 chữ số
-                    </label>
+                    <label className="block text-xs font-bold mb-1">Mã OTP 6 chữ số</label>
                     <input
                       type="text"
                       required
                       value={otpInput}
                       onChange={(e) => setOtpInput(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white font-bold tracking-widest"
+                      className={`w-full px-4 py-3 rounded-2xl border text-sm font-black tracking-widest ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">
-                      Mật khẩu mới (Tối thiểu 8 ký tự, có chữ Hoa, chữ thường và số)
+                    <label className="block text-xs font-bold mb-1">
+                      Mật khẩu mới (Đủ 4 tiêu chuẩn)
                     </label>
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -681,37 +1120,30 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                       placeholder="Nhập mật khẩu mới..."
                       value={resetNewPassword}
                       onChange={(e) => setResetNewPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white"
+                      className={`w-full px-4 py-3 rounded-2xl border text-sm ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-1.5 text-[11px] bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <span className={passwordRulesStatus.hasMinLength ? 'text-emerald-400' : 'text-slate-500'}>
-                      ✓ Ít nhất 8 ký tự
-                    </span>
-                    <span className={passwordRulesStatus.hasUppercase ? 'text-emerald-400' : 'text-slate-500'}>
-                      ✓ Có chữ viết hoa (A-Z)
-                    </span>
-                    <span className={passwordRulesStatus.hasLowercase ? 'text-emerald-400' : 'text-slate-500'}>
-                      ✓ Có chữ thường (a-z)
-                    </span>
-                    <span className={passwordRulesStatus.hasNumber ? 'text-emerald-400' : 'text-slate-500'}>
-                      ✓ Có chữ số (0-9)
-                    </span>
-                  </div>
-
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => setForgotStep(1)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-semibold text-slate-300"
+                      className={`px-4 py-3 rounded-2xl text-xs font-bold border ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 text-slate-300'
+                          : 'bg-slate-100 border-slate-200 text-slate-700'
+                      }`}
                     >
                       Quay lại
                     </button>
                     <button
                       type="submit"
                       disabled={isLoading}
-                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                      className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20"
                     >
                       Xác nhận Đổi Mật khẩu Mới
                     </button>
@@ -720,6 +1152,14 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
               )}
             </div>
           )}
+        </div>
+
+        {/* CHAN TRANG BEN PHAI */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] opacity-60 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <span>© 2026 SpotMatrix Workspace Platform</span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> Hold 5m • Grace Check-in 15m
+          </span>
         </div>
       </div>
     </div>
