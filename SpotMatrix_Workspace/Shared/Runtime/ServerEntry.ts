@@ -8,6 +8,7 @@ import { bookingRouter } from '../../Main/Booking/Function/Routes/BookingRoutes'
 import { aiRouter } from '../../Ai/Function/Routes/AiRoutes';
 import { datamanagerRouter } from '../../Main/Datamanager/Function/Routes/DatamanagerRoutes';
 import { authRouter } from '../../Main/Auth/Function/Routes/AuthRoutes';
+import { notificationRouter } from '../../Main/Notification/Function/Routes/NotificationRoutes';
 import { healthCheckRouter } from '../../Error/Function/Routes/HealthCheckRoutes';
 import { handleGlobalException } from '../../Error/Function/Middlewares/GlobalErrorMiddleware';
 import { seedDefaultAccountsToMongo } from '../../Main/Auth/Function/Services/AuthService';
@@ -33,6 +34,7 @@ async function bootstrapBackendServer(): Promise<void> {
   appServer.use('/api/v1/ai', aiRouter);
   appServer.use('/api/v1/datamanager', datamanagerRouter);
   appServer.use('/api/v1/auth', authRouter);
+  appServer.use('/api/v1/notifications', notificationRouter);
   appServer.use('/api/v1/system', healthCheckRouter);
 
   appServer.use(handleGlobalException);

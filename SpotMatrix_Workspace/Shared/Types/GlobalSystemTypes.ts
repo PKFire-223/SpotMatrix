@@ -86,3 +86,20 @@ export interface AuditConcurrencyLogItem {
   detailMessage: string;
   createdAtIso: string;
 }
+
+export type NotificationCategoryType =
+  | 'BOOKING_EVENT'
+  | 'FLOORPLAN_UPDATE'
+  | 'TRUST_SCORE_ALERT'
+  | 'SYSTEM_SECURITY';
+
+export interface NotificationRecordItem {
+  notificationId: string;
+  recipientEmail: string;
+  titleText: string;
+  contentText: string;
+  category: NotificationCategoryType;
+  isRead: boolean;
+  relatedNodeId?: string;
+  createdAtIso: string;
+}

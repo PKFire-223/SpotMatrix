@@ -6,7 +6,10 @@ import {
   RotateCcw,
   Flame,
   AlertTriangle,
-  CheckCircle2,
+  Box,
+  Layers,
+  RotateCw,
+  LayoutGrid,
 } from 'lucide-react';
 import { WorkspaceNodeItem } from '../../../../Shared/Types/GlobalSystemTypes';
 
@@ -18,9 +21,9 @@ interface InteractiveMap2DProps {
   activeFloor: number;
   onSelectWorkspaceNode: (nodeItem: WorkspaceNodeItem) => void;
   onCommitNodeCoordinates: (nodeId: string, newX: number, newY: number) => void;
+  onAutoArrangeLayout?: () => void;
 }
 
-// Hạt nhân hiển thị từng vị trí được bọc React.memo để chống re-render thừa
 interface SpotNodeRenderProps {
   nodeItem: WorkspaceNodeItem;
   renderX: number;
@@ -35,7 +38,10 @@ interface SpotNodeRenderProps {
   onPointerDownNode: (e: React.PointerEvent<SVGGElement>, nodeItem: WorkspaceNodeItem) => void;
 }
 
-const MemoizedSpotNode: React.FC<SpotNodeRenderProps> = memo(
+// ============================================================================
+// COMPONENT VE NOI THAT 2.5D CHI TIET (BAN, GHE XOAY, MAN HINH, PHONG HOP 8 GHE)
+// ============================================================================
+const MemoizedFurnitureNode: React.FC<SpotNodeRenderProps> = memo(
   ({
     nodeItem,
     renderX,
@@ -49,53 +55,81 @@ const MemoizedSpotNode: React.FC<SpotNodeRenderProps> = memo(
     holdSecondsLeft,
     onPointerDownNode,
   }) => {
-    const resolveNodePalette = (status: WorkspaceNodeItem['status']) => {
+    // Bang mau kien truc diu mat (Neutral Slate & Soft Accent)
+    const resolveStatusColors = (status: WorkspaceNodeItem['status']) => {
       if (isColliding) {
         return {
-          bg: isDark ? '#7f1d1d' : '#fee2e2',
-          border: '#ef4444',
-          text: isDark ? '#fecaca' : '#991b1b',
-          badge: 'Trùng vị trí!',
+          chairFill: '#dc2626',
+          chairStroke: '#991b1b',
+          tableTop: isDark ? '#450a0a' : '#fef2f2',
+          tableEdge: '#ef4444',
+          badgeBg: isDark ? '#7f1d1d' : '#fee2e2',
+          badgeText: isDark ? '#fecaca' : '#991b1b',
+          statusLabel: 'Trùng chỗ!',
+          ledColor: '#ef4444',
         };
       }
-      if (isDark) {
-        switch (status) {
-          case 'AVAILABLE':
-            return { bg: '#064e3b', border: '#10b981', text: '#ecfdf5', badge: 'Trống' };
-          case 'HOLDING':
-            return { bg: '#78350f', border: '#f59e0b', text: '#fef3c7', badge: 'Giữ chỗ' };
-          case 'RESERVED':
-            return { bg: '#1e3a8a', border: '#3b82f6', text: '#eff6ff', badge: 'Đã đặt' };
-          case 'OCCUPIED':
-            return { bg: '#881337', border: '#f43f5e', text: '#ffe4e6', badge: 'Đang ngồi' };
-          default:
-            return { bg: '#334155', border: '#94a3b8', text: '#f1f5f9', badge: 'Bảo trì' };
-        }
-      } else {
-        switch (status) {
-          case 'AVAILABLE':
-            return { bg: '#ecfdf5', border: '#0d9488', text: '#134e4a', badge: 'Trống' };
-          case 'HOLDING':
-            return { bg: '#fffbeb', border: '#d97706', text: '#78350f', badge: 'Giữ chỗ' };
-          case 'RESERVED':
-            return { bg: '#eff6ff', border: '#2563eb', text: '#1e3a8a', badge: 'Đã đặt' };
-          case 'OCCUPIED':
-            return { bg: '#fff1f2', border: '#e11d48', text: '#881337', badge: 'Đang ngồi' };
-          default:
-            return { bg: '#f1f5f9', border: '#64748b', text: '#334155', badge: 'Bảo trì' };
-        }
+      switch (status) {
+        case 'AVAILABLE':
+          return {
+            chairFill: isDark ? '#0d9488' : '#14b8a6',
+            chairStroke: isDark ? '#5eead4' : '#0f766e',
+            tableTop: isDark ? '#1e293b' : '#ffffff',
+            tableEdge: isDark ? '#0d9488' : '#99f6e4',
+            badgeBg: isDark ? '#064e3b' : '#f0fdfa',
+            badgeText: isDark ? '#a7f3d0' : '#115e59',
+            statusLabel: 'Trống',
+            ledColor: '#10b981',
+          };
+        case 'HOLDING':
+          return {
+            chairFill: isDark ? '#d97706' : '#f59e0b',
+            chairStroke: isDark ? '#fcd34d' : '#b45309',
+            tableTop: isDark ? '#1e293b' : '#fffbeb',
+            tableEdge: isDark ? '#d97706' : '#fde68a',
+            badgeBg: isDark ? '#78350f' : '#fef3c7',
+            badgeText: isDark ? '#fde68a' : '#92400e',
+            statusLabel: 'Giữ 5p',
+            ledColor: '#f59e0b',
+          };
+        case 'RESERVED':
+          return {
+            chairFill: isDark ? '#2563eb' : '#3b82f6',
+            chairStroke: isDark ? '#93c5fd' : '#1d4ed8',
+            tableTop: isDark ? '#1e293b' : '#f8fafc',
+            tableEdge: isDark ? '#3b82f6' : '#bfdbfe',
+            badgeBg: isDark ? '#1e3a8a' : '#eff6ff',
+            badgeText: isDark ? '#bfdbfe' : '#1e40af',
+            statusLabel: 'Đã đặt',
+            ledColor: '#3b82f6',
+          };
+        case 'OCCUPIED':
+          return {
+            chairFill: isDark ? '#be123c' : '#e11d48',
+            chairStroke: isDark ? '#fda4af' : '#9f1239',
+            tableTop: isDark ? '#1e293b' : '#fff1f2',
+            tableEdge: isDark ? '#f43f5e' : '#fecdd3',
+            badgeBg: isDark ? '#881337' : '#ffe4e6',
+            badgeText: isDark ? '#fecdd3' : '#9f1239',
+            statusLabel: 'Đang ngồi',
+            ledColor: '#f43f5e',
+          };
+        default:
+          return {
+            chairFill: '#64748b',
+            chairStroke: '#475569',
+            tableTop: isDark ? '#0f172a' : '#f1f5f9',
+            tableEdge: '#64748b',
+            badgeBg: isDark ? '#334155' : '#e2e8f0',
+            badgeText: isDark ? '#cbd5e1' : '#475569',
+            statusLabel: 'Bảo trì',
+            ledColor: '#94a3b8',
+          };
       }
     };
 
-    const palette = resolveNodePalette(nodeItem.status);
-    const boxW =
-      nodeItem.zoneType === 'MEETING_ROOM'
-        ? 132
-        : nodeItem.zoneType === 'COLLAB_HUB'
-        ? 122
-        : 104;
-    const boxH =
-      nodeItem.zoneType === 'MEETING_ROOM' || nodeItem.zoneType === 'COLLAB_HUB' ? 76 : 64;
+    const colors = resolveStatusColors(nodeItem.status);
+    const safeAiScore = Number.isFinite(nodeItem.aiScore) ? Number(nodeItem.aiScore) : 90;
 
     const formatCountdown = (totalSec: number) => {
       const m = Math.floor(totalSec / 60)
@@ -105,7 +139,55 @@ const MemoizedSpotNode: React.FC<SpotNodeRenderProps> = memo(
       return `${m}:${s}`;
     };
 
-    const safeAiScore = Number.isFinite(nodeItem.aiScore) ? Number(nodeItem.aiScore) : 90;
+    // Ham ve 1 chiec ghe van phong 2.5D (co dem ngoi + tua lung cong)
+    const renderChair25D = (
+      cx: number,
+      cy: number,
+      rotationDeg = 0,
+      key?: string | number
+    ) => (
+      <g key={key} transform={`translate(${cx}, ${cy}) rotate(${rotationDeg})`}>
+        {/* Bong do 2.5D cua ghe */}
+        <rect
+          x="-9"
+          y="-6"
+          width="18"
+          height="14"
+          rx="5"
+          fill="rgba(15, 23, 42, 0.16)"
+        />
+        {/* Tay vin 2 ben */}
+        <rect
+          x="-11"
+          y="-5"
+          width="22"
+          height="8"
+          rx="2"
+          fill={colors.chairStroke}
+          opacity="0.7"
+        />
+        {/* Dem ngoi */}
+        <rect
+          x="-8"
+          y="-7"
+          width="16"
+          height="12"
+          rx="4"
+          fill={colors.chairFill}
+          stroke={colors.chairStroke}
+          strokeWidth="1"
+        />
+        {/* Tua lung cong phia sau */}
+        <rect
+          x="-9"
+          y="3"
+          width="18"
+          height="4.5"
+          rx="2.2"
+          fill={colors.chairStroke}
+        />
+      </g>
+    );
 
     return (
       <g
@@ -114,89 +196,324 @@ const MemoizedSpotNode: React.FC<SpotNodeRenderProps> = memo(
         style={{ willChange: isBeingDragged ? 'transform' : 'auto' }}
         className={isAdminDragMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
       >
-        {/* Lớp phủ Nhiệt AI (AI Demand Aura) khi bật chế độ Heatmap */}
+        {/* Lop phu Ban do Nhiet AI */}
         {showAiHeatmap && (
           <circle
             cx="0"
             cy="0"
-            r={boxW * 0.72}
+            r={nodeItem.zoneType === 'MEETING_ROOM' ? 88 : 58}
             fill={
               safeAiScore >= 94
-                ? 'rgba(13, 148, 136, 0.16)'
-                : safeAiScore >= 88
-                ? 'rgba(37, 99, 235, 0.14)'
+                ? 'rgba(13, 148, 136, 0.14)'
                 : 'rgba(100, 116, 139, 0.12)'
             }
-            stroke={safeAiScore >= 94 ? 'rgba(13, 148, 136, 0.35)' : 'rgba(37, 99, 235, 0.25)'}
-            strokeDasharray="3 3"
+            stroke={safeAiScore >= 94 ? 'rgba(13, 148, 136, 0.35)' : 'rgba(100, 116, 139, 0.25)'}
+            strokeDasharray="4 3"
           />
         )}
 
-        {/* Viền đánh dấu vị trí đang được chọn */}
-        {isSelected && (
+        {/* =================================================================
+            KIEU 1: PHONG HOP (MEETING_ROOM) — BAN HOP DAI + 8 GHE QUANH BAN + TV
+           ================================================================= */}
+        {nodeItem.zoneType === 'MEETING_ROOM' && (
+          <g>
+            {/* Thảm lót sàn phòng họp */}
+            <rect
+              x="-82"
+              y="-54"
+              width="164"
+              height="108"
+              rx="12"
+              fill={isDark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(241, 245, 249, 0.9)'}
+              stroke={isSelected ? '#3b82f6' : isDark ? '#334155' : '#cbd5e1'}
+              strokeWidth={isSelected ? 2.5 : 1.5}
+            />
+            {/* Man hinh TV 85 inch gan tren vach trai */}
+            <rect
+              x="-78"
+              y="-22"
+              width="5"
+              height="44"
+              rx="2"
+              fill={isDark ? '#38bdf8' : '#0284c7'}
+            />
+            {/* 3 Ghe phia tren (xoay 180 do huong xuong ban) */}
+            {[-34, 0, 34].map((gx, i) => renderChair25D(gx, -34, 180, `top-${i}`))}
+            {/* 3 Ghe phia duoi (huong len ban) */}
+            {[-34, 0, 34].map((gx, i) => renderChair25D(gx, 34, 0, `bot-${i}`))}
+            {/* 1 Ghe Chu toa ben trai & 1 Ghe ben phai */}
+            {renderChair25D(-60, 0, 90, 'left-head')}
+            {renderChair25D(60, 0, -90, 'right-head')}
+
+            {/* Độ dày cạnh bàn 2.5D (Extruded Shadow) */}
+            <rect
+              x="-48"
+              y="-17"
+              width="96"
+              height="40"
+              rx="10"
+              fill={isDark ? '#0f172a' : '#cbd5e1'}
+            />
+            {/* Mặt bàn họp chính */}
+            <rect
+              x="-48"
+              y="-21"
+              width="96"
+              height="38"
+              rx="10"
+              fill={colors.tableTop}
+              stroke={colors.tableEdge}
+              strokeWidth="2"
+            />
+            {/* Thiết bị Hội nghị AI 360 giữa bàn */}
+            <rect
+              x="-16"
+              y="-6"
+              width="32"
+              height="8"
+              rx="4"
+              fill={isDark ? '#334155' : '#e2e8f0'}
+            />
+            <circle cx="0" cy="-2" r="2.5" fill={colors.ledColor} />
+          </g>
+        )}
+
+        {/* =================================================================
+            KIEU 2: KHU THAO LUAN NHOM (COLLAB_HUB) — BAN OVAL + 6 GHE XOAY QUANH
+           ================================================================= */}
+        {nodeItem.zoneType === 'COLLAB_HUB' && (
+          <g>
+            {/* Thảm tròn khu sáng tạo */}
+            <rect
+              x="-68"
+              y="-48"
+              width="136"
+              height="96"
+              rx="20"
+              fill={isDark ? 'rgba(30, 41, 59, 0.55)' : 'rgba(241, 245, 249, 0.85)'}
+              stroke={isSelected ? '#3b82f6' : isDark ? '#334155' : '#cbd5e1'}
+              strokeWidth={isSelected ? 2.5 : 1.2}
+              strokeDasharray="5 3"
+            />
+            {/* 6 ghế xung quanh bàn thảo luận */}
+            {renderChair25D(-24, -30, 180, 'c1')}
+            {renderChair25D(24, -30, 180, 'c2')}
+            {renderChair25D(-24, 30, 0, 'c3')}
+            {renderChair25D(24, 30, 0, 'c4')}
+            {renderChair25D(-50, 0, 90, 'c5')}
+            {renderChair25D(50, 0, -90, 'c6')}
+
+            {/* Độ dày mặt bàn 2.5D */}
+            <rect
+              x="-38"
+              y="-15"
+              width="76"
+              height="36"
+              rx="16"
+              fill={isDark ? '#0f172a' : '#cbd5e1'}
+            />
+            {/* Mặt bàn Oval */}
+            <rect
+              x="-38"
+              y="-19"
+              width="76"
+              height="34"
+              rx="16"
+              fill={colors.tableTop}
+              stroke={colors.tableEdge}
+              strokeWidth="2"
+            />
+            <circle cx="-12" cy="-2" r="3" fill={colors.ledColor} />
+            <rect
+              x="-2"
+              y="-5"
+              width="18"
+              height="6"
+              rx="2"
+              fill={isDark ? '#334155' : '#cbd5e1'}
+            />
+          </g>
+        )}
+
+        {/* =================================================================
+            KIEU 3: BOT CACH AM (FOCUS_BOOTH) — BUONG KIN CACH AM + CUA KINH
+           ================================================================= */}
+        {nodeItem.zoneType === 'FOCUS_BOOTH' && (
+          <g>
+            {/* Vách buồng cách âm 2 lớp */}
+            <rect
+              x="-44"
+              y="-38"
+              width="88"
+              height="76"
+              rx="10"
+              fill={isDark ? '#0f172a' : '#e2e8f0'}
+              stroke={isSelected ? '#3b82f6' : isDark ? '#475569' : '#94a3b8'}
+              strokeWidth={isSelected ? 2.5 : 2}
+            />
+            <rect
+              x="-38"
+              y="-32"
+              width="76"
+              height="64"
+              rx="7"
+              fill={isDark ? '#1e293b' : '#f8fafc'}
+            />
+            {/* Cung mở cửa kính */}
+            <path
+              d="M 14 32 A 22 22 0 0 1 36 10"
+              fill="none"
+              stroke={isDark ? '#64748b' : '#94a3b8'}
+              strokeWidth="1.2"
+              strokeDasharray="2 2"
+            />
+            {/* Ghế đơn bên trong bốt */}
+            {renderChair25D(0, 14, 0)}
+            {/* Bàn âm tường & Màn hình */}
+            <rect
+              x="-28"
+              y="-26"
+              width="56"
+              height="22"
+              rx="4"
+              fill={colors.tableTop}
+              stroke={colors.tableEdge}
+              strokeWidth="1.5"
+            />
+            <rect
+              x="-14"
+              y="-22"
+              width="28"
+              height="4"
+              rx="1.5"
+              fill={isDark ? '#94a3b8' : '#475569'}
+            />
+            <circle cx="20" cy="-15" r="2.5" fill={colors.ledColor} />
+          </g>
+        )}
+
+        {/* =================================================================
+            KIEU 4: BAN CA NHAN (DESK_POD) — BAN 2.5D + MAN HINH KEP + GHE XOAY
+           ================================================================= */}
+        {nodeItem.zoneType === 'DESK_POD' && (
+          <g>
+            {/* Khung viền chọn */}
+            {isSelected && (
+              <rect
+                x="-46"
+                y="-34"
+                width="92"
+                height="74"
+                rx="12"
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="2"
+                strokeDasharray="4 2"
+              />
+            )}
+
+            {/* Ghế công thái học đặt phía dưới bàn */}
+            {renderChair25D(0, 21, 0)}
+
+            {/* Cạnh bàn 2.5D đổ bóng */}
+            <rect
+              x="-38"
+              y="-22"
+              width="76"
+              height="34"
+              rx="7"
+              fill={isDark ? '#0f172a' : '#cbd5e1'}
+            />
+            {/* Mặt bàn làm việc */}
+            <rect
+              x="-38"
+              y="-26"
+              width="76"
+              height="32"
+              rx="7"
+              fill={colors.tableTop}
+              stroke={colors.tableEdge}
+              strokeWidth="2"
+            />
+
+            {/* Cặp màn hình kép 4K (Dual Monitors) nghiêng nhẹ */}
+            <rect
+              x="-26"
+              y="-21"
+              width="22"
+              height="4"
+              rx="1.5"
+              transform="rotate(-6 -15 -19)"
+              fill={isDark ? '#94a3b8' : '#334155'}
+            />
+            <rect
+              x="4"
+              y="-21"
+              width="22"
+              height="4"
+              rx="1.5"
+              transform="rotate(6 15 -19)"
+              fill={isDark ? '#94a3b8' : '#334155'}
+            />
+
+            {/* Bàn phím & Chuột trên mặt bàn */}
+            <rect
+              x="-10"
+              y="-9"
+              width="18"
+              height="7"
+              rx="1.5"
+              fill={isDark ? '#334155' : '#e2e8f0'}
+            />
+            <rect
+              x="12"
+              y="-8"
+              width="4"
+              height="6"
+              rx="2"
+              fill={isDark ? '#475569' : '#cbd5e1'}
+            />
+
+            {/* Đèn LED báo trạng thái góc bàn */}
+            <circle cx="-29" cy="-9" r="3" fill={colors.ledColor} />
+          </g>
+        )}
+
+        {/* =================================================================
+            NHAN THONG TIN NHO GON DAT NGAY TREN / DUOI NOI THAT (KHONG CHE HINH)
+           ================================================================= */}
+        <g
+          transform={`translate(0, ${
+            nodeItem.zoneType === 'MEETING_ROOM'
+              ? 0
+              : nodeItem.zoneType === 'COLLAB_HUB'
+              ? 0
+              : -8
+          })`}
+        >
           <rect
-            x={-boxW / 2 - 5}
-            y={-boxH / 2 - 5}
-            width={boxW + 10}
-            height={boxH + 10}
-            rx={15}
-            fill="none"
-            stroke={isColliding ? '#ef4444' : isDark ? '#60a5fa' : '#2563eb'}
-            strokeWidth="2"
-            strokeDasharray="4 2"
+            x="-40"
+            y="-9"
+            width="80"
+            height="18"
+            rx="5"
+            fill={colors.badgeBg}
+            stroke={colors.tableEdge}
+            strokeWidth="1"
           />
-        )}
-
-        {/* Khung chính của Bàn / Phòng họp */}
-        <rect
-          x={-boxW / 2}
-          y={-boxH / 2}
-          width={boxW}
-          height={boxH}
-          rx={11}
-          fill={palette.bg}
-          stroke={palette.border}
-          strokeWidth={isSelected || isBeingDragged ? 2.5 : 1.5}
-        />
-
-        {/* Mã bàn & Nhãn trạng thái */}
-        <text
-          x="0"
-          y="-9"
-          textAnchor="middle"
-          fill={palette.text}
-          fontSize="11.5"
-          fontWeight="800"
-        >
-          {nodeItem.nodeCode} • {palette.badge}
-        </text>
-
-        {/* Đồng hồ đếm ngược 5 phút nếu ghế đang HOLDING, ngược lại hiện sức chứa & điểm AI */}
-        <text
-          x="0"
-          y="8"
-          textAnchor="middle"
-          fill={palette.text}
-          fontSize="9.5"
-          fontWeight="700"
-          opacity="0.9"
-        >
-          {nodeItem.status === 'HOLDING'
-            ? `⏱ Nhả sau: ${formatCountdown(holdSecondsLeft)}`
-            : `${nodeItem.capacityCount || 1} chỗ • AI ${safeAiScore}%`}
-        </text>
-
-        {/* Tọa độ thực tế (X, Y) */}
-        <text
-          x="0"
-          y="22"
-          textAnchor="middle"
-          fill={palette.text}
-          fontSize="8.5"
-          opacity="0.7"
-        >
-          ({renderX}, {renderY})
-        </text>
+          <text
+            x="0"
+            y="3"
+            textAnchor="middle"
+            fill={colors.badgeText}
+            fontSize="9.5"
+            fontWeight="800"
+          >
+            {nodeItem.status === 'HOLDING'
+              ? `${nodeItem.nodeCode} • ${formatCountdown(holdSecondsLeft)}`
+              : `${nodeItem.nodeCode} • ${colors.statusLabel}`}
+          </text>
+        </g>
       </g>
     );
   }
@@ -210,20 +527,24 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
   activeFloor,
   onSelectWorkspaceNode,
   onCommitNodeCoordinates,
+  onAutoArrangeLayout,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  // Cho phep chuyen doi giua Mat bang Kien truc 2.5D va Phoi canh Khong gian 3D Isometric
+  const [perspectiveMode, setPerspectiveMode] = useState<'2.5D_TOP' | '3D_ISO'>('2.5D_TOP');
+  const [isoRotationDeg, setIsoRotationDeg] = useState<number>(-18);
   const [zoomScale, setZoomScale] = useState<number>(1);
   const [showAiHeatmap, setShowAiHeatmap] = useState<boolean>(false);
+
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [liveDragPosition, setLiveDragPosition] = useState<{ posX: number; posY: number } | null>(
     null
   );
   const [collisionWarning, setCollisionWarning] = useState<string | null>(null);
-  const [holdSecondsLeft, setHoldSecondsLeft] = useState<number>(285); // 04:45 dem nguoc
+  const [holdSecondsLeft, setHoldSecondsLeft] = useState<number>(275);
 
-  // Bo dem nguoc thoi gian giu cho 5 phut (300s) tren ban do 2D
   useEffect(() => {
     const timer = setInterval(() => {
       setHoldSecondsLeft((prev) => (prev > 1 ? prev - 1 : 300));
@@ -231,33 +552,27 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Kiem tra va cham (Bounding Box Collision) de ngan Admin keo 2 ban de len nhau
   const checkCoordinateCollision = useCallback(
     (movingNodeId: string, candidateX: number, candidateY: number): boolean => {
       return workspaceNodes.some((other) => {
         if (other.nodeId === movingNodeId || other.floorLevel !== activeFloor) return false;
         const otherX = Number.isFinite(other.position2D?.posX) ? other.position2D.posX : 0;
         const otherY = Number.isFinite(other.position2D?.posY) ? other.position2D.posY : 0;
-        const minDistanceX = 95;
-        const minDistanceY = 65;
-        return (
-          Math.abs(candidateX - otherX) < minDistanceX &&
-          Math.abs(candidateY - otherY) < minDistanceY
-        );
+        return Math.abs(candidateX - otherX) < 95 && Math.abs(candidateY - otherY) < 75;
       });
     },
     [workspaceNodes, activeFloor]
   );
 
   const convertClientToSvgCoords = (clientX: number, clientY: number) => {
-    if (!svgRef.current) return { x: 100, y: 100 };
+    if (!svgRef.current) return { x: 120, y: 120 };
     const rect = svgRef.current.getBoundingClientRect();
-    const safeWidth = rect.width > 0 ? rect.width : 720;
-    const safeHeight = rect.height > 0 ? rect.height : 420;
-    const rawX = (clientX - rect.left) * (720 / safeWidth);
-    const rawY = (clientY - rect.top) * (420 / safeHeight);
-    const snappedX = Math.max(60, Math.min(660, Math.round(rawX / 10) * 10));
-    const snappedY = Math.max(70, Math.min(365, Math.round(rawY / 10) * 10));
+    const safeWidth = rect.width > 0 ? rect.width : 800;
+    const safeHeight = rect.height > 0 ? rect.height : 460;
+    const rawX = (clientX - rect.left) * (800 / safeWidth);
+    const rawY = (clientY - rect.top) * (460 / safeHeight);
+    const snappedX = Math.max(70, Math.min(730, Math.round(rawX / 10) * 10));
+    const snappedY = Math.max(80, Math.min(395, Math.round(rawY / 10) * 10));
     return { x: snappedX, y: snappedY };
   };
 
@@ -270,7 +585,7 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
       try {
         e.currentTarget.setPointerCapture(e.pointerId);
       } catch {
-        // Bo qua neu trinh duyet khong ho tro pointer capture
+        // Bo qua
       }
       setDraggingNodeId(nodeItem.nodeId);
       setLiveDragPosition({
@@ -281,7 +596,6 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
     [isAdminDragMode, onSelectWorkspaceNode]
   );
 
-  // Su dung requestAnimationFrame de dam bao keo tha muot 60 FPS khong gay giat lag
   const handlePointerMoveSvg = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!isAdminDragMode || !draggingNodeId) return;
     const { clientX, clientY } = e;
@@ -309,7 +623,7 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
 
     if (hasCollision) {
       setCollisionWarning(
-        `Đã chặn thao tác: Vị trí (${finalX}, ${finalY}) bị chồng lấp với một bàn khác. Hệ thống đã tự động giữ lại tọa độ an toàn ban đầu.`
+        `Chặn va chạm nội thất: Vị trí (${finalX}, ${finalY}) chồng lên bàn/phòng khác. Hệ thống đã giữ lại tọa độ cũ.`
       );
       return;
     }
@@ -328,56 +642,110 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
         isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90 shadow-sm'
       }`}
     >
-      {/* Thanh trang thai & Cong cu Dac biet tren So do 2D */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
+      {/* THANH DIEU KHIEN CHE DO XEM 2.5D / 3D ISOMETRIC & SAP XEP PHONG */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-              isDark ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-700'
+          {/* Chuyen doi 2.5D Top-down vs 3D Isometric */}
+          <div
+            className={`inline-flex rounded-xl p-1 border text-xs ${
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
             }`}
           >
-            Mặt bằng Tầng {activeFloor} ({workspaceNodes.length} vị trí)
-          </span>
+            <button
+              type="button"
+              onClick={() => setPerspectiveMode('2.5D_TOP')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition ${
+                perspectiveMode === '2.5D_TOP'
+                  ? isDark
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Mặt bằng Nội thất 2.5D
+            </button>
+            <button
+              type="button"
+              onClick={() => setPerspectiveMode('3D_ISO')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold transition ${
+                perspectiveMode === '3D_ISO'
+                  ? isDark
+                    ? 'bg-slate-800 text-white'
+                    : 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500'
+              }`}
+            >
+              <Box className="w-3.5 h-3.5" />
+              Phối cảnh Phòng 3D
+            </button>
+          </div>
 
-          {/* Nut Bat/Tat Lop phu Ban do Nhiet AI */}
+          {perspectiveMode === '3D_ISO' && (
+            <button
+              type="button"
+              onClick={() => setIsoRotationDeg((prev) => (prev === -18 ? 18 : prev === 18 ? 0 : -18))}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+                isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-200'
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              Đổi góc nghiêng 3D ({isoRotationDeg}°)
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setShowAiHeatmap(!showAiHeatmap)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border transition ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
               showAiHeatmap
-                ? 'bg-teal-600 text-white border-teal-600'
+                ? isDark
+                  ? 'bg-slate-200 text-slate-900 border-slate-200'
+                  : 'bg-slate-900 text-white border-slate-900'
                 : isDark
-                ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                ? 'bg-slate-800 border-slate-700 text-slate-300'
+                : 'bg-slate-50 border-slate-200 text-slate-600'
             }`}
           >
             <Flame className="w-3.5 h-3.5" />
-            {showAiHeatmap ? 'Đang bật Nhiệt độ AI' : 'Bản đồ Nhiệt AI'}
+            Nhiệt độ AI
           </button>
 
-          {isAdminDragMode && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">
-              <Move className="w-3.5 h-3.5" />
-              Chế độ Kéo thả Chống va chạm (Snap 10px)
-            </span>
+          {onAutoArrangeLayout && (
+            <button
+              type="button"
+              onClick={onAutoArrangeLayout}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition ${
+                isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200/70'
+              }`}
+              title="Căn chỉnh lại vị trí bàn và phòng họp chuẩn kiến trúc, không đè lên vách ngăn"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Sắp xếp Chuẩn Kiến trúc
+            </button>
           )}
         </div>
 
+        {/* Chu thich mau trang thai diu mat */}
         <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-teal-600 inline-block" /> Trống
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block" /> Trống
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block" /> Giữ 5p
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Giữ 5p
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> Đã đặt
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" /> Đã đặt
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-600 inline-block" /> Đang ngồi
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" /> Đang ngồi
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block" /> Bảo trì
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block" /> Bảo trì
           </span>
 
           <div
@@ -393,7 +761,6 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
                   ? 'bg-slate-800 border-slate-700 text-slate-300'
                   : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}
-              title="Thu nhỏ"
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
@@ -405,7 +772,6 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
                   ? 'bg-slate-800 border-slate-700 text-slate-300'
                   : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}
-              title="100%"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -417,7 +783,6 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
                   ? 'bg-slate-800 border-slate-700 text-slate-300'
                   : 'bg-slate-50 border-slate-200 text-slate-600'
               }`}
-              title="Phóng to"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
@@ -425,7 +790,6 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
         </div>
       </div>
 
-      {/* Canh bao tu dong neu Admin keo ban de len vi tri khac */}
       {collisionWarning && (
         <div
           className={`mb-3 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
@@ -444,144 +808,326 @@ export const InteractiveMap2D: React.FC<InteractiveMap2DProps> = ({
         </div>
       )}
 
-      {/* Khung Canvas SVG Mat bang Kien truc 2D */}
+      {/* =====================================================================
+          KHUNG KHONG GIAN KIEN TRUC (HO TRO NGHIENG 3D ISOMETRIC MUOT MA)
+         ===================================================================== */}
       <div
-        className={`w-full overflow-auto rounded-xl border ${
-          isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
+        className={`w-full overflow-hidden rounded-2xl border p-2 sm:p-4 transition-all duration-500 ${
+          isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100/70 border-slate-200/80'
         }`}
+        style={{
+          perspective: perspectiveMode === '3D_ISO' ? '1200px' : 'none',
+        }}
       >
-        <svg
-          ref={svgRef}
-          viewBox="0 0 720 420"
-          onPointerMove={handlePointerMoveSvg}
-          onPointerUp={handlePointerUpSvg}
-          onPointerLeave={handlePointerUpSvg}
+        <div
+          className="transition-transform duration-500 ease-out"
           style={{
-            transform: `scale(${zoomScale})`,
-            transformOrigin: 'center center',
-            transition: draggingNodeId ? 'none' : 'transform 0.2s ease-out',
+            transform:
+              perspectiveMode === '3D_ISO'
+                ? `scale(${zoomScale * 0.94}) rotateX(42deg) rotateZ(${isoRotationDeg}deg)`
+                : `scale(${zoomScale})`,
+            transformStyle: 'preserve-3d',
+            boxShadow:
+              perspectiveMode === '3D_ISO'
+                ? isDark
+                  ? '0 28px 50px -12px rgba(0, 0, 0, 0.7), 0 12px 0 0 #1e293b'
+                  : '0 28px 50px -12px rgba(15, 23, 42, 0.18), 0 12px 0 0 #cbd5e1'
+                : 'none',
+            borderRadius: '16px',
           }}
-          className={`w-full h-auto min-h-[340px] select-none ${
-            isAdminDragMode ? 'cursor-crosshair' : 'cursor-default'
-          }`}
         >
-          <defs>
-            <pattern id="archGrid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path
-                d="M 20 0 L 0 0 0 20"
-                fill="none"
-                stroke={isDark ? 'rgba(148, 163, 184, 0.07)' : 'rgba(100, 116, 139, 0.09)'}
-                strokeWidth="1"
-              />
-            </pattern>
-          </defs>
-
-          <rect width="720" height="420" fill="url(#archGrid)" />
-
-          {/* Khung Tuong Bao Kien Truc & Phan Khu */}
-          <rect
-            x="20"
-            y="20"
-            width="680"
-            height="380"
-            rx="16"
-            fill="none"
-            stroke={isDark ? '#334155' : '#cbd5e1'}
-            strokeWidth="2"
-          />
-
-          {/* Khu Phong hop ben phai */}
-          <rect
-            x="475"
-            y="32"
-            width="210"
-            height="175"
-            rx="12"
-            fill={isDark ? 'rgba(30, 41, 59, 0.35)' : 'rgba(241, 245, 249, 0.7)'}
-            stroke={isDark ? '#334155' : '#cbd5e1'}
-            strokeDasharray="5 4"
-          />
-          <text
-            x="490"
-            y="52"
-            fill={isDark ? '#94a3b8' : '#64748b'}
-            fontSize="10"
-            fontWeight="700"
+          <svg
+            ref={svgRef}
+            viewBox="0 0 800 460"
+            onPointerMove={handlePointerMoveSvg}
+            onPointerUp={handlePointerUpSvg}
+            onPointerLeave={handlePointerUpSvg}
+            className={`w-full h-auto min-h-[360px] rounded-xl select-none ${
+              isDark ? 'bg-slate-900' : 'bg-white'
+            } ${isAdminDragMode ? 'cursor-crosshair' : 'cursor-default'}`}
           >
-            KHU PHÒNG HỌP & HỘI THẢO
-          </text>
+            <defs>
+              <pattern id="floorTileGrid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <path
+                  d="M 24 0 L 0 0 0 24"
+                  fill="none"
+                  stroke={isDark ? 'rgba(148, 163, 184, 0.06)' : 'rgba(100, 116, 139, 0.08)'}
+                  strokeWidth="1"
+                />
+              </pattern>
+            </defs>
 
-          <text
-            x="38"
-            y="48"
-            fill={isDark ? '#94a3b8' : '#64748b'}
-            fontSize="10"
-            fontWeight="700"
-          >
-            KHU BÀN CÁ NHÂN (DESK PODS) — TẦNG {activeFloor}
-          </text>
+            {/* Nen Gach San Kien Truc */}
+            <rect width="800" height="460" fill="url(#floorTileGrid)" />
 
-          <line
-            x1="35"
-            y1="215"
-            x2="685"
-            y2="215"
-            stroke={isDark ? '#1e293b' : '#e2e8f0'}
-            strokeWidth="1.5"
-            strokeDasharray="6 6"
-          />
-          <text
-            x="38"
-            y="236"
-            fill={isDark ? '#94a3b8' : '#64748b'}
-            fontSize="10"
-            fontWeight="700"
-          >
-            KHU TẬP TRUNG (FOCUS BOOTH) & THẢO LUẬN NHÓM (COLLAB HUB)
-          </text>
+            {/* TUONG BAO NGOAI VAN PHONG (Co do day kien truc) */}
+            <rect
+              x="16"
+              y="16"
+              width="768"
+              height="428"
+              rx="18"
+              fill="none"
+              stroke={isDark ? '#334155' : '#cbd5e1'}
+              strokeWidth="4"
+            />
 
-          {workspaceNodes.map((nodeItem) => {
-            const isSelected = nodeItem.nodeId === selectedNodeId;
-            const isBeingDragged = nodeItem.nodeId === draggingNodeId;
-            const safeX = Number.isFinite(nodeItem.position2D?.posX)
-              ? nodeItem.position2D.posX
-              : 120;
-            const safeY = Number.isFinite(nodeItem.position2D?.posY)
-              ? nodeItem.position2D.posY
-              : 120;
+            {/* ===============================================================
+                PHAN KHU 1 (GOC TREN BEN TRAI): KHU BAN LAM VIEC CA NHAN (OPEN DESK ZONE)
+               =============================================================== */}
+            <rect
+              x="28"
+              y="28"
+              width="445"
+              height="185"
+              rx="12"
+              fill={isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(248, 250, 252, 0.9)'}
+              stroke={isDark ? '#1e293b' : '#e2e8f0'}
+              strokeWidth="1.5"
+            />
+            <rect
+              x="40"
+              y="36"
+              width="215"
+              height="20"
+              rx="5"
+              fill={isDark ? '#1e293b' : '#f1f5f9'}
+            />
+            <text
+              x="50"
+              y="49"
+              fill={isDark ? '#94a3b8' : '#475569'}
+              fontSize="9.5"
+              fontWeight="800"
+            >
+              ZONE A • KHU BÀN CÁ NHÂN (DESK PODS)
+            </text>
 
-            const renderX =
-              isBeingDragged && liveDragPosition ? liveDragPosition.posX : safeX;
-            const renderY =
-              isBeingDragged && liveDragPosition ? liveDragPosition.posY : safeY;
+            {/* ===============================================================
+                PHAN KHU 2 (GOC TREN BEN PHAI): PHONG HOP KINH BOARDROOM (CO VACH KINH & CUA)
+               =============================================================== */}
+            <rect
+              x="488"
+              y="28"
+              width="282"
+              height="215"
+              rx="14"
+              fill={isDark ? 'rgba(15, 23, 42, 0.65)' : 'rgba(241, 245, 249, 0.65)'}
+              stroke={isDark ? '#475569' : '#94a3b8'}
+              strokeWidth="2.5"
+            />
+            {/* Ký hiệu cửa kính trượt vào phòng họp */}
+            <line
+              x1="488"
+              y1="175"
+              x2="488"
+              y2="215"
+              stroke={isDark ? '#0f172a' : '#ffffff'}
+              strokeWidth="4"
+            />
+            <path
+              d="M 488 175 A 32 32 0 0 0 456 207"
+              fill="none"
+              stroke={isDark ? '#64748b' : '#94a3b8'}
+              strokeWidth="1.2"
+              strokeDasharray="3 3"
+            />
+            <rect
+              x="502"
+              y="36"
+              width="225"
+              height="20"
+              rx="5"
+              fill={isDark ? '#1e293b' : '#e2e8f0'}
+            />
+            <text
+              x="512"
+              y="49"
+              fill={isDark ? '#cbd5e1' : '#334155'}
+              fontSize="9.5"
+              fontWeight="800"
+            >
+              ZONE M • PHÒNG HỌP KÍNH (BOARDROOM 8P)
+            </text>
 
-            return (
-              <MemoizedSpotNode
-                key={nodeItem.nodeId}
-                nodeItem={nodeItem}
-                renderX={renderX}
-                renderY={renderY}
-                isSelected={isSelected}
-                isBeingDragged={isBeingDragged}
-                isColliding={isBeingDragged && isCurrentDragColliding}
-                isDark={isDark}
-                isAdminDragMode={isAdminDragMode}
-                showAiHeatmap={showAiHeatmap}
-                holdSecondsLeft={holdSecondsLeft}
-                onPointerDownNode={handlePointerDownNode}
-              />
-            );
-          })}
-        </svg>
+            {/* ===============================================================
+                HANH LANG DI CHUYEN CHINH GIUA SAN (MAIN CORRIDOR)
+               =============================================================== */}
+            <text
+              x="245"
+              y="232"
+              textAnchor="middle"
+              fill={isDark ? '#475569' : '#94a3b8'}
+              fontSize="9"
+              fontWeight="700"
+              letterSpacing="2"
+            >
+              ─── HÀNH LANG DI CHUYỂN TRUNG TÂM ───
+            </text>
+
+            {/* ===============================================================
+                PHAN KHU 3 (GOC DUOI BEN TRAI): KHU BOT CACH AM (FOCUS BOOTH ZONE)
+               =============================================================== */}
+            <rect
+              x="28"
+              y="248"
+              width="215"
+              height="182"
+              rx="12"
+              fill={isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(248, 250, 252, 0.9)'}
+              stroke={isDark ? '#1e293b' : '#e2e8f0'}
+              strokeWidth="1.5"
+            />
+            <rect
+              x="40"
+              y="256"
+              width="190"
+              height="20"
+              rx="5"
+              fill={isDark ? '#1e293b' : '#f1f5f9'}
+            />
+            <text
+              x="48"
+              y="269"
+              fill={isDark ? '#94a3b8' : '#475569'}
+              fontSize="9.5"
+              fontWeight="800"
+            >
+              ZONE F • BỐT YÊN TĨNH (FOCUS)
+            </text>
+
+            {/* ===============================================================
+                PHAN KHU 4 (GOC DUOI GIUA): KHU THAO LUAN NHOM (COLLABORATION HUB)
+               =============================================================== */}
+            <rect
+              x="256"
+              y="248"
+              width="335"
+              height="182"
+              rx="12"
+              fill={isDark ? 'rgba(15, 23, 42, 0.45)' : 'rgba(248, 250, 252, 0.9)'}
+              stroke={isDark ? '#1e293b' : '#e2e8f0'}
+              strokeWidth="1.5"
+            />
+            <rect
+              x="268"
+              y="256"
+              width="225"
+              height="20"
+              rx="5"
+              fill={isDark ? '#1e293b' : '#f1f5f9'}
+            />
+            <text
+              x="278"
+              y="269"
+              fill={isDark ? '#94a3b8' : '#475569'}
+              fontSize="9.5"
+              fontWeight="800"
+            >
+              ZONE C • KHU THẢO LUẬN (COLLAB HUB 6P)
+            </text>
+
+            {/* ===============================================================
+                PHAN KHU 5 (GOC DUOI BEN PHAI): SANH VAO, QUAY CHECK-IN QR & PANTRY
+               =============================================================== */}
+            <rect
+              x="604"
+              y="258"
+              width="166"
+              height="172"
+              rx="12"
+              fill={isDark ? 'rgba(30, 41, 59, 0.3)' : 'rgba(241, 245, 249, 0.6)'}
+              stroke={isDark ? '#334155' : '#cbd5e1'}
+              strokeDasharray="4 4"
+            />
+            <text
+              x="687"
+              y="282"
+              textAnchor="middle"
+              fill={isDark ? '#94a3b8' : '#64748b'}
+              fontSize="9.5"
+              fontWeight="800"
+            >
+              SẢNH & QUẦY QR CHECK-IN
+            </text>
+            {/* Quầy Lễ tân / Kiosk Quét QR */}
+            <rect
+              x="637"
+              y="305"
+              width="100"
+              height="34"
+              rx="8"
+              fill={isDark ? '#1e293b' : '#e2e8f0'}
+              stroke={isDark ? '#475569' : '#94a3b8'}
+            />
+            <text
+              x="687"
+              y="325"
+              textAnchor="middle"
+              fill={isDark ? '#cbd5e1' : '#475569'}
+              fontSize="9"
+              fontWeight="700"
+            >
+              KIOSK QUÉT MÃ QR
+            </text>
+            {/* Cửa chính ra vào */}
+            <text
+              x="687"
+              y="412"
+              textAnchor="middle"
+              fill={isDark ? '#64748b' : '#94a3b8'}
+              fontSize="9"
+              fontWeight="700"
+            >
+              ▲ LỐI VÀO THANG MÁY
+            </text>
+
+            {/* ===============================================================
+                VE TUNG VI TRI BAN / PHONG HOP 2.5D LEN MAT BANG
+               =============================================================== */}
+            {workspaceNodes.map((nodeItem) => {
+              const isSelected = nodeItem.nodeId === selectedNodeId;
+              const isBeingDragged = nodeItem.nodeId === draggingNodeId;
+              const safeX = Number.isFinite(nodeItem.position2D?.posX)
+                ? nodeItem.position2D.posX
+                : 120;
+              const safeY = Number.isFinite(nodeItem.position2D?.posY)
+                ? nodeItem.position2D.posY
+                : 130;
+
+              const renderX =
+                isBeingDragged && liveDragPosition ? liveDragPosition.posX : safeX;
+              const renderY =
+                isBeingDragged && liveDragPosition ? liveDragPosition.posY : safeY;
+
+              return (
+                <MemoizedFurnitureNode
+                  key={nodeItem.nodeId}
+                  nodeItem={nodeItem}
+                  renderX={renderX}
+                  renderY={renderY}
+                  isSelected={isSelected}
+                  isBeingDragged={isBeingDragged}
+                  isColliding={isBeingDragged && isCurrentDragColliding}
+                  isDark={isDark}
+                  isAdminDragMode={isAdminDragMode}
+                  showAiHeatmap={showAiHeatmap}
+                  holdSecondsLeft={holdSecondsLeft}
+                  onPointerDownNode={handlePointerDownNode}
+                />
+              );
+            })}
+          </svg>
+        </div>
       </div>
 
-      {/* Thanh ghi chu nho phia duoi */}
       <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
-        <span className="flex items-center gap-1.5">
-          <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-          Bảo vệ chống chồng lấp tọa độ (Anti-Collision Guard) đang hoạt động
+        <span>
+          Mô hình nội thất 2.5D hiển thị số lượng ghế thực tế quanh từng bàn và màn hình làm việc
         </span>
-        <span>Hỗ trợ thao tác chạm trên iPad/Mobile & Chuột máy tính</span>
+        <span>
+          Bấm nút &ldquo;Sắp xếp Chuẩn Kiến trúc&rdquo; nếu muốn căn chỉnh các bàn vào đúng tâm từng phân khu
+        </span>
       </div>
     </div>
   );
