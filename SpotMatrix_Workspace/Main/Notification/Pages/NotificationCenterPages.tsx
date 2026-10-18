@@ -1,33 +1,48 @@
 import React, { useState } from 'react';
-import { Bell, CheckCheck, Trash2, Send, ArrowUpRight } from 'lucide-react';
-import { NotificationRecordItem } from '../../../Shared/Types/GlobalSystemTypes';
+import {
+  Bell,
+  CheckCheck,
+  Trash2,
+  Send,
+  ArrowUpRight,
+  CheckCircle2,
+  XCircle,
+} from 'lucide-react';
+import {
+  NotificationRecordItem,
+  UserRoleType,
+} from '../../../Shared/Types/GlobalSystemTypes';
 import { NotificationPanelLayout } from '../Layout/NotificationPanelLayout';
 
 interface NotificationCenterPagesProps {
   notifications: NotificationRecordItem[];
+  userRole?: UserRoleType;
   isDark: boolean;
   onSelectAndNavigateNotification: (item: NotificationRecordItem) => void;
+  onHandleApprovalDecision?: (bookingId: string, decision: 'APPROVED' | 'REJECTED') => void;
   onMarkAllRead: () => void;
   onDeleteNotification: (id: string) => void;
   onTriggerTestNotification: (title: string, content: string) => void;
 }
 
 export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = ({
-  notifications,
+  notifications = [],
+  userRole = 'EMPLOYEE',
   isDark,
   onSelectAndNavigateNotification,
+  onHandleApprovalDecision,
   onMarkAllRead,
   onDeleteNotification,
   onTriggerTestNotification,
 }) => {
   const [filterMode, setFilterMode] = useState<'ALL' | 'UNREAD'>('ALL');
-  const [customTitle, setCustomTitle] = useState('Nhắc lịch Check-in QR bàn A-01');
+  const [customTitle, setCustomTitle] = useState('Nhắc lịch Check-in QR phòng M1-01');
   const [customContent, setCustomContent] = useState(
-    'Bạn còn 10 phút để quét mã QR nhận bàn A-01 trước khi hệ thống tự động giải phóng chỗ.'
+    'Phòng M1-01 đã nằm trong khung giờ 2 tiếng trước giờ bắt đầu, mời bạn quét mã QR nhận phòng.'
   );
 
-  // Loai bo thong bao cap nhat toa do (vi da chuyen sang Nhat ky hoat dong Admin)
-  const validNotifications = notifications.filter(
+  const canApprove = userRole === 'MANAGER' || userRole === 'SYS_ADMIN';
+  const validNotifications = (Array.isArray(notifications) ? notifications : []).filter(
     (n) => n.category !== 'FLOORPLAN_UPDATE'
   );
 
@@ -50,9 +65,11 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
             <Bell className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-extrabold">Trung tâm Thông báo Cá nhân</h2>
+            <h2 className="text-base font-extrabold">
+              Trung tâm Thông báo & Phê duyệt Yêu cầu Đặt phòng
+            </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Bấm trực tiếp vào bất kỳ thông báo nào để di chuyển tới bàn/phòng họp hoặc lịch đặt chỗ tương ứng
+              Bấm vào thông báo để đi tới vị trí phòng họp • Quản lý & Admin có thể duyệt yêu cầu trực tiếp tại đây
             </p>
           </div>
         </div>
@@ -67,9 +84,7 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
               type="button"
               onClick={() => setFilterMode('ALL')}
               className={`px-3 py-1.5 rounded-lg font-bold transition ${
-                filterMode === 'ALL'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500'
+                filterMode === 'ALL' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'
               }`}
             >
               Tất cả ({validNotifications.length})
@@ -104,7 +119,7 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
 
       <div className={`p-4 rounded-2xl border ${cardSurface}`}>
         <p className="text-xs font-bold mb-2.5 text-slate-500 dark:text-slate-400">
-          Mô phỏng phát Thông báo Realtime (Bật Pop-up êm dịu & gắn liên kết di chuyển tới bàn A-01):
+          Mô phỏng phát Thông báo Realtime:
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
           <input
@@ -146,57 +161,96 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
             Hiện không có thông báo nào trong danh mục này.
           </div>
         ) : (
-          displayedList.map((item) => (
-            <div
-              key={item.notificationId}
-              className={`p-4 flex items-start justify-between gap-4 transition group ${
-                !item.isRead
-                  ? isDark
-                    ? 'bg-indigo-950/15 hover:bg-indigo-950/30'
-                    : 'bg-indigo-50/30 hover:bg-indigo-50/70'
-                  : 'opacity-80 hover:opacity-100'
-              }`}
-            >
+          displayedList.map((item) => {
+            const isApprovalReq = Boolean(item.approvalBookingId);
+            const isPendingApproval = item.approvalHandledStatus === 'PENDING';
+
+            return (
               <div
-                onClick={() => onSelectAndNavigateNotification(item)}
-                className="flex items-start gap-3 cursor-pointer flex-1"
+                key={item.notificationId}
+                className={`p-4 flex flex-col gap-3 transition ${
+                  !item.isRead
+                    ? isDark
+                      ? 'bg-indigo-950/15'
+                      : 'bg-indigo-50/30'
+                    : 'opacity-85'
+                }`}
               >
-                <span
-                  className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
-                    !item.isRead ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                  }`}
-                />
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-extrabold group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1">
-                      {item.titleText}
-                      <ArrowUpRight className="w-3.5 h-3.5 opacity-60" />
-                    </span>
-                    {item.relatedNodeId && (
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold">
-                        Đi tới: {item.relatedNodeId}
+                <div className="flex items-start justify-between gap-4">
+                  <div
+                    onClick={() => onSelectAndNavigateNotification(item)}
+                    className="flex items-start gap-3 cursor-pointer flex-1 group"
+                  >
+                    <span
+                      className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
+                        !item.isRead ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                      }`}
+                    />
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-extrabold group-hover:text-indigo-600 flex items-center gap-1">
+                          {item.titleText}
+                          <ArrowUpRight className="w-3.5 h-3.5 opacity-60" />
+                        </span>
+                        {item.relatedNodeId && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                            Đi tới: {item.relatedNodeId}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400">
+                          {new Date(item.createdAtIso).toLocaleString('vi-VN')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {item.contentText}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onDeleteNotification(item.notificationId)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition"
+                    title="Xóa thông báo"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {isApprovalReq && canApprove && onHandleApprovalDecision && (
+                  <div className="pl-5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 text-xs">
+                    {isPendingApproval ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onHandleApprovalDecision(item.approvalBookingId!, 'APPROVED')
+                          }
+                          className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold flex items-center gap-1"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Chấp nhận yêu cầu
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onHandleApprovalDecision(item.approvalBookingId!, 'REJECTED')
+                          }
+                          className="px-3.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 font-bold flex items-center gap-1"
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Từ chối
+                        </button>
+                      </>
+                    ) : (
+                      <span className="font-bold text-slate-400">
+                        ✓ Yêu cầu đã được xử lý bởi @{item.approvalHandledBy || 'Quản lý/Admin'} (
+                        {item.approvalHandledStatus === 'APPROVED' ? 'Đã chấp nhận' : 'Đã từ chối'})
                       </span>
                     )}
-                    <span className="text-[11px] text-slate-400">
-                      {new Date(item.createdAtIso).toLocaleString('vi-VN')}
-                    </span>
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {item.contentText}
-                  </p>
-                </div>
+                )}
               </div>
-
-              <button
-                type="button"
-                onClick={() => onDeleteNotification(item.notificationId)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition"
-                title="Xóa thông báo"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </NotificationPanelLayout>

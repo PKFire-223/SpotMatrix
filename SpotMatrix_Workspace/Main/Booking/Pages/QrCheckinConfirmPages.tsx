@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -14,7 +14,7 @@ import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 
 interface QrCheckinConfirmPagesProps {
   isDark?: boolean;
-  onConfirmCheckinFromUrl?: (bookingId: string) => void;
+  onConfirmCheckinFromUrl?: (bookingId: string, exactScanTimeText: string) => void;
 }
 
 export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
@@ -23,6 +23,7 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
 }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const hasRecordedScanRef = useRef<boolean>(false);
 
   const bookingId = searchParams.get('bookingId') || 'BK-2026-001';
   const roomCode = searchParams.get('room') || 'M1-01';
@@ -30,13 +31,33 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
   const timeSlot = searchParams.get('time') || '08:00 - 10:00';
   const purposeNote = searchParams.get('purpose') || 'Họp triển khai dự án SpotMatrix';
 
+  // Đóng băng thời điểm quét QR ngay lúc mở trang xác nhận (Không bao giờ tự nhảy giây nữa)
+  const [frozenScanTimeText] = useState<string>(() => {
+    const fromParam = searchParams.get('scannedAt');
+    if (fromParam) return fromParam;
+    const now = new Date();
+    return `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+  });
+
   useEffect(() => {
+    if (hasRecordedScanRef.current) return;
+    hasRecordedScanRef.current = true;
+
     if (bookingId && onConfirmCheckinFromUrl) {
-      onConfirmCheckinFromUrl(bookingId);
+      onConfirmCheckinFromUrl(bookingId, frozenScanTimeText);
     }
-    // Dong bo trang thai Check-in sang tab chinh qua localStorage
-    localStorage.setItem('spotmatrix_last_qr_checkin_id', bookingId);
-  }, [bookingId, onConfirmCheckinFromUrl]);
+
+    localStorage.setItem(
+      'spotmatrix_last_qr_checkin_payload',
+      JSON.stringify({
+        bookingId,
+        roomCode,
+        userEmail,
+        scannedAtText: frozenScanTimeText,
+        timestamp: Date.now(),
+      })
+    );
+  }, [bookingId, roomCode, userEmail, frozenScanTimeText, onConfirmCheckinFromUrl]);
 
   return (
     <div
@@ -49,15 +70,13 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90'
         }`}
       >
-        {/* Header Logo */}
         <div className="flex items-center justify-between border-b pb-4 border-slate-100 dark:border-slate-800">
           <SpotMatrixLogo theme={isDark ? 'dark' : 'light'} variant="full" />
           <span className="px-3 py-1 rounded-full text-[11px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-400">
-            QR Verified
+            Đã Lưu Nhật Ký & MongoDB
           </span>
         </div>
 
-        {/* Huy hieu Xac nhan Thanh cong */}
         <div className="text-center space-y-2 py-2">
           <div className="w-16 h-16 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:text-teal-400 flex items-center justify-center mx-auto shadow-sm">
             <CheckCircle2 className="w-9 h-9" />
@@ -66,11 +85,10 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
             Xác nhận Check-in Đúng Hạn!
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-            Hệ thống SpotMatrix đã ghi nhận bạn có mặt tại phòng họp đúng khung giờ đăng ký.
+            Thời điểm quét QR đã được khóa cố định và cập nhật vào Nhật ký Hoạt động.
           </p>
         </div>
 
-        {/* Thong tin chi tiet Phieu Check-in */}
         <div
           className={`p-4 sm:p-5 rounded-2xl border space-y-3 text-xs ${
             isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50/90 border-slate-200/80'
@@ -106,10 +124,10 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
 
           <div className="flex items-center justify-between">
             <span className="text-slate-400 flex items-center gap-1.5">
-              <CalendarCheck className="w-3.5 h-3.5 text-teal-500" /> Thời điểm quét QR:
+              <CalendarCheck className="w-3.5 h-3.5 text-teal-500" /> Thời điểm quét (Đã chốt):
             </span>
-            <strong className="font-semibold">
-              {new Date().toLocaleTimeString('vi-VN')} • Hôm nay
+            <strong className="font-extrabold text-teal-600 dark:text-teal-400">
+              {frozenScanTimeText}
             </strong>
           </div>
 
@@ -119,7 +137,6 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
           </div>
         </div>
 
-        {/* Thong bao cong diem tin nhiem */}
         <div
           className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs ${
             isDark
@@ -138,16 +155,14 @@ export const QrCheckinConfirmPages: React.FC<QrCheckinConfirmPagesProps> = ({
           </span>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/dashboard')}
-            className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Quay về Bảng Điều khiển SpotMatrix
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/dashboard')}
+          className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Quay về Bảng Điều khiển SpotMatrix
+        </button>
 
         <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />

@@ -6,6 +6,8 @@ export type UserRoleType = 'EMPLOYEE' | 'MANAGER' | 'SYS_ADMIN';
 
 export type EquipmentStatusType = 'AVAILABLE' | 'IN_USE' | 'BROKEN';
 
+export type BookingApprovalStatusType = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
 export type AuditEventCategoryType =
   | 'OPTIMISTIC_LOCK_WIN'
   | 'OPTIMISTIC_LOCK_REJECTED'
@@ -13,6 +15,13 @@ export type AuditEventCategoryType =
   | 'QR_CHECKIN_SUCCESS'
   | 'FLOORPLAN_COORD_UPDATED'
   | 'POLICY_CONFIG_UPDATED';
+
+export type NotificationCategoryType =
+  | 'BOOKING_EVENT'
+  | 'BOOKING_APPROVAL_REQUEST'
+  | 'FLOORPLAN_UPDATE'
+  | 'TRUST_SCORE_ALERT'
+  | 'SYSTEM_SECURITY';
 
 export interface WorkspaceNodeItem {
   nodeId: string;
@@ -33,10 +42,18 @@ export interface BookingPayloadItem {
   bookingId: string;
   nodeId: string;
   userEmail: string;
+  requesterUsername?: string;
+  requesterRole?: UserRoleType;
+  departmentName?: string;
+  bookingDateIso?: string;
   startTimeIso: string;
   endTimeIso: string;
   purposeNote: string;
   bookingStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED';
+  approvalStatus?: BookingApprovalStatusType;
+  approvedByUsername?: string | null;
+  approvedAtIso?: string | null;
+  checkedInAtIso?: string | null;
   bookingEquipmentIds?: string[];
 }
 
@@ -61,6 +78,9 @@ export interface SharedEquipmentItem {
   assignedNodeId: string | null;
   position2D: { posX: number; posY: number };
   currentBookingId: string | null;
+  weeklyUsageHours?: number;
+  monthlyUsageHours?: number;
+  healthPercent?: number;
 }
 
 export interface SystemPolicyConfigItem {
@@ -87,19 +107,17 @@ export interface AuditConcurrencyLogItem {
   createdAtIso: string;
 }
 
-export type NotificationCategoryType =
-  | 'BOOKING_EVENT'
-  | 'FLOORPLAN_UPDATE'
-  | 'TRUST_SCORE_ALERT'
-  | 'SYSTEM_SECURITY';
-
 export interface NotificationRecordItem {
   notificationId: string;
   recipientEmail: string;
+  targetRole?: UserRoleType | 'ALL';
   titleText: string;
   contentText: string;
   category: NotificationCategoryType;
   isRead: boolean;
   relatedNodeId?: string;
+  approvalBookingId?: string;
+  approvalHandledStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvalHandledBy?: string;
   createdAtIso: string;
 }

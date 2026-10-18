@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -17,11 +17,17 @@ import {
   LogOut,
   ChevronRight,
   Sparkles,
+  User,
+  Settings,
+  Mail,
+  Building2,
+  Award,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
   AuditConcurrencyLogItem,
   BookingPayloadItem,
+  EquipmentStatusType,
   NotificationCategoryType,
   NotificationRecordItem,
   SeatStatusType,
@@ -32,10 +38,16 @@ import {
 } from '../Types/GlobalSystemTypes';
 import { ErrorBoundaryLayout } from '../../Error/Layout/ErrorBoundaryLayout';
 import { DashboardMainPages } from '../../Main/Dashboard/Pages/DashboardMainPages';
+import { DataOverviewPages } from '../../Main/Datamanager/Pages/DataOverviewPages';
 import { FloorplanMainPages } from '../../Main/Floorplan/Pages/FloorplanMainPages';
 import { BookingCalendarPages } from '../../Main/Booking/Pages/BookingCalendarPages';
 import { QrCheckinConfirmPages } from '../../Main/Booking/Pages/QrCheckinConfirmPages';
 import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/LoginPages';
+import {
+  ProfilePages,
+  UserProfileCustomization,
+} from '../../Main/Auth/Pages/ProfilePages';
+import { SettingsPages } from '../../Main/Auth/Pages/SettingsPages';
 import { NotificationHeaderBell } from '../../Main/Notification/Function/Components/NotificationHeaderBell';
 import { RealtimePopupToast } from '../../Main/Notification/Function/Components/RealtimePopupToast';
 import { NotificationCenterPages } from '../../Main/Notification/Pages/NotificationCenterPages';
@@ -45,6 +57,7 @@ import {
 } from '../../Main/Auditlog/Pages/AuditLogPages';
 
 const SESSION_STORAGE_KEY = 'spotmatrix_active_session_v2';
+const PROFILE_CUSTOM_STORAGE_KEY = 'spotmatrix_profile_custom_v2';
 
 type ActiveSidebarPage =
   | 'OVERVIEW'
@@ -52,9 +65,10 @@ type ActiveSidebarPage =
   | 'BOOKING'
   | 'NOTIFICATION'
   | 'DATAMANAGER'
-  | 'AUDIT';
+  | 'AUDIT'
+  | 'PROFILE'
+  | 'SETTINGS';
 
-// Ham sinh du lieu 5 Tang (Tang 1..4: Moi tang 6 Phong hop chinh thuc >= 2 nguoi; Tang 5: Hoi truong 30 cho)
 function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
   const rooms: WorkspaceNodeItem[] = [];
   const floorTemplates = [
@@ -133,7 +147,6 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
     });
   }
 
-  // TANG 5: HOI TRUONG LON DAU TRUONG LA MA (30 NGUOI)
   rooms.push({
     nodeId: 'NODE-H01',
     nodeCode: 'H-01',
@@ -150,6 +163,123 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
 
   return rooms;
 }
+
+const INITIAL_ROOM_EQUIPMENTS: SharedEquipmentItem[] = [
+  {
+    equipmentId: 'EQ-01',
+    equipmentCode: 'EQ-M101-TV4K-01',
+    equipmentName: 'Màn hình Hội nghị Sony Bravia 4K 75"',
+    categoryName: 'MONITOR_4K',
+    status: 'AVAILABLE',
+    assignedNodeId: 'M1-01',
+    position2D: { posX: 150, posY: 115 },
+    currentBookingId: null,
+    weeklyUsageHours: 24,
+    monthlyUsageHours: 96,
+    healthPercent: 98,
+  },
+  {
+    equipmentId: 'EQ-02',
+    equipmentCode: 'EQ-M101-CAM360-02',
+    equipmentName: 'Camera AI Tracking 360° Poly Studio',
+    categoryName: 'AUDIO_POD',
+    status: 'AVAILABLE',
+    assignedNodeId: 'M1-01',
+    position2D: { posX: 150, posY: 115 },
+    currentBookingId: null,
+    weeklyUsageHours: 22,
+    monthlyUsageHours: 88,
+    healthPercent: 97,
+  },
+  {
+    equipmentId: 'EQ-03',
+    equipmentCode: 'EQ-M102-LASER-01',
+    equipmentName: 'Máy chiếu Laser Epson 4K Pro',
+    categoryName: 'PROJECTOR',
+    status: 'IN_USE',
+    assignedNodeId: 'M1-02',
+    position2D: { posX: 400, posY: 115 },
+    currentBookingId: 'BK-2026-001',
+    weeklyUsageHours: 31,
+    monthlyUsageHours: 124,
+    healthPercent: 86,
+  },
+  {
+    equipmentId: 'EQ-04',
+    equipmentCode: 'EQ-M103-HUB-01',
+    equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
+    categoryName: 'TYPE_C_HUB',
+    status: 'BROKEN',
+    assignedNodeId: 'M1-03',
+    position2D: { posX: 650, posY: 115 },
+    currentBookingId: null,
+    weeklyUsageHours: 12,
+    monthlyUsageHours: 54,
+    healthPercent: 45,
+  },
+  {
+    equipmentId: 'EQ-05',
+    equipmentCode: 'EQ-M205-WACOM-01',
+    equipmentName: 'Bảng Tương tác Cảm ứng KTS Wacom 24"',
+    categoryName: 'WACOM_TABLET',
+    status: 'AVAILABLE',
+    assignedNodeId: 'M2-05',
+    position2D: { posX: 400, posY: 345 },
+    currentBookingId: null,
+    weeklyUsageHours: 19,
+    monthlyUsageHours: 78,
+    healthPercent: 95,
+  },
+  {
+    equipmentId: 'EQ-06',
+    equipmentCode: 'EQ-H01-PANO-01',
+    equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường',
+    categoryName: 'PROJECTOR',
+    status: 'AVAILABLE',
+    assignedNodeId: 'H-01',
+    position2D: { posX: 400, posY: 230 },
+    currentBookingId: null,
+    weeklyUsageHours: 28,
+    monthlyUsageHours: 112,
+    healthPercent: 99,
+  },
+];
+
+const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
+  {
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    role: 'SYS_ADMIN',
+    departmentName: 'System Governance',
+    trustScore: 100,
+    onTimeCheckInCount: 32,
+    noShowPenaltyCount: 0,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
+  {
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    role: 'MANAGER',
+    departmentName: 'Product & Engineering',
+    trustScore: 100,
+    onTimeCheckInCount: 28,
+    noShowPenaltyCount: 0,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
+  {
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    role: 'EMPLOYEE',
+    departmentName: 'Product & Engineering',
+    trustScore: 96,
+    onTimeCheckInCount: 18,
+    noShowPenaltyCount: 1,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
+];
 
 const INITIAL_FIVE_FLOOR_ROOMS = buildStandardFiveFloorRooms();
 
@@ -171,7 +301,7 @@ const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
     username: 'Managerlead123',
     userEmail: 'manager.lead@spotmatrix.vn',
     fullName: 'Lê Thu Hà (Quản lý)',
-    departmentName: 'Workspace Operations',
+    departmentName: 'Product & Engineering',
     role: 'MANAGER',
     trustScore: 100,
     accountStatus: 'ACTIVE',
@@ -182,30 +312,20 @@ const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
     accountCode: 'ACC-EMP-003',
     username: 'Employeedev123',
     userEmail: 'employee.dev@spotmatrix.vn',
-    fullName: 'Nguyễn Minh Quân (Backend Dev)',
-    departmentName: 'Platform Engineering',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    departmentName: 'Product & Engineering',
     role: 'EMPLOYEE',
     trustScore: 96,
     accountStatus: 'ACTIVE',
-    isOnline: false,
-    lastActiveText: '14 phút trước',
-  },
-  {
-    accountCode: 'ACC-EMP-004',
-    username: 'Quang',
-    userEmail: 'quang@spotmatrix.vn',
-    fullName: 'Nguyễn Văn Quang',
-    departmentName: 'Product & Engineering',
-    role: 'MANAGER',
-    trustScore: 100,
-    accountStatus: 'ACTIVE',
     isOnline: true,
-    lastActiveText: 'Đang hoạt động',
+    lastActiveText: 'Vừa truy cập',
   },
 ];
 
 const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
+  const avatarDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState<boolean>(false);
 
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('spotmatrix_theme_mode');
@@ -228,6 +348,18 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   });
 
+  // Lưu trữ tùy chỉnh Avatar & Ảnh nền Background của người dùng
+  const [profileCustomMap, setProfileCustomMap] = useState<
+    Record<string, { avatarUrl: string | null; backgroundUrl: string | null; phoneNumber: string; jobTitle: string; bioText: string }>
+  >(() => {
+    try {
+      const raw = localStorage.getItem(PROFILE_CUSTOM_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+
   const [activePage, setActivePage] = useState<ActiveSidebarPage>('OVERVIEW');
   const [workspaceNodes, setWorkspaceNodes] =
     useState<WorkspaceNodeItem[]>(INITIAL_FIVE_FLOOR_ROOMS);
@@ -243,25 +375,50 @@ const MainWorkspaceRoutes: React.FC = () => {
     {
       bookingId: 'BK-2026-001',
       nodeId: 'M1-01',
-      userEmail: 'architect.lead@spotmatrix.vn',
+      userEmail: 'employee.dev@spotmatrix.vn',
+      requesterUsername: 'Employeedev123',
+      requesterRole: 'EMPLOYEE',
+      bookingDateIso: new Date().toISOString().slice(0, 10),
       startTimeIso: '08:00',
       endTimeIso: '10:00',
       purposeNote: 'Họp Kiến trúc Hệ thống 3D (Tầng 1)',
       bookingStatus: 'CONFIRMED',
+      approvalStatus: 'APPROVED',
+      approvedByUsername: 'Managerlead123',
     },
     {
       bookingId: 'BK-2026-002',
       nodeId: 'H01-A3',
       userEmail: 'manager.lead@spotmatrix.vn',
+      requesterUsername: 'Managerlead123',
+      requesterRole: 'MANAGER',
+      bookingDateIso: new Date().toISOString().slice(0, 10),
       startTimeIso: '13:00',
       endTimeIso: '15:00',
       purposeNote: '[Hội trường Tầng 5 - Ghế H01-A3] Townhall Quý 4',
       bookingStatus: 'CHECKED_IN',
+      approvalStatus: 'APPROVED',
+      approvedByUsername: 'Systemadmin123',
+      checkedInAtIso: '12:45:10 • Hôm nay',
     },
   ]);
-  const [equipmentsList, setEquipmentsList] = useState<SharedEquipmentItem[]>([]);
-  const [trustProfiles, setTrustProfiles] = useState<UserTrustProfileItem[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditConcurrencyLogItem[]>([]);
+
+  const [equipmentsList, setEquipmentsList] =
+    useState<SharedEquipmentItem[]>(INITIAL_ROOM_EQUIPMENTS);
+  const [trustProfiles, setTrustProfiles] =
+    useState<UserTrustProfileItem[]>(INITIAL_TRUST_PROFILES);
+  const [auditLogs, setAuditLogs] = useState<AuditConcurrencyLogItem[]>([
+    {
+      auditId: 'AUD-INIT-01',
+      eventCategory: 'QR_CHECKIN_SUCCESS',
+      actorEmail: 'manager.lead@spotmatrix.vn',
+      targetNodeId: 'H01-A3',
+      outcomeStatus: 'SUCCESS',
+      detailMessage:
+        'Xác nhận quét QR đúng hạn tại Hội trường H01-A3 lúc 12:45:10 (+2 điểm tín nhiệm).',
+      createdAtIso: new Date().toISOString(),
+    },
+  ]);
   const [managedUsers, setManagedUsers] =
     useState<ManagedUserAccountItem[]>(INITIAL_MANAGED_USERS);
 
@@ -271,59 +428,99 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
 
-  // Lang nghe su kien Check-in QR tu Tab moi (/qr-checkin)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        avatarDropdownRef.current &&
+        !avatarDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const recordRealtimeAuditLog = useCallback(
+    (
+      eventCategory: AuditConcurrencyLogItem['eventCategory'],
+      actorEmail: string,
+      targetNodeId: string,
+      detailMessage: string
+    ) => {
+      const newAudit: AuditConcurrencyLogItem = {
+        auditId: `AUD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
+        eventCategory,
+        actorEmail,
+        targetNodeId,
+        outcomeStatus: 'SUCCESS',
+        detailMessage,
+        createdAtIso: new Date().toISOString(),
+      };
+      setAuditLogs((prev) => [newAudit, ...prev]);
+    },
+    []
+  );
+
   useEffect(() => {
     const handleStorageSync = (e: StorageEvent) => {
-      if (e.key === 'spotmatrix_last_qr_checkin_id' && e.newValue) {
-        setBookingsList((prev) =>
-          prev.map((b) =>
-            b.bookingId === e.newValue ? { ...b, bookingStatus: 'CHECKED_IN' } : b
-          )
-        );
+      if (e.key === 'spotmatrix_last_qr_checkin_payload' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setBookingsList((prev) =>
+            prev.map((b) =>
+              b.bookingId === parsed.bookingId
+                ? {
+                    ...b,
+                    bookingStatus: 'CHECKED_IN',
+                    checkedInAtIso: parsed.scannedAtText,
+                  }
+                : b
+            )
+          );
+          recordRealtimeAuditLog(
+            'QR_CHECKIN_SUCCESS',
+            parsed.userEmail,
+            parsed.roomCode,
+            `Đã quét QR Check-in đúng hạn cho vé ${parsed.bookingId} tại thời điểm cố định: [${parsed.scannedAtText}].`
+          );
+        } catch {
+          // Bỏ qua
+        }
       }
     };
     window.addEventListener('storage', handleStorageSync);
     return () => window.removeEventListener('storage', handleStorageSync);
-  }, []);
+  }, [recordRealtimeAuditLog]);
 
   const pushRealtimeNotification = useCallback(
     async (
       titleText: string,
       contentText: string,
       category: NotificationCategoryType = 'BOOKING_EVENT',
-      relatedNodeId?: string
+      relatedNodeId?: string,
+      extraApproval?: {
+        approvalBookingId: string;
+        approvalHandledStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+      }
     ) => {
       if (category === 'FLOORPLAN_UPDATE') return;
 
       const localItem: NotificationRecordItem = {
-        notificationId: `NTF-${Date.now()}`,
+        notificationId: `NTF-${Date.now()}-${Math.floor(Math.random() * 99)}`,
         recipientEmail: userSession?.userProfile.userEmail || 'all',
         titleText,
         contentText,
         category,
         isRead: false,
         relatedNodeId,
+        approvalBookingId: extraApproval?.approvalBookingId,
+        approvalHandledStatus: extraApproval?.approvalHandledStatus,
         createdAtIso: new Date().toISOString(),
       };
 
       setNotificationsList((prev) => [localItem, ...prev]);
       setActivePopupNotification(localItem);
-
-      try {
-        await fetch('/api/v1/notifications', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            recipientEmail: localItem.recipientEmail,
-            titleText,
-            contentText,
-            category,
-            relatedNodeId,
-          }),
-        });
-      } catch {
-        // Giu local
-      }
     },
     [userSession]
   );
@@ -336,34 +533,54 @@ const MainWorkspaceRoutes: React.FC = () => {
     return () => clearTimeout(timer);
   }, [activePopupNotification]);
 
-  const fetchAllSyncedData = useCallback(async () => {
-    try {
-      const [eqRes, trustRes, auditRes, notifRes] = await Promise.all([
-        fetch('/api/v1/datamanager/equipments').then((r) => r.json()),
-        fetch('/api/v1/datamanager/trust-scores').then((r) => r.json()),
-        fetch('/api/v1/datamanager/audit-logs').then((r) => r.json()),
-        fetch('/api/v1/notifications').then((r) => r.json()),
-      ]);
-      if (eqRes?.success && Array.isArray(eqRes.data)) setEquipmentsList(eqRes.data);
-      if (trustRes?.success && Array.isArray(trustRes.data)) setTrustProfiles(trustRes.data);
-      if (auditRes?.success && Array.isArray(auditRes.data)) setAuditLogs(auditRes.data);
-      if (notifRes?.success && Array.isArray(notifRes.data)) {
-        setNotificationsList(
-          notifRes.data.filter(
-            (n: NotificationRecordItem) => n.category !== 'FLOORPLAN_UPDATE'
-          )
+  const handleLoginSuccess = (sessionData: AuthenticatedUserSession) => {
+    setUserSession(sessionData);
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+    setActivePage('OVERVIEW');
+    navigate('/dashboard', { replace: true });
+
+    setManagedUsers((prev) => {
+      const exists = prev.some(
+        (u) => u.username.toLowerCase() === sessionData.userProfile.username.toLowerCase()
+      );
+      if (exists) {
+        return prev.map((u) =>
+          u.username.toLowerCase() === sessionData.userProfile.username.toLowerCase()
+            ? { ...u, isOnline: true, lastActiveText: 'Vừa đăng nhập' }
+            : u
         );
       }
-    } catch {
-      // Su dung INITIAL_FIVE_FLOOR_ROOMS
-    }
-  }, []);
+      return [
+        {
+          accountCode: sessionData.userProfile.accountCode,
+          username: sessionData.userProfile.username,
+          userEmail: sessionData.userProfile.userEmail,
+          fullName: sessionData.userProfile.fullName,
+          departmentName: sessionData.userProfile.departmentName,
+          role: sessionData.userProfile.role,
+          trustScore: sessionData.userProfile.trustScore,
+          accountStatus: 'ACTIVE',
+          isOnline: true,
+          lastActiveText: 'Vừa đăng nhập',
+        },
+        ...prev,
+      ];
+    });
+  };
 
-  useEffect(() => {
-    if (userSession) {
-      fetchAllSyncedData();
-    }
-  }, [userSession, fetchAllSyncedData]);
+  const handleLogout = () => {
+    setIsAvatarMenuOpen(false);
+    setUserSession(null);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    setActivePopupNotification(null);
+    navigate('/login', { replace: true });
+  };
+
+  const handleDeleteNotification = (notificationId: string) => {
+    setNotificationsList((prev) =>
+      prev.filter((item) => item.notificationId !== notificationId)
+    );
+  };
 
   const handleSelectAndNavigateNotification = (notifItem: NotificationRecordItem) => {
     setNotificationsList((prev) =>
@@ -382,17 +599,8 @@ const MainWorkspaceRoutes: React.FC = () => {
         setActivePage('FLOORPLAN');
         return;
       }
-      if (notifItem.relatedNodeId.startsWith('H01-')) {
-        setActivePage('BOOKING');
-        return;
-      }
     }
-
-    if (notifItem.category === 'BOOKING_EVENT') {
-      setActivePage('BOOKING');
-    } else {
-      setActivePage('FLOORPLAN');
-    }
+    setActivePage('BOOKING');
   };
 
   const handleNavigateToBookingWithSlot = (
@@ -404,34 +612,47 @@ const MainWorkspaceRoutes: React.FC = () => {
     setActivePage('BOOKING');
   };
 
-  const handleLoginSuccess = (sessionData: AuthenticatedUserSession) => {
-    setUserSession(sessionData);
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-    setActivePage('OVERVIEW');
-    navigate('/dashboard', { replace: true });
-    setTimeout(() => {
-      pushRealtimeNotification(
-        `Xin chào ${sessionData.userProfile.fullName}`,
-        `Hệ thống 5 Tầng Phòng họp 3D & Hội trường đã sẵn sàng.`,
-        'SYSTEM_SECURITY',
-        'NODE-M101'
-      );
-    }, 300);
-  };
+  const handleApprovalDecision = (
+    bookingId: string,
+    decision: 'APPROVED' | 'REJECTED'
+  ) => {
+    const actorUsername = userSession?.userProfile.username || 'Systemadmin123';
 
-  const handleLogout = () => {
-    setUserSession(null);
-    sessionStorage.removeItem(SESSION_STORAGE_KEY);
-    setActivePopupNotification(null);
-    navigate('/login', { replace: true });
-  };
+    setBookingsList((prev) =>
+      prev.map((b) =>
+        b.bookingId === bookingId
+          ? {
+              ...b,
+              approvalStatus: decision,
+              approvedByUsername: actorUsername,
+              approvedAtIso: new Date().toLocaleTimeString('vi-VN'),
+              bookingStatus: decision === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED',
+            }
+          : b
+      )
+    );
 
-  const handleMarkAllNotificationsRead = async () => {
-    setNotificationsList((prev) => prev.map((item) => ({ ...item, isRead: true })));
-  };
+    setNotificationsList((prev) =>
+      prev.map((n) =>
+        n.approvalBookingId === bookingId
+          ? {
+              ...n,
+              isRead: true,
+              approvalHandledStatus: decision,
+              approvalHandledBy: actorUsername,
+            }
+          : n
+      )
+    );
 
-  const handleDeleteNotification = async (notificationId: string) => {
-    setNotificationsList((prev) => prev.filter((i) => i.notificationId !== notificationId));
+    recordRealtimeAuditLog(
+      'POLICY_CONFIG_UPDATED',
+      actorUsername,
+      bookingId,
+      `@${actorUsername} đã [${
+        decision === 'APPROVED' ? 'CHẤP NHẬN' : 'TỪ CHỐI'
+      }] yêu cầu đặt phòng ${bookingId}.`
+    );
   };
 
   const handleUpdateNodeCoords = async (nodeId: string, posX: number, posY: number) => {
@@ -462,7 +683,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     amenitiesList: string[];
   }) => {
     const newNode: WorkspaceNodeItem = {
-      nodeId: `NODE-${payload.nodeCode}-${Date.now().toString().slice(-3)}`,
+      nodeId: `NODE-${payload.nodeCode.replace('-', '')}-${Date.now().toString().slice(-3)}`,
       nodeCode: payload.nodeCode,
       nodeLabel: payload.nodeLabel,
       zoneType: payload.zoneType,
@@ -483,43 +704,91 @@ const MainWorkspaceRoutes: React.FC = () => {
     customEmail?: string,
     note?: string,
     customTargetCode?: string,
-    timeWindow?: { start: string; end: string }
+    timeWindow?: { start: string; end: string; dateIso?: string }
   ) => {
     const codeToBook = customTargetCode || targetNode.nodeCode;
+    const currentRole = userSession?.userProfile.role || 'EMPLOYEE';
+    const isEmployeeRequest = currentRole === 'EMPLOYEE';
 
-    if (!customTargetCode || !customTargetCode.startsWith('H01-')) {
-      handleUpdateNodeStatus(targetNode.nodeId, 'RESERVED');
-    }
+    handleUpdateNodeStatus(
+      targetNode.nodeId,
+      isEmployeeRequest ? 'HOLDING' : 'RESERVED'
+    );
 
+    const newBookingId = `BK-${Date.now().toString().slice(-4)}`;
     const newBookingItem: BookingPayloadItem = {
-      bookingId: `BK-${Date.now().toString().slice(-4)}`,
+      bookingId: newBookingId,
       nodeId: codeToBook,
-      userEmail: customEmail || userSession?.userProfile.userEmail || 'member@spotmatrix.vn',
+      userEmail: customEmail || userSession?.userProfile.userEmail || 'employee@spotmatrix.vn',
+      requesterUsername: userSession?.userProfile.username || 'Employeedev123',
+      requesterRole: currentRole,
+      departmentName: userSession?.userProfile.departmentName || 'Product & Engineering',
+      bookingDateIso: timeWindow?.dateIso || new Date().toISOString().slice(0, 10),
       startTimeIso: timeWindow?.start || '08:00',
       endTimeIso: timeWindow?.end || '10:00',
       purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
       bookingStatus: 'CONFIRMED',
+      approvalStatus: isEmployeeRequest ? 'PENDING_APPROVAL' : 'APPROVED',
+      approvedByUsername: isEmployeeRequest
+        ? null
+        : userSession?.userProfile.username || 'Systemadmin123',
     };
 
     setBookingsList((prev) => [newBookingItem, ...prev]);
-    pushRealtimeNotification(
-      `Đặt lịch thành công: ${codeToBook}`,
-      `Đã tạo mã QR Check-in cho "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
-      'BOOKING_EVENT',
-      codeToBook.startsWith('H01-') ? codeToBook : targetNode.nodeId
+
+    if (isEmployeeRequest) {
+      pushRealtimeNotification(
+        `[Cần Phê Duyệt] Nhân viên đặt phòng ${codeToBook}`,
+        `Nhân viên @${userSession?.userProfile.username} xin đặt phòng ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+        'BOOKING_APPROVAL_REQUEST',
+        targetNode.nodeId,
+        {
+          approvalBookingId: newBookingId,
+          approvalHandledStatus: 'PENDING',
+        }
+      );
+    } else {
+      pushRealtimeNotification(
+        `Đặt lịch thành công: ${codeToBook}`,
+        `Đã cấp mã QR Check-in cho "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+        'BOOKING_EVENT',
+        targetNode.nodeId
+      );
+    }
+  };
+
+  const handleCheckInBooking = (bookingId: string, exactScanTimeText?: string) => {
+    const now = new Date();
+    const frozenTime =
+      exactScanTimeText ||
+      `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+
+    const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+
+    setBookingsList((prev) =>
+      prev.map((b) =>
+        b.bookingId === bookingId
+          ? { ...b, bookingStatus: 'CHECKED_IN', checkedInAtIso: frozenTime }
+          : b
+      )
+    );
+
+    recordRealtimeAuditLog(
+      'QR_CHECKIN_SUCCESS',
+      targetBk?.userEmail || userSession?.userProfile.username || 'User',
+      targetBk?.nodeId || bookingId,
+      `Xác nhận quét mã QR đúng hạn cho vé ${bookingId} tại thời điểm cố định: [${frozenTime}] (+2 điểm tín nhiệm).`
     );
   };
 
-  const handleCheckInBooking = (bookingId: string) => {
-    setBookingsList((prev) =>
-      prev.map((b) =>
-        b.bookingId === bookingId ? { ...b, bookingStatus: 'CHECKED_IN' } : b
+  const handleUpdateEquipmentStatus = (
+    equipmentId: string,
+    nextStatus: EquipmentStatusType
+  ) => {
+    setEquipmentsList((prev) =>
+      prev.map((eq) =>
+        eq.equipmentId === equipmentId ? { ...eq, status: nextStatus } : eq
       )
-    );
-    pushRealtimeNotification(
-      `Check-in QR Thành công (+2 điểm)`,
-      `Vé ${bookingId} đã được xác nhận đúng hạn. Điểm tín nhiệm +2đ.`,
-      'TRUST_SCORE_ALERT'
     );
   };
 
@@ -544,11 +813,50 @@ const MainWorkspaceRoutes: React.FC = () => {
     setManagedUsers((prev) => prev.filter((u) => u.username !== username));
   };
 
+  // Lưu thay đổi Hồ sơ cá nhân & Ảnh Avatar / Ảnh bìa Background
+  const currentUsernameKey = userSession?.userProfile.username || 'default';
+  const currentCustomProfile = profileCustomMap[currentUsernameKey] || {
+    avatarUrl: null,
+    backgroundUrl: null,
+    phoneNumber: '0908 123 456',
+    jobTitle: 'Senior System Member',
+    bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+  };
+
+  const handleSaveProfileCustomization = (updated: UserProfileCustomization) => {
+    const nextMap = {
+      ...profileCustomMap,
+      [currentUsernameKey]: {
+        avatarUrl: updated.avatarUrl,
+        backgroundUrl: updated.backgroundUrl,
+        phoneNumber: updated.phoneNumber,
+        jobTitle: updated.jobTitle,
+        bioText: updated.bioText,
+      },
+    };
+    setProfileCustomMap(nextMap);
+    localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
+
+    if (userSession) {
+      const nextSession: AuthenticatedUserSession = {
+        ...userSession,
+        userProfile: {
+          ...userSession.userProfile,
+          fullName: updated.fullName,
+          userEmail: updated.userEmail,
+          departmentName: updated.departmentName,
+        },
+      };
+      setUserSession(nextSession);
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
+    }
+  };
+
   const sidebarItems = [
     {
       id: 'OVERVIEW' as ActiveSidebarPage,
       label: 'Tổng quan (Dashboard)',
-      sub: 'Biểu đồ & AI So sánh',
+      sub: 'Số liệu thật & AI So sánh',
       icon: LayoutDashboard,
       adminOnly: false,
     },
@@ -569,7 +877,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     {
       id: 'DATAMANAGER' as ActiveSidebarPage,
       label: 'Thiết bị & Tín nhiệm',
-      sub: 'Trust Score & Quotas',
+      sub: 'Mã số thiết bị & Điểm số',
       icon: Database,
       adminOnly: false,
     },
@@ -584,7 +892,6 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   return (
     <Routes>
-      {/* TRANG XAC NHAN KHI QUET MA QR CHECK-IN (MO O TAB MOI HOAC DIEN THOAI) */}
       <Route
         path="/qr-checkin"
         element={
@@ -675,75 +982,33 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v3.5
+                  SpotMatrix 5-Floor 3D v4.2
                 </div>
               </aside>
 
               <div className="flex-1 flex flex-col min-w-0">
                 <header
-                  className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 ${
+                  className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 sm:px-8 py-3 flex items-center justify-between gap-3 ${
                     isDark
                       ? 'bg-slate-900/90 border-slate-800'
                       : 'bg-white/95 border-slate-200/90 shadow-sm'
                   }`}
                 >
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <div
-                      className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border text-xs ${
-                        isDark
-                          ? 'bg-slate-950 border-slate-800 text-slate-200'
-                          : 'bg-slate-50 border-slate-200/90 text-slate-800'
-                      }`}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-teal-500" title="Đang Online" />
-                      <span className="font-extrabold">{userSession.userProfile.fullName}</span>
-                      <span className="text-slate-400">
-                        @{userSession.userProfile.username} • Tín nhiệm:{' '}
-                        <strong className="text-teal-600 dark:text-teal-400">
-                          {userSession.userProfile.trustScore}đ
-                        </strong>
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                        {userSession.userProfile.role}
-                      </span>
-                    </div>
-
+                  <div className="flex items-center gap-2.5">
                     <NotificationHeaderBell
                       notifications={notificationsList}
+                      userRole={userSession.userProfile.role}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
-                      onMarkAllRead={handleMarkAllNotificationsRead}
+                      onHandleApprovalDecision={handleApprovalDecision}
+                      onMarkAllRead={() =>
+                        setNotificationsList((prev) =>
+                          prev.map((item) => ({ ...item, isRead: true }))
+                        )
+                      }
                       onNavigateNotificationPage={() => setActivePage('NOTIFICATION')}
                     />
 
-                    <button
-                      type="button"
-                      onClick={toggleThemeMode}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                        isDark
-                          ? 'bg-slate-800 border-slate-700 text-amber-300'
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
-                      }`}
-                    >
-                      {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                      <span>{isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
-                        isDark
-                          ? 'bg-slate-900 border-slate-800 text-rose-400 hover:bg-rose-950/50'
-                          : 'bg-white border-slate-200 text-rose-600 hover:bg-rose-50 shadow-sm'
-                      }`}
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Thoát</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -759,11 +1024,168 @@ const MainWorkspaceRoutes: React.FC = () => {
                           );
                         }
                       }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      AI Gợi ý Phòng họp
+                      <span className="hidden sm:inline">AI Gợi ý Phòng họp</span>
                     </button>
+                  </div>
+
+                  {/* NGOAI CUNG BEN PHAI HEADER: NUT AVATAR TRON & POP-UP NHO DINH BEN PHAI */}
+                  <div className="relative ml-auto" ref={avatarDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
+                      className={`relative w-10 h-10 rounded-full border-2 flex items-center justify-center font-extrabold text-sm transition shadow-sm overflow-hidden ${
+                        isDark
+                          ? 'bg-indigo-950 border-indigo-500/60 text-indigo-200'
+                          : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      }`}
+                    >
+                      {currentCustomProfile.avatarUrl ? (
+                        <img
+                          src={currentCustomProfile.avatarUrl}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (userSession.userProfile.fullName || 'U').charAt(0).toUpperCase()
+                      )}
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-teal-500 border border-white dark:border-slate-900" />
+                    </button>
+
+                    {isAvatarMenuOpen && (
+                      <div
+                        className={`absolute right-0 mt-2.5 w-72 rounded-2xl border shadow-2xl z-50 overflow-hidden transition-all ${
+                          isDark
+                            ? 'bg-slate-900 border-slate-800 text-slate-100'
+                            : 'bg-white border-slate-200 text-slate-800'
+                        }`}
+                      >
+                        <div
+                          className={`p-4 border-b ${
+                            isDark
+                              ? 'bg-slate-950/70 border-slate-800'
+                              : 'bg-slate-50/80 border-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {currentCustomProfile.avatarUrl ? (
+                              <img
+                                src={currentCustomProfile.avatarUrl}
+                                alt="Avatar"
+                                className="w-11 h-11 rounded-full object-cover shrink-0 border border-indigo-500/30"
+                              />
+                            ) : (
+                              <div className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0">
+                                {(userSession.userProfile.fullName || 'U')
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-extrabold truncate">
+                                {userSession.userProfile.fullName}
+                              </p>
+                              <p className="text-xs text-slate-400 truncate">
+                                @{userSession.userProfile.username}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 space-y-1.5 text-xs">
+                            <p className="flex items-center justify-between">
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                <Mail className="w-3.5 h-3.5" /> Email:
+                              </span>
+                              <strong className="font-semibold truncate max-w-[155px]">
+                                {userSession.userProfile.userEmail}
+                              </strong>
+                            </p>
+                            <p className="flex items-center justify-between">
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5" /> Vai trò:
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                                {userSession.userProfile.role}
+                              </span>
+                            </p>
+                            <p className="flex items-center justify-between">
+                              <span className="text-slate-400 flex items-center gap-1.5">
+                                <Award className="w-3.5 h-3.5" /> Điểm tín nhiệm:
+                              </span>
+                              <strong className="font-extrabold text-teal-600 dark:text-teal-400">
+                                {userSession.userProfile.trustScore} điểm
+                              </strong>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-2 space-y-1 text-xs font-semibold">
+                          {/* DÒNG 1: CHUYỂN ĐẾN TRANG HỒ SƠ CÁ NHÂN (CÓ UPLOAD AVT & BACKGROUND) */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAvatarMenuOpen(false);
+                              setActivePage('PROFILE');
+                            }}
+                            className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
+                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                            }`}
+                          >
+                            <User className="w-4 h-4 text-indigo-600" />
+                            <span>Hồ sơ Cá nhân & Ảnh đại diện</span>
+                          </button>
+
+                          {/* DÒNG 2: CHUYỂN ĐỔI NHANH GIAO DIỆN SÁNG / TỐI */}
+                          <button
+                            type="button"
+                            onClick={toggleThemeMode}
+                            className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition ${
+                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="flex items-center gap-2.5">
+                              {isDark ? (
+                                <Sun className="w-4 h-4 text-amber-400" />
+                              ) : (
+                                <Moon className="w-4 h-4 text-indigo-600" />
+                              )}
+                              <span>Chế độ Sáng / Tối</span>
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-400">
+                              {isDark ? 'Đang bật Tối' : 'Đang bật Sáng'}
+                            </span>
+                          </button>
+
+                          {/* DÒNG 3: CHUYỂN ĐẾN TRANG CÀI ĐẶT HỆ THỐNG & TÀI KHOẢN */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAvatarMenuOpen(false);
+                              setActivePage('SETTINGS');
+                            }}
+                            className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
+                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
+                            }`}
+                          >
+                            <Settings className="w-4 h-4 text-teal-600" />
+                            <span>Cài đặt Hệ thống & Tài khoản</span>
+                          </button>
+
+                          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                          <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-rose-600 hover:bg-rose-500/10 font-bold transition"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Đăng xuất tài khoản</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </header>
 
@@ -817,6 +1239,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       selectedNode={selectedNode}
                       preselectedSlot={preselectedSlot}
                       userEmail={userSession.userProfile.userEmail}
+                      userRole={userSession.userProfile.role}
                       isDark={isDark}
                       onCreateNewBooking={(email, purpose, targetCode, timeWin) => {
                         if (selectedNode) {
@@ -831,9 +1254,15 @@ const MainWorkspaceRoutes: React.FC = () => {
                   {activePage === 'NOTIFICATION' && (
                     <NotificationCenterPages
                       notifications={notificationsList}
+                      userRole={userSession.userProfile.role}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
-                      onMarkAllRead={handleMarkAllNotificationsRead}
+                      onHandleApprovalDecision={handleApprovalDecision}
+                      onMarkAllRead={() =>
+                        setNotificationsList((prev) =>
+                          prev.map((item) => ({ ...item, isRead: true }))
+                        )
+                      }
                       onDeleteNotification={handleDeleteNotification}
                       onTriggerTestNotification={(title, content) =>
                         pushRealtimeNotification(title, content, 'BOOKING_EVENT', 'NODE-M101')
@@ -842,13 +1271,15 @@ const MainWorkspaceRoutes: React.FC = () => {
                   )}
 
                   {activePage === 'DATAMANAGER' && (
-                    <DashboardMainPages
+                    <DataOverviewPages
                       workspaceNodes={workspaceNodes}
-                      bookingsList={bookingsList}
                       equipmentsList={equipmentsList}
                       trustProfiles={trustProfiles}
-                      auditLogs={auditLogs}
+                      selectedNode={selectedNode}
+                      userRole={userSession.userProfile.role}
+                      userEmail={userSession.userProfile.userEmail}
                       isDark={isDark}
+                      onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
                     />
                   )}
 
@@ -856,9 +1287,43 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <AuditLogPages
                       auditLogs={auditLogs}
                       managedUsers={managedUsers}
+                      bookingsList={bookingsList}
                       isDark={isDark}
                       onToggleBlockUser={handleToggleBlockUser}
                       onDeleteUserAccount={handleDeleteUserAccount}
+                      onAdminOverrideBookingApproval={handleApprovalDecision}
+                    />
+                  )}
+
+                  {/* TRANG HỒ SƠ CÁ NHÂN (MỞ TỪ DÒNG 1 POP-UP AVATAR) */}
+                  {activePage === 'PROFILE' && (
+                    <ProfilePages
+                      profileData={{
+                        fullName: userSession.userProfile.fullName,
+                        userEmail: userSession.userProfile.userEmail,
+                        username: userSession.userProfile.username,
+                        role: userSession.userProfile.role,
+                        departmentName: userSession.userProfile.departmentName,
+                        accountCode: userSession.userProfile.accountCode,
+                        trustScore: userSession.userProfile.trustScore,
+                        phoneNumber: currentCustomProfile.phoneNumber,
+                        jobTitle: currentCustomProfile.jobTitle,
+                        bioText: currentCustomProfile.bioText,
+                        avatarUrl: currentCustomProfile.avatarUrl,
+                        backgroundUrl: currentCustomProfile.backgroundUrl,
+                      }}
+                      userBookings={bookingsList}
+                      isDark={isDark}
+                      onSaveProfileCustomization={handleSaveProfileCustomization}
+                    />
+                  )}
+
+                  {/* TRANG CÀI ĐẶT HỆ THỐNG (MỞ TỪ DÒNG 3 POP-UP AVATAR) */}
+                  {activePage === 'SETTINGS' && (
+                    <SettingsPages
+                      isDark={isDark}
+                      userRole={userSession.userProfile.role}
+                      onToggleTheme={toggleThemeMode}
                     />
                   )}
                 </main>
