@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { RotateCcw, Eye, UserCheck, Clock, Sparkles, Move3d } from 'lucide-react';
+import { RotateCcw, Eye, UserCheck, Clock, Move3d } from 'lucide-react';
 import {
   BookingPayloadItem,
   UserRoleType,
@@ -35,35 +35,30 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [hoveredInfo, setHoveredInfo] = useState<Hovered3DInfo | null>(null);
-  const [cameraAngles, setCameraAngles] = useState({ theta: 0.55, phi: 0.92, radius: 19 });
-
   const isSysAdmin = userRole === 'SYS_ADMIN';
 
-  // Refs giu trang thai xoay chuot muot 60 FPS khong can re-render React
   const orbitStateRef = useRef({
     isDragging: false,
     startX: 0,
     startY: 0,
-    theta: 0.55,
-    phi: 0.92,
-    radius: 19,
+    theta: 0.42,
+    phi: 0.88,
+    radius: 20,
   });
 
   const resetCameraView = () => {
-    orbitStateRef.current.theta = activeFloor === 3 ? 0.0 : 0.55;
-    orbitStateRef.current.phi = activeFloor === 3 ? 0.85 : 0.92;
-    orbitStateRef.current.radius = activeFloor === 3 ? 21 : 19;
-    setCameraAngles({ ...orbitStateRef.current });
+    orbitStateRef.current.theta = activeFloor === 5 ? 0.0 : 0.42;
+    orbitStateRef.current.phi = activeFloor === 5 ? 0.82 : 0.88;
+    orbitStateRef.current.radius = activeFloor === 5 ? 21.5 : 20;
   };
 
   useEffect(() => {
     const container = mountRef.current;
     if (!container) return;
 
-    const width = container.clientWidth || 760;
-    const height = 430;
+    const width = container.clientWidth || 780;
+    const height = 450;
 
-    // 1. Khoi tao Scene, Camera & Renderer WebGL
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(isDark ? 0x0b1120 : 0xf1f5f9);
 
@@ -73,7 +68,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
       camera.position.y = radius * Math.cos(phi);
       camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
-      camera.lookAt(0, 0.5, 0);
+      camera.lookAt(0, 0.4, 0);
     };
     updateCameraPosition();
 
@@ -86,26 +81,26 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 2. He thong Anh sang Kien truc 3D
-    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.75 : 0.95);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, isDark ? 0.9 : 1.1);
-    dirLight.position.set(12, 22, 14);
+    // He thong anh sang
+    scene.add(new THREE.AmbientLight(0xffffff, isDark ? 0.78 : 0.95));
+    const dirLight = new THREE.DirectionalLight(0xffffff, isDark ? 0.95 : 1.15);
+    dirLight.position.set(14, 24, 16);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
     dirLight.shadow.mapSize.height = 1024;
     scene.add(dirLight);
 
-    // 3. San Toa nha 3D & Luoi Toa do
-    const floorWidth = 18;
-    const floorDepth = 12;
-    const slabGeo = new THREE.BoxGeometry(floorWidth, 0.35, floorDepth);
+    // San Chinh cua Tang
+    const floorWidth = 18.6;
+    const floorDepth = 12.4;
     const slabMat = new THREE.MeshStandardMaterial({
-      color: isDark ? 0x1e293b : 0xffffff,
-      roughness: 0.6,
+      color: isDark ? 0x1e293b : 0xf8fafc,
+      roughness: 0.65,
     });
-    const floorSlab = new THREE.Mesh(slabGeo, slabMat);
+    const floorSlab = new THREE.Mesh(
+      new THREE.BoxGeometry(floorWidth, 0.36, floorDepth),
+      slabMat
+    );
     floorSlab.position.y = -0.18;
     floorSlab.receiveShadow = true;
     scene.add(floorSlab);
@@ -119,180 +114,198 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // Tuong kinh bao quanh san
-    const glassWallMat = new THREE.MeshStandardMaterial({
-      color: isDark ? 0x38bdf8 : 0x64748b,
-      transparent: true,
-      opacity: 0.18,
-      roughness: 0.2,
+    // Tuong bao ngoai Toa nha
+    const outerWallMat = new THREE.MeshStandardMaterial({
+      color: isDark ? 0x334155 : 0xcbd5e1,
+      roughness: 0.5,
     });
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(floorWidth, 1.8, 0.12), glassWallMat);
-    backWall.position.set(0, 0.9, -floorDepth / 2);
-    scene.add(backWall);
+    const backOuterWall = new THREE.Mesh(
+      new THREE.BoxGeometry(floorWidth, 1.85, 0.18),
+      outerWallMat
+    );
+    backOuterWall.position.set(0, 0.92, -floorDepth / 2);
+    scene.add(backOuterWall);
 
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, floorDepth), glassWallMat);
-    leftWall.position.set(-floorWidth / 2, 0.9, 0);
-    scene.add(leftWall);
+    const leftOuterWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 1.85, floorDepth),
+      outerWallMat
+    );
+    leftOuterWall.position.set(-floorWidth / 2, 0.92, 0);
+    scene.add(leftOuterWall);
 
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, floorDepth), glassWallMat);
-    rightWall.position.set(floorWidth / 2, 0.9, 0);
-    scene.add(rightWall);
+    const rightOuterWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 1.85, floorDepth),
+      outerWallMat
+    );
+    rightOuterWall.position.set(floorWidth / 2, 0.92, 0);
+    scene.add(rightOuterWall);
 
-    // Danh sach cac Mesh co the Click / Hover Raycast
     const interactiveMeshes: THREE.Object3D[] = [];
 
     const getStatusHex = (status: WorkspaceNodeItem['status']) => {
       switch (status) {
         case 'AVAILABLE':
-          return 0x0d9488; // Xanh ngoc Teal
+          return 0x0d9488;
         case 'HOLDING':
-          return 0xd97706; // Vang Amber
+          return 0xd97706;
         case 'RESERVED':
-          return 0x4f46e5; // Xanh Indigo
+          return 0x4f46e5;
         case 'OCCUPIED':
-          return 0xe11d48; // Do Rose
+          return 0xe11d48;
         default:
-          return 0x64748b; // Xam Bao tri
+          return 0x64748b;
       }
     };
 
-    // Ham tao 1 chiec ghe 3D (Chan ghe + Dem ngoi + Tua lung)
+    // Ham tao 1 chiec ghe hop 3D cao rao, ro net
     const createChair3D = (colorHex: number) => {
       const chairGroup = new THREE.Group();
-      const chairMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.4 });
-      const darkBaseMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+      const cushionMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.35 });
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
 
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.45), chairMat);
-      seat.position.y = 0.42;
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.09, 0.46), cushionMat);
+      seat.position.y = 0.44;
       seat.castShadow = true;
       chairGroup.add(seat);
 
-      const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.48, 0.08), chairMat);
-      backrest.position.set(0, 0.68, 0.2);
+      const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.52, 0.09), cushionMat);
+      backrest.position.set(0, 0.72, 0.19);
       backrest.castShadow = true;
       chairGroup.add(backrest);
 
-      const legPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 12), darkBaseMat);
-      legPole.position.y = 0.2;
-      chairGroup.add(legPole);
+      const armLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.36), frameMat);
+      armLeft.position.set(-0.24, 0.56, 0.02);
+      chairGroup.add(armLeft);
+
+      const armRight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.36), frameMat);
+      armRight.position.set(0.24, 0.56, 0.02);
+      chairGroup.add(armRight);
+
+      const pedestal = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.08, 0.42, 12),
+        frameMat
+      );
+      pedestal.position.y = 0.21;
+      chairGroup.add(pedestal);
 
       return chairGroup;
     };
 
     // =========================================================================
-    // NEU LA TANG 3 (TANG TREN CUNG): DUNG MO HINH 3D HOI TRUONG DAU TRUONG LA MA
+    // TANG 5: HOI TRUONG LON DAU TRUONG LA MA (BAC THEM RONG TAM - KHONG CHE GHE)
     // =========================================================================
-    if (activeFloor === 3) {
+    if (activeFloor === 5) {
       const hallNode =
-        workspaceNodes.find((n) => n.floorLevel === 3) ||
+        workspaceNodes.find((n) => n.floorLevel === 5) ||
         workspaceNodes[workspaceNodes.length - 1];
 
-      // 1. San khau Tron Trung tam (Speaker Podium 360)
-      const stageGroup = new THREE.Group();
-      const stagePod = new THREE.Mesh(
-        new THREE.CylinderGeometry(2.1, 2.3, 0.45, 40),
-        new THREE.MeshStandardMaterial({ color: 0x312e81, roughness: 0.35 })
+      // Tham do / xanh dan loi trung tam vao Hoi truong
+      const aisleCarpet = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 0.03, 11.8),
+        new THREE.MeshStandardMaterial({ color: 0x312e81, roughness: 0.8 })
       );
-      stagePod.position.set(0, 0.22, 1.2);
-      stagePod.castShadow = true;
-      stagePod.receiveShadow = true;
-      stageGroup.add(stagePod);
+      aisleCarpet.position.set(0, 0.02, 0);
+      scene.add(aisleCarpet);
 
-      const stageRing = new THREE.Mesh(
-        new THREE.RingGeometry(2.15, 2.35, 40),
+      // 1. SAN KHAU TRON TRUNG TAM (SPEAKER PODIUM 360) O TAM HOI TRUONG
+      const stageCenterZ = -1.6;
+      const stageCylinder = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.1, 2.25, 0.28, 48),
+        new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.3 })
+      );
+      stageCylinder.position.set(0, 0.14, stageCenterZ);
+      stageCylinder.receiveShadow = true;
+      scene.add(stageCylinder);
+
+      const stageLedRing = new THREE.Mesh(
+        new THREE.RingGeometry(2.05, 2.22, 48),
         new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide })
       );
-      stageRing.rotation.x = -Math.PI / 2;
-      stageRing.position.set(0, 0.46, 1.2);
-      stageGroup.add(stageRing);
+      stageLedRing.rotation.x = -Math.PI / 2;
+      stageLedRing.position.set(0, 0.29, stageCenterZ);
+      scene.add(stageLedRing);
 
-      // Buc phat bieu cua Dien gia o tam San khau
-      const podiumStand = new THREE.Mesh(
-        new THREE.BoxGeometry(0.65, 0.9, 0.45),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
+      // Ban Dien gia & Micro o giua San khau
+      const lectern = new THREE.Mesh(
+        new THREE.BoxGeometry(0.75, 0.85, 0.45),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 })
       );
-      podiumStand.position.set(0, 0.85, 1.2);
-      stageGroup.add(podiumStand);
+      lectern.position.set(0, 0.7, stageCenterZ);
+      lectern.castShadow = true;
+      scene.add(lectern);
 
       // Man hinh LED Cong Panorama phia sau San khau
-      const screenCurveGeo = new THREE.CylinderGeometry(
-        5.5,
-        5.5,
-        2.4,
-        32,
+      const ledArcGeo = new THREE.CylinderGeometry(
+        4.8,
+        4.8,
+        2.3,
+        40,
         1,
         true,
-        -Math.PI * 0.28,
+        Math.PI * 0.72,
         Math.PI * 0.56
       );
-      const screenCurveMat = new THREE.MeshStandardMaterial({
+      const ledArcMat = new THREE.MeshStandardMaterial({
         color: 0x0f172a,
-        emissive: 0x1e3a8a,
-        emissiveIntensity: 0.55,
+        emissive: 0x2563eb,
+        emissiveIntensity: 0.45,
         side: THREE.DoubleSide,
       });
-      const curvedScreen = new THREE.Mesh(screenCurveGeo, screenCurveMat);
-      curvedScreen.position.set(0, 1.35, -0.8);
-      stageGroup.add(curvedScreen);
+      const ledScreen = new THREE.Mesh(ledArcGeo, ledArcMat);
+      ledScreen.position.set(0, 1.35, stageCenterZ + 0.6);
+      scene.add(ledScreen);
 
-      scene.add(stageGroup);
-
-      // 2. Ba Bac them Vong cung Dau truong La Ma (Tier A, Tier B, Tier C)
-      const tiersConfig = [
-        { radius: 3.4, height: 0.2, count: 6, prefix: 'A' },
-        { radius: 4.8, height: 0.5, count: 9, prefix: 'B' },
-        { radius: 6.2, height: 0.85, count: 11, prefix: 'C' },
+      // 2. 3 VONG CUNG BAC THEM RONG TAM (KHONG DUNG KHOI DAC DE TRANH LAP GHE TRONG)
+      const amphitheaterTiers = [
+        { radius: 3.3, stepHeight: 0.16, count: 7, prefix: 'A' },
+        { radius: 4.7, stepHeight: 0.42, count: 9, prefix: 'B' },
+        { radius: 6.1, stepHeight: 0.68, count: 12, prefix: 'C' },
       ];
 
-      tiersConfig.forEach((tier) => {
-        // Bac them ban nguyet
-        const stepGeo = new THREE.CylinderGeometry(
-          tier.radius + 0.5,
-          tier.radius + 0.55,
-          tier.height,
-          40,
-          1,
-          false,
-          Math.PI * 0.62,
-          Math.PI * 1.36
-        );
-        const stepMat = new THREE.MeshStandardMaterial({
-          color: isDark ? 0x1e293b : 0xe2e8f0,
-          roughness: 0.75,
-        });
-        const stepMesh = new THREE.Mesh(stepGeo, stepMat);
-        stepMesh.position.set(0, tier.height / 2, 1.2);
-        stepMesh.receiveShadow = true;
-        scene.add(stepMesh);
+      const platformMat = new THREE.MeshStandardMaterial({
+        color: isDark ? 0x334155 : 0xe2e8f0,
+        roughness: 0.6,
+      });
 
-        // Xep cac Ghe 3D tren tung Vong cung huong ve San khau Tron
+      amphitheaterTiers.forEach((tier) => {
         for (let i = 0; i < tier.count; i++) {
           const ratio = tier.count > 1 ? i / (tier.count - 1) : 0.5;
-          const angle = Math.PI * 0.68 + ratio * Math.PI * 1.24;
-          const sx = Math.cos(angle) * tier.radius;
-          const sz = 1.2 + Math.sin(angle) * tier.radius;
+          // Xep thanh vong cung ban nguyet phia truoc san khau (tu goc -68 do den +68 do)
+          const angle = -Math.PI * 0.38 + ratio * Math.PI * 0.76;
+          const sx = Math.sin(angle) * tier.radius;
+          const sz = stageCenterZ + Math.cos(angle) * tier.radius;
           const seatCode = `H01-${tier.prefix}${i + 1}`;
 
-          const isSeatBooked =
+          // Buc de chan rieng cho tung khoang ghe tren Vong cung (Rong tam 100%, khong che hang truoc!)
+          const stepBlock = new THREE.Mesh(
+            new THREE.BoxGeometry(0.95, tier.stepHeight, 0.95),
+            platformMat
+          );
+          stepBlock.position.set(sx, tier.stepHeight / 2, sz);
+          stepBlock.lookAt(0, tier.stepHeight / 2, stageCenterZ);
+          stepBlock.receiveShadow = true;
+          scene.add(stepBlock);
+
+          const isBooked =
             bookingsList.some((b) => b.nodeId === seatCode) ||
-            (tier.prefix === 'A' && i === 2) ||
+            (tier.prefix === 'A' && i === 3) ||
             (tier.prefix === 'B' && i === 4);
 
-          const seatColor = isSeatBooked ? 0x4f46e5 : 0x0d9488;
-          const chair3D = createChair3D(seatColor);
-          chair3D.position.set(sx, tier.height, sz);
-          chair3D.lookAt(0, tier.height, 1.2);
-          chair3D.rotateY(Math.PI);
+          const chairColor = isBooked ? 0x4f46e5 : 0x0d9488;
+          const chair3D = createChair3D(chairColor);
+          // Dat ghe NAM TREN MAT BAC THEM (y = tier.stepHeight) de khong bao gio bi chim!
+          chair3D.position.set(sx, tier.stepHeight, sz);
+          chair3D.lookAt(0, tier.stepHeight, stageCenterZ);
 
           if (hallNode) {
             chair3D.userData = {
               nodeItem: hallNode,
-              seatLabel: `Ghế Hội trường ${seatCode} (${
-                isSeatBooked ? 'Đã có người đặt' : 'Đang trống'
+              seatLabel: `Ghế Hội trường ${seatCode} — Hàng ${tier.prefix} (${
+                isBooked ? 'Đã đặt' : 'Còn trống'
               })`,
             };
-            chair3D.traverse((child) => {
-              child.userData = chair3D.userData;
+            chair3D.traverse((c) => {
+              c.userData = chair3D.userData;
             });
             interactiveMeshes.push(chair3D);
           }
@@ -302,188 +315,246 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       });
     } else {
       // =======================================================================
-      // TANG 1 & TANG 2: DUNG MO HINH 3D CAC PHONG HOP & BAN LAM VIEC
+      // TANG 1, 2, 3, 4: MOI TANG GOM 6 PHONG HOP CHINH THUC CO TUONG, VACH KINH, CUA & HANH LANG
       // =======================================================================
-      workspaceNodes.forEach((nodeItem) => {
-        // Chuyen doi toa do 2D (800x460) sang toa do khong gian 3D (-7..7, -4.5..4.5)
-        const rawX = Number.isFinite(nodeItem.position2D?.posX) ? nodeItem.position2D.posX : 200;
-        const rawY = Number.isFinite(nodeItem.position2D?.posY) ? nodeItem.position2D.posY : 200;
-        const worldX = ((rawX - 400) / 360) * 7.2;
-        const worldZ = ((rawY - 230) / 200) * 4.5;
+      // 1. Tham Hanh lang Trung tam chay doc giua tang (z = -0.95 den +0.95)
+      const corridorRunner = new THREE.Mesh(
+        new THREE.BoxGeometry(floorWidth - 0.6, 0.02, 1.85),
+        new THREE.MeshStandardMaterial({
+          color: isDark ? 0x0f172a : 0xe2e8f0,
+          roughness: 0.8,
+        })
+      );
+      corridorRunner.position.set(0, 0.015, 0);
+      scene.add(corridorRunner);
+
+      // Vach ngan Tuong giua cac Phong hop (2 ben Hanh lang: Day Bac & Day Nam)
+      const interiorWallMat = new THREE.MeshStandardMaterial({
+        color: isDark ? 0x475569 : 0xcbd5e1,
+        roughness: 0.45,
+      });
+      const glassCorridorMat = new THREE.MeshStandardMaterial({
+        color: isDark ? 0x38bdf8 : 0x64748b,
+        transparent: true,
+        opacity: 0.24,
+        roughness: 0.15,
+      });
+      const doorWoodMat = new THREE.MeshStandardMaterial({
+        color: isDark ? 0x6366f1 : 0x334155,
+        roughness: 0.4,
+      });
+
+      // Vach ngan doc chia 3 phong Day Bac va 3 phong Day Nam (x = -3.1 va x = +3.1)
+      [-3.1, 3.1].forEach((divX) => {
+        const northDivider = new THREE.Mesh(
+          new THREE.BoxGeometry(0.14, 1.65, 5.1),
+          interiorWallMat
+        );
+        northDivider.position.set(divX, 0.82, -3.55);
+        northDivider.castShadow = true;
+        scene.add(northDivider);
+
+        const southDivider = new THREE.Mesh(
+          new THREE.BoxGeometry(0.14, 1.65, 5.1),
+          interiorWallMat
+        );
+        southDivider.position.set(divX, 0.82, 3.55);
+        southDivider.castShadow = true;
+        scene.add(southDivider);
+      });
+
+      // 2. Ve 6 Phong hop Chinh thuc tren Tang (3 Phong Day Bac + 3 Phong Day Nam)
+      workspaceNodes.forEach((nodeItem, idx) => {
+        const colIndex = idx % 3; // 0: Trai, 1: Giua, 2: Phai
+        const isNorthWing = idx < 3; // 0,1,2: Day Bac (z am); 3,4,5: Day Nam (z duong)
+
+        const roomCenterX = (colIndex - 1) * 6.15;
+        const roomCenterZ = isNorthWing ? -3.55 : 3.55;
+        const corridorWallZ = isNorthWing ? -1.0 : 1.0;
 
         const statusColor = getStatusHex(nodeItem.status);
         const isSelected = nodeItem.nodeId === selectedNodeId;
-        const nodeGroup = new THREE.Group();
-        nodeGroup.position.set(worldX, 0, worldZ);
 
-        // Vong sang duoi san neu Phong/Ban dang duoc chon
-        if (isSelected) {
-          const ringGeo = new THREE.RingGeometry(1.4, 1.65, 32);
-          const ringMat = new THREE.MeshBasicMaterial({
-            color: 0x2563eb,
-            side: THREE.DoubleSide,
-          });
-          const selectRing = new THREE.Mesh(ringGeo, ringMat);
-          selectRing.rotation.x = -Math.PI / 2;
-          selectRing.position.y = 0.03;
-          nodeGroup.add(selectRing);
-        }
+        const roomGroup = new THREE.Group();
+        roomGroup.position.set(roomCenterX, 0, roomCenterZ);
 
-        if (nodeItem.zoneType === 'MEETING_ROOM') {
-          // Phong hop 3D: Vach kinh bao quanh + Ban hop lon + 8 ghe + Man hinh TV
-          const roomEnclosure = new THREE.Mesh(
-            new THREE.BoxGeometry(3.8, 1.45, 2.7),
+        // San go/tham rieng ben trong tung Phong hop
+        const roomCarpet = new THREE.Mesh(
+          new THREE.BoxGeometry(5.8, 0.03, 4.8),
+          new THREE.MeshStandardMaterial({
+            color: isSelected
+              ? isDark
+                ? 0x1e1b4b
+                : 0xeef2ff
+              : isDark
+              ? 0x1e293b
+              : 0xffffff,
+            roughness: 0.5,
+          })
+        );
+        roomCarpet.position.y = 0.02;
+        roomGroup.add(roomCarpet);
+
+        // Vach kinh mat tien giap Hanh lang + Khung Cua ra vao + Canh cua mo 35 do
+        const localCorridorZ = corridorWallZ - roomCenterZ;
+        const leftGlassPanel = new THREE.Mesh(
+          new THREE.BoxGeometry(3.6, 1.65, 0.1),
+          glassCorridorMat
+        );
+        leftGlassPanel.position.set(-1.1, 0.82, localCorridorZ);
+        roomGroup.add(leftGlassPanel);
+
+        const rightGlassPanel = new THREE.Mesh(
+          new THREE.BoxGeometry(1.1, 1.65, 0.1),
+          glassCorridorMat
+        );
+        rightGlassPanel.position.set(2.35, 0.82, localCorridorZ);
+        roomGroup.add(rightGlassPanel);
+
+        // Canh cua phong hop mo he 35 do
+        const doorLeaf = new THREE.Mesh(
+          new THREE.BoxGeometry(0.95, 1.5, 0.07),
+          doorWoodMat
+        );
+        doorLeaf.position.set(1.25, 0.75, localCorridorZ + (isNorthWing ? -0.25 : 0.25));
+        doorLeaf.rotation.y = isNorthWing ? 0.55 : -0.55;
+        roomGroup.add(doorLeaf);
+
+        // Man hinh TV 85 inch treo tren tuong phong hop
+        const tvWall = new THREE.Mesh(
+          new THREE.BoxGeometry(0.08, 0.85, 1.65),
+          new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            emissive: statusColor,
+            emissiveIntensity: 0.4,
+          })
+        );
+        tvWall.position.set(-2.75, 0.95, 0);
+        roomGroup.add(tvWall);
+
+        // Tinh so ghe cua phong hop (Toi thieu 2 nguoi tro len: 2, 4, 6, 8, 10, 12, 16)
+        const seatCap = Math.max(2, nodeItem.capacityCount || 4);
+
+        if (nodeItem.zoneType === 'COLLAB_HUB') {
+          // Phong hop Ban Tron / Oval Sang tao
+          const tableRadius = seatCap >= 8 ? 1.25 : 1.0;
+          const roundTable = new THREE.Mesh(
+            new THREE.CylinderGeometry(tableRadius, tableRadius, 0.1, 32),
             new THREE.MeshStandardMaterial({
-              color: statusColor,
-              transparent: true,
-              opacity: 0.14,
-              roughness: 0.2,
+              color: isDark ? 0x334155 : 0xf1f5f9,
+              roughness: 0.3,
             })
           );
-          roomEnclosure.position.y = 0.72;
-          nodeGroup.add(roomEnclosure);
+          roundTable.position.y = 0.68;
+          roundTable.castShadow = true;
+          roomGroup.add(roundTable);
 
-          // Ban hop 3D
-          const tableTop = new THREE.Mesh(
-            new THREE.BoxGeometry(2.3, 0.1, 1.15),
+          const basePole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.25, 0.4, 0.65, 20),
+            new THREE.MeshStandardMaterial({ color: 0x475569 })
+          );
+          basePole.position.y = 0.32;
+          roomGroup.add(basePole);
+
+          const displayChairs = Math.min(10, seatCap);
+          for (let c = 0; c < displayChairs; c++) {
+            const ang = (c * Math.PI * 2) / displayChairs;
+            const ch = createChair3D(statusColor);
+            const chairDist = tableRadius + 0.48;
+            ch.position.set(Math.cos(ang) * chairDist, 0, Math.sin(ang) * chairDist);
+            ch.rotation.y = -ang - Math.PI / 2;
+            roomGroup.add(ch);
+          }
+        } else {
+          // Phong hop Ban Hop Chu Nhat (Tu 2 nguoi den 16 nguoi)
+          const sidePairs = Math.max(1, Math.floor((seatCap - 2) / 2));
+          const tableLen = Math.min(3.6, Math.max(1.3, sidePairs * 0.78 + 0.6));
+          const tableWid = seatCap <= 4 ? 0.95 : 1.2;
+
+          const rectTable = new THREE.Mesh(
+            new THREE.BoxGeometry(tableLen, 0.1, tableWid),
             new THREE.MeshStandardMaterial({
               color: isDark ? 0x334155 : 0xf8fafc,
               roughness: 0.3,
             })
           );
-          tableTop.position.y = 0.68;
-          tableTop.castShadow = true;
-          nodeGroup.add(tableTop);
+          rectTable.position.y = 0.68;
+          rectTable.castShadow = true;
+          roomGroup.add(rectTable);
 
-          // Man hinh TV treo vach
-          const tvScreen = new THREE.Mesh(
-            new THREE.BoxGeometry(0.08, 0.75, 1.4),
-            new THREE.MeshStandardMaterial({
-              color: 0x0f172a,
-              emissive: statusColor,
-              emissiveIntensity: 0.35,
-            })
-          );
-          tvScreen.position.set(-1.82, 0.95, 0);
-          nodeGroup.add(tvScreen);
-
-          // 6 Ghe hai ben + 2 Ghe dau ban
-          [-0.75, 0, 0.75].forEach((gx) => {
-            const topChair = createChair3D(statusColor);
-            topChair.position.set(gx, 0, -0.82);
-            topChair.rotation.y = Math.PI;
-            nodeGroup.add(topChair);
-
-            const botChair = createChair3D(statusColor);
-            botChair.position.set(gx, 0, 0.82);
-            nodeGroup.add(botChair);
+          // Chan ban
+          [-tableLen / 2 + 0.25, tableLen / 2 - 0.25].forEach((lx) => {
+            const leg = new THREE.Mesh(
+              new THREE.BoxGeometry(0.12, 0.65, tableWid - 0.3),
+              new THREE.MeshStandardMaterial({ color: 0x475569 })
+            );
+            leg.position.set(lx, 0.32, 0);
+            roomGroup.add(leg);
           });
 
-          const leftHeadChair = createChair3D(statusColor);
-          leftHeadChair.position.set(-1.42, 0, 0);
-          leftHeadChair.rotation.y = -Math.PI / 2;
-          nodeGroup.add(leftHeadChair);
+          if (seatCap === 2) {
+            // Phong hop 2 nguoi doi dien nhau
+            const chTop = createChair3D(statusColor);
+            chTop.position.set(0, 0, -0.78);
+            chTop.rotation.y = Math.PI;
+            roomGroup.add(chTop);
 
-          const rightHeadChair = createChair3D(statusColor);
-          rightHeadChair.position.set(1.42, 0, 0);
-          rightHeadChair.rotation.y = Math.PI / 2;
-          nodeGroup.add(rightHeadChair);
-        } else if (nodeItem.zoneType === 'COLLAB_HUB') {
-          // Khu thao luan 3D: Ban tron trung tam + 6 ghe xoay quanh
-          const roundTable = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.05, 1.05, 0.1, 28),
-            new THREE.MeshStandardMaterial({
-              color: isDark ? 0x334155 : 0xffffff,
-              roughness: 0.35,
-            })
-          );
-          roundTable.position.y = 0.68;
-          roundTable.castShadow = true;
-          nodeGroup.add(roundTable);
+            const chBot = createChair3D(statusColor);
+            chBot.position.set(0, 0, 0.78);
+            roomGroup.add(chBot);
+          } else {
+            // Ghe Chu toa 2 dau ban
+            const headLeft = createChair3D(statusColor);
+            headLeft.position.set(-tableLen / 2 - 0.42, 0, 0);
+            headLeft.rotation.y = -Math.PI / 2;
+            roomGroup.add(headLeft);
 
-          const centerPedestal = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2, 0.35, 0.65, 16),
-            new THREE.MeshStandardMaterial({ color: 0x475569 })
-          );
-          centerPedestal.position.y = 0.32;
-          nodeGroup.add(centerPedestal);
+            const headRight = createChair3D(statusColor);
+            headRight.position.set(tableLen / 2 + 0.42, 0, 0);
+            headRight.rotation.y = Math.PI / 2;
+            roomGroup.add(headRight);
 
-          for (let i = 0; i < 6; i++) {
-            const ang = (i * Math.PI * 2) / 6;
-            const ch = createChair3D(statusColor);
-            ch.position.set(Math.cos(ang) * 1.45, 0, Math.sin(ang) * 1.45);
-            ch.lookAt(worldX, 0, worldZ);
-            ch.rotation.y = -ang + Math.PI / 2;
-            nodeGroup.add(ch);
-          }
-        } else {
-          // Ban ca nhan / Bot cach am 3D: Ban + Cap man hinh kep 4K + Ghe xoay
-          const deskTop = new THREE.Mesh(
-            new THREE.BoxGeometry(1.45, 0.08, 0.85),
-            new THREE.MeshStandardMaterial({
-              color: isDark ? 0x334155 : 0xffffff,
-              roughness: 0.4,
-            })
-          );
-          deskTop.position.y = 0.68;
-          deskTop.castShadow = true;
-          nodeGroup.add(deskTop);
+            // Cac cap ghe doc 2 ben suon ban
+            const pairsCount = Math.min(5, Math.ceil((seatCap - 2) / 2));
+            for (let p = 0; p < pairsCount; p++) {
+              const offsetRatio = pairsCount > 1 ? p / (pairsCount - 1) - 0.5 : 0;
+              const gx = offsetRatio * (tableLen - 0.7);
 
-          // 2 Man hinh 4K tren ban
-          [-0.32, 0.32].forEach((mx) => {
-            const monitor = new THREE.Mesh(
-              new THREE.BoxGeometry(0.52, 0.34, 0.04),
-              new THREE.MeshStandardMaterial({
-                color: 0x0f172a,
-                emissive: statusColor,
-                emissiveIntensity: 0.25,
-              })
-            );
-            monitor.position.set(mx, 0.92, -0.22);
-            nodeGroup.add(monitor);
-          });
+              const c1 = createChair3D(statusColor);
+              c1.position.set(gx, 0, -tableWid / 2 - 0.38);
+              c1.rotation.y = Math.PI;
+              roomGroup.add(c1);
 
-          const deskChair = createChair3D(statusColor);
-          deskChair.position.set(0, 0, 0.65);
-          nodeGroup.add(deskChair);
-
-          if (nodeItem.zoneType === 'FOCUS_BOOTH') {
-            const boothBox = new THREE.Mesh(
-              new THREE.BoxGeometry(1.85, 1.6, 1.65),
-              new THREE.MeshStandardMaterial({
-                color: statusColor,
-                transparent: true,
-                opacity: 0.16,
-              })
-            );
-            boothBox.position.y = 0.8;
-            nodeGroup.add(boothBox);
+              const c2 = createChair3D(statusColor);
+              c2.position.set(gx, 0, tableWid / 2 + 0.38);
+              roomGroup.add(c2);
+            }
           }
         }
 
-        // Den tinh hieu 3D lo lung phia tren moi Phong/Ban
-        const beacon = new THREE.Mesh(
-          new THREE.SphereGeometry(0.16, 16, 16),
+        // Den bao trang thai Phong hop treo phia tren
+        const statusOrb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.18, 16, 16),
           new THREE.MeshStandardMaterial({
             color: statusColor,
             emissive: statusColor,
-            emissiveIntensity: 0.6,
+            emissiveIntensity: 0.65,
           })
         );
-        beacon.position.y = 1.65;
-        nodeGroup.add(beacon);
+        statusOrb.position.y = 1.75;
+        roomGroup.add(statusOrb);
 
-        nodeGroup.userData = { nodeItem };
-        nodeGroup.traverse((child) => {
+        roomGroup.userData = { nodeItem };
+        roomGroup.traverse((child) => {
           child.userData = { nodeItem };
         });
 
-        interactiveMeshes.push(nodeGroup);
-        scene.add(nodeGroup);
+        interactiveMeshes.push(roomGroup);
+        scene.add(roomGroup);
       });
     }
 
-    // 4. Xu ly Keo Chuot Xoay 3D (Orbit Drag), Lan Chuot Zoom & Raycaster Hover/Click
+    // Raycaster & Mouse Orbit
     const raycaster = new THREE.Raycaster();
     const mouseVec = new THREE.Vector2();
 
@@ -503,14 +574,13 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
 
         orbitStateRef.current.theta -= dx * 0.0085;
         orbitStateRef.current.phi = Math.max(
-          0.35,
-          Math.min(1.38, orbitStateRef.current.phi - dy * 0.007)
+          0.32,
+          Math.min(1.4, orbitStateRef.current.phi - dy * 0.007)
         );
         updateCameraPosition();
         return;
       }
 
-      // Kiem tra Hover tren Mo hinh 3D
       mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouseVec, camera);
@@ -555,7 +625,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       e.preventDefault();
       orbitStateRef.current.radius = Math.max(
         10,
-        Math.min(28, orbitStateRef.current.radius + e.deltaY * 0.01)
+        Math.min(29, orbitStateRef.current.radius + e.deltaY * 0.01)
       );
       updateCameraPosition();
     };
@@ -583,7 +653,6 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     };
   }, [workspaceNodes, bookingsList, selectedNodeId, activeFloor, isDark, onSelectWorkspaceNode]);
 
-  // Tim lich dat cua phong dang hover (De hien thi chi tiet cho SYS_ADMIN)
   const hoveredBookingRecord = hoveredInfo
     ? bookingsList.find(
         (b) =>
@@ -599,17 +668,16 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90 shadow-sm'
       }`}
     >
-      {/* Thanh huong dan Xoay Chuot 3D */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm">
             <Move3d className="w-3.5 h-3.5" />
-            {activeFloor === 3
-              ? 'Mô hình 3D Hội trường Lớn (Đấu trường La Mã)'
-              : `Mô hình 3D Phòng họp — Tầng ${activeFloor}`}
+            {activeFloor === 5
+              ? 'Mô hình 3D Tầng 5 — Hội trường Đấu trường La Mã'
+              : `Mô hình 3D 6 Phòng họp — Tầng ${activeFloor}`}
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Giữ chuột trái kéo để xoay 360° • Lăn chuột để thu phóng
+            Giữ chuột trái xoay 360° • Click vào từng phòng để xem Slot trống
           </span>
         </div>
 
@@ -638,11 +706,9 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         </div>
       </div>
 
-      {/* Khung Canvas 3D Three.js */}
       <div className="relative w-full rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-800">
-        <div ref={mountRef} className="w-full h-[430px] cursor-grab active:cursor-grabbing" />
+        <div ref={mountRef} className="w-full h-[450px] cursor-grab active:cursor-grabbing" />
 
-        {/* TOOLTIP THONG MINH KHI RE CHUOT VAO PHONG TREN MO HINH 3D */}
         {hoveredInfo && (
           <div
             style={{
@@ -665,15 +731,14 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
             </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-              Sức chứa: <strong>{hoveredInfo.node.capacityCount} ghế</strong> • Trạng thái:{' '}
+              Sức chứa: <strong>{hoveredInfo.node.capacityCount} người</strong> • Trạng thái:{' '}
               <strong>{hoveredInfo.node.status}</strong>
             </p>
 
-            {/* QUYEN DAC BIET CUA ADMIN: HIEN RO THONG TIN NGUOI DAT & GIO DAT KHI HOVER */}
             {isSysAdmin && (
               <div className="mt-2 pt-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1 text-[11px]">
                 <p className="font-extrabold text-rose-500 flex items-center gap-1">
-                  <Eye className="w-3 h-3" /> Thông tin Kiểm tra (Quyền ADMIN):
+                  <Eye className="w-3 h-3" /> Thông tin Người đặt (Quyền ADMIN):
                 </p>
                 {hoveredBookingRecord || hoveredInfo.node.status !== 'AVAILABLE' ? (
                   <>
@@ -686,20 +751,17 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
                     </p>
                     <p className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-teal-500" />
-                      Khung giờ:{' '}
+                      Giờ đặt:{' '}
                       <strong>
                         {hoveredBookingRecord
                           ? `${hoveredBookingRecord.startTimeIso} – ${hoveredBookingRecord.endTimeIso}`
-                          : '09:00 – 11:30'}
+                          : '10:00 – 12:00'}
                       </strong>
-                    </p>
-                    <p className="text-slate-400 truncate">
-                      Nội dung: {hoveredBookingRecord?.purposeNote || 'Họp điều phối dự án'}
                     </p>
                   </>
                 ) : (
                   <p className="text-teal-600 dark:text-teal-400 font-semibold">
-                    ✓ Phòng hiện đang trống tất cả các khung giờ.
+                    ✓ Phòng hiện đang trống tất cả các ca.
                   </p>
                 )}
               </div>

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import {
   Filter,
   Search,
-  Move,
   PlusCircle,
   Wrench,
   Cpu,
@@ -12,7 +11,6 @@ import {
   Clock,
   CalendarPlus,
   UserCheck,
-  ShieldCheck,
 } from 'lucide-react';
 import {
   BookingPayloadItem,
@@ -32,7 +30,10 @@ interface FloorplanMainPagesProps {
   userRole: UserRoleType;
   isDark: boolean;
   onSelectNode: (nodeItem: WorkspaceNodeItem) => void;
-  onNavigateToBookingWithSlot: (nodeItem: WorkspaceNodeItem, slotTime: { start: string; end: string }) => void;
+  onNavigateToBookingWithSlot: (
+    nodeItem: WorkspaceNodeItem,
+    slotTime: { start: string; end: string }
+  ) => void;
   onUpdateNodeCoords: (nodeId: string, posX: number, posY: number) => void;
   onUpdateNodeStatus: (nodeId: string, nextStatus: SeatStatusType) => void;
   onCreateNewNode: (payload: {
@@ -55,28 +56,6 @@ const DAILY_TIME_SLOTS = [
   { id: 'SLOT-5', label: 'Ca 5 (17:00 - 19:00)', start: '17:00', end: '19:00' },
 ];
 
-const EQUIPMENT_FILTER_OPTIONS = [
-  'Tất cả thiết bị',
-  'Màn hình 4K',
-  'Bảng vẽ Wacom',
-  'Máy chiếu Laser',
-  'Camera AI 360',
-  'Sân khấu tròn 360°',
-  'Cách âm 40dB',
-];
-
-const ARCHITECTURAL_PRESET_COORDS: Record<string, { posX: number; posY: number }> = {
-  'A-01': { posX: 110, posY: 125 },
-  'A-02': { posX: 250, posY: 125 },
-  'A-03': { posX: 390, posY: 125 },
-  'M-01': { posX: 630, posY: 145 },
-  'F-01': { posX: 135, posY: 350 },
-  'C-01': { posX: 425, posY: 350 },
-  'B-01': { posX: 180, posY: 130 },
-  'M-02': { posX: 630, posY: 145 },
-  'H-01': { posX: 400, posY: 230 },
-};
-
 export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
   workspaceNodes,
   bookingsList = [],
@@ -90,21 +69,15 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
   onCreateNewNode,
 }) => {
   const [activeFloor, setActiveFloor] = useState<number>(1);
-  // Mac dinh hien thi Mo hinh 3D Xoay 360 do
   const [viewMode, setViewMode] = useState<'3D_MODEL' | '2D_BLUEPRINT'>('3D_MODEL');
-
-  const [zoneFilter, setZoneFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [equipmentFilter, setEquipmentFilter] = useState<string>('Tất cả thiết bị');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
-
-  const [isAdminDragMode, setIsAdminDragMode] = useState<boolean>(false);
   const [showAddNodeModal, setShowAddNodeModal] = useState<boolean>(false);
 
-  const [newCode, setNewCode] = useState('M-05');
-  const [newLabel, setNewLabel] = useState('Phòng Họp Sáng tạo M05');
+  const [newCode, setNewCode] = useState('M1-07');
+  const [newLabel, setNewLabel] = useState('Phòng Họp Mở Rộng (6 người)');
   const [newZone, setNewZone] = useState<WorkspaceZoneType>('MEETING_ROOM');
-  const [newCapacity, setNewCapacity] = useState(8);
+  const [newCapacity, setNewCapacity] = useState(6);
   const [newEquipment, setNewEquipment] = useState('Máy chiếu Laser, Camera AI 360');
 
   const isSysAdmin = userRole === 'SYS_ADMIN';
@@ -112,16 +85,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
   const filteredNodes = useMemo(() => {
     return workspaceNodes.filter((node) => {
       if (node.floorLevel !== activeFloor) return false;
-      if (zoneFilter !== 'ALL' && node.zoneType !== zoneFilter) return false;
       if (statusFilter !== 'ALL' && node.status !== statusFilter) return false;
-      if (
-        equipmentFilter !== 'Tất cả thiết bị' &&
-        !(node.amenitiesList || []).some((eq) =>
-          eq.toLowerCase().includes(equipmentFilter.toLowerCase())
-        )
-      ) {
-        return false;
-      }
       if (searchKeyword.trim() !== '') {
         const kw = searchKeyword.trim().toLowerCase();
         const matchCode = node.nodeCode.toLowerCase().includes(kw);
@@ -130,9 +94,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       }
       return true;
     });
-  }, [workspaceNodes, activeFloor, zoneFilter, statusFilter, equipmentFilter, searchKeyword]);
+  }, [workspaceNodes, activeFloor, statusFilter, searchKeyword]);
 
-  // Tinh toan trang thai tung Slot gio trong ngay cho Phong dang chon
   const selectedNodeSlotsStatus = useMemo(() => {
     if (!selectedNode) return [];
     return DAILY_TIME_SLOTS.map((slot, index) => {
@@ -144,7 +107,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           b.endTimeIso >= slot.start
       );
 
-      // Mo phong mot slot da dat neu phong dang o trang thai OCCUPIED/RESERVED ma chua co ban ghi cu the
       const isSimulatedOccupied =
         !matchedBooking &&
         index === 1 &&
@@ -160,20 +122,10 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           (isSimulatedOccupied ? 'manager.lead@spotmatrix.vn' : null),
         bookedPurpose:
           matchedBooking?.purposeNote ||
-          (isSimulatedOccupied ? 'Họp triển khai kế hoạch Sprint' : null),
+          (isSimulatedOccupied ? 'Họp điều phối dự án định kỳ' : null),
       };
     });
   }, [selectedNode, bookingsList]);
-
-  const handleAutoArrangeStandardLayout = () => {
-    filteredNodes.forEach((node, index) => {
-      const preset = ARCHITECTURAL_PRESET_COORDS[node.nodeCode] || {
-        posX: 120 + (index % 3) * 140,
-        posY: index < 3 ? 125 : 350,
-      };
-      onUpdateNodeCoords(node.nodeId, preset.posX, preset.posY);
-    });
-  };
 
   const handleAddNodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,9 +139,9 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       nodeLabel: newLabel,
       zoneType: newZone,
       floorLevel: activeFloor,
-      capacityCount: Number(newCapacity),
-      posX: 250,
-      posY: 125,
+      capacityCount: Math.max(2, Number(newCapacity)),
+      posX: 400,
+      posY: 115,
       amenitiesList: eqArray,
     });
     setShowAddNodeModal(false);
@@ -205,30 +157,31 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* THANH CHON TANG (TANG 1, TANG 2, TANG 3 HOI TRUONG) & CHE DO 3D / 2D */}
       <div className={`p-4 sm:p-5 rounded-2xl border transition-colors ${cardSurfaceClass}`}>
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-200/70 dark:border-slate-800">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold flex items-center gap-2">
               <Layers className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              Sơ đồ Phòng họp & Hội trường 3D
+              Sơ đồ Phòng họp 5 Tầng & Hội trường (3D & 2D)
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Kiểm tra bố cục phòng 3D, xem phòng đã có người đặt chưa và tra cứu các Slot giờ còn trống
+              Tầng 1–4: Mỗi tầng 6 phòng họp chính thức có tường vách ngăn & hành lang (tối thiểu 2 người/phòng) • Tầng 5: Hội trường Đấu trường La Mã
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Chon 3 Tang: Tang 1, Tang 2, Tang 3 (Hoi truong) */}
+            {/* CHON 5 TANG: TANG 1, 2, 3, 4 & TANG 5 (HOI TRUONG) */}
             <div
-              className={`inline-flex rounded-xl p-1 border ${
+              className={`inline-flex flex-wrap rounded-xl p-1 border gap-1 ${
                 isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
               }`}
             >
               {[
-                { fl: 1, name: 'Tầng 1 (Phòng họp & Bàn)' },
-                { fl: 2, name: 'Tầng 2 (Phòng Chiến lược)' },
-                { fl: 3, name: 'Tầng 3 (Hội trường)' },
+                { fl: 1, label: 'Tầng 1' },
+                { fl: 2, label: 'Tầng 2' },
+                { fl: 3, label: 'Tầng 3' },
+                { fl: 4, label: 'Tầng 4' },
+                { fl: 5, label: 'Tầng 5 (Hội trường)' },
               ].map((item) => (
                 <button
                   key={item.fl}
@@ -244,12 +197,12 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                   }`}
                 >
-                  {item.name}
+                  {item.label}
                 </button>
               ))}
             </div>
 
-            {/* Chuyen doi Mo hinh 3D Xoay 360 vs Mat bang 2D */}
+            {/* Chuyen doi Mo hinh 3D va Ban ve 2D (Ho tro ca Hoi truong Tang 5) */}
             <div
               className={`inline-flex rounded-xl p-1 border ${
                 isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
@@ -277,47 +230,18 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                Sơ đồ 2D
+                Mô hình 2D
               </button>
             </div>
-
-            {isSysAdmin && viewMode === '2D_BLUEPRINT' && (
-              <button
-                type="button"
-                onClick={() => setIsAdminDragMode(!isAdminDragMode)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
-                  isAdminDragMode
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : isDark
-                    ? 'bg-slate-800 border-slate-700 text-slate-200'
-                    : 'bg-slate-100 border-slate-200 text-slate-700'
-                }`}
-              >
-                <Move className="w-3.5 h-3.5" />
-                {isAdminDragMode ? 'Đang bật Kéo thả' : 'Kéo thả 2D (Admin)'}
-              </button>
-            )}
-
-            {isSysAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowAddNodeModal(!showAddNodeModal)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                Thêm Phòng
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Bo loc */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Tìm mã phòng (M-01, H-01, A-01)..."
+              placeholder="Tìm mã phòng (M1-01, M2-03, H-01)..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
               className={`w-full pl-8 pr-3 py-2 rounded-xl border text-xs font-medium focus:outline-none ${inputSurfaceClass}`}
@@ -327,47 +251,28 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           <div className="flex items-center gap-1.5">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
-              value={zoneFilter}
-              onChange={(e) => setZoneFilter(e.target.value)}
-              className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none ${inputSurfaceClass}`}
-            >
-              <option value="ALL">Tất cả loại phòng</option>
-              <option value="MEETING_ROOM">Phòng họp (Meeting Room)</option>
-              <option value="COLLAB_HUB">Hội trường / Khu thảo luận</option>
-              <option value="DESK_POD">Bàn cá nhân (Desk Pod)</option>
-              <option value="FOCUS_BOOTH">Bốt yên tĩnh (Focus Booth)</option>
-            </select>
-          </div>
-
-          <div>
-            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none ${inputSurfaceClass}`}
             >
-              <option value="ALL">Tất cả trạng thái</option>
+              <option value="ALL">Tất cả trạng thái phòng</option>
               <option value="AVAILABLE">Đang trống (Available)</option>
               <option value="HOLDING">Đang giữ 5p (Holding)</option>
               <option value="RESERVED">Đã đặt trước (Reserved)</option>
               <option value="OCCUPIED">Đang họp (Occupied)</option>
-              <option value="MAINTENANCE">Đang bảo trì (Maintenance)</option>
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <select
-              value={equipmentFilter}
-              onChange={(e) => setEquipmentFilter(e.target.value)}
-              className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold focus:outline-none ${inputSurfaceClass}`}
+          {isSysAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowAddNodeModal(!showAddNodeModal)}
+              className="py-2 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 transition"
             >
-              {EQUIPMENT_FILTER_OPTIONS.map((eq) => (
-                <option key={eq} value={eq}>
-                  {eq}
-                </option>
-              ))}
-            </select>
-          </div>
+              <PlusCircle className="w-3.5 h-3.5" />
+              Thêm Phòng Họp Mới (≥ 2 người)
+            </button>
+          )}
         </div>
 
         {isSysAdmin && showAddNodeModal && (
@@ -398,17 +303,16 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold mb-1">Loại bố cục</label>
-              <select
-                value={newZone}
-                onChange={(e) => setNewZone(e.target.value as WorkspaceZoneType)}
+              <label className="block text-[11px] font-bold mb-1">Sức chứa (≥ 2) *</label>
+              <input
+                type="number"
+                min={2}
+                max={30}
+                required
+                value={newCapacity}
+                onChange={(e) => setNewCapacity(Math.max(2, Number(e.target.value)))}
                 className={`w-full px-3 py-2 rounded-xl border text-xs ${inputSurfaceClass}`}
-              >
-                <option value="MEETING_ROOM">MEETING_ROOM</option>
-                <option value="COLLAB_HUB">COLLAB_HUB</option>
-                <option value="DESK_POD">DESK_POD</option>
-                <option value="FOCUS_BOOTH">FOCUS_BOOTH</option>
-              </select>
+              />
             </div>
             <div>
               <label className="block text-[11px] font-bold mb-1">Thiết bị phòng</label>
@@ -429,7 +333,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         )}
       </div>
 
-      {/* KHUNG HIEN THI MO HINH 3D XOAY CHUOT & BANG KIEM TRA SLOT GIO BEN PHAI */}
       <FloorplanCanvasLayout
         mapViewportSlot={
           viewMode === '3D_MODEL' ? (
@@ -447,11 +350,10 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
               workspaceNodes={filteredNodes}
               selectedNodeId={selectedNode?.nodeId || null}
               isDark={isDark}
-              isAdminDragMode={isAdminDragMode}
+              isAdminDragMode={false}
               activeFloor={activeFloor}
               onSelectWorkspaceNode={onSelectNode}
               onCommitNodeCoordinates={onUpdateNodeCoords}
-              onAutoArrangeLayout={handleAutoArrangeStandardLayout}
             />
           )
         }
@@ -460,12 +362,12 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             <div className="flex items-center justify-between border-b pb-3 border-slate-200/70 dark:border-slate-800">
               <h3 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                 <MapPin className="w-4 h-4" />
-                Thông tin Bố cục & Trạng thái Slot
+                Thông tin Phòng & Các Slot Trống
               </h3>
               {selectedNode && (
                 <span className="text-xs font-bold px-2.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                  {selectedNode.floorLevel === 3
-                    ? 'Tầng 3 (Hội trường)'
+                  {selectedNode.floorLevel === 5
+                    ? 'Tầng 5 (Hội trường)'
                     : `Tầng ${selectedNode.floorLevel}`}
                 </span>
               )}
@@ -481,20 +383,10 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Bố cục:{' '}
-                    <strong>
-                      {selectedNode.floorLevel === 3
-                        ? 'Đấu trường La Mã (Sân khấu tròn 360° & 3 vòng ghế)'
-                        : selectedNode.zoneType === 'MEETING_ROOM'
-                        ? 'Phòng họp Kính Bàn dài (Boardroom)'
-                        : selectedNode.zoneType === 'COLLAB_HUB'
-                        ? 'Không gian Thảo luận Bàn tròn'
-                        : 'Trạm làm việc Cá nhân Dual-4K'}
-                    </strong>
+                    Sức chứa tiêu chuẩn: <strong>{selectedNode.capacityCount} người</strong>
                   </p>
                 </div>
 
-                {/* Danh sach Thiet bi */}
                 <div className="flex flex-wrap gap-1.5">
                   {(selectedNode.amenitiesList || []).map((item) => (
                     <span
@@ -510,17 +402,11 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                   ))}
                 </div>
 
-                {/* BANG KIEM TRA CAC SLOT TRONG NGAY (CON TRONG HAY DA CO NGUOI DAT) */}
                 <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-extrabold flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-teal-600" />
-                      Trạng thái các Slot trong ngày:
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      Sức chứa: {selectedNode.capacityCount} chỗ
-                    </span>
-                  </div>
+                  <span className="text-xs font-extrabold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-teal-600" />
+                    Kiểm tra Slot trống trong ngày:
+                  </span>
 
                   <div className="space-y-2">
                     {selectedNodeSlotsStatus.map((slot) => (
@@ -559,12 +445,11 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                           )}
                         </div>
 
-                        {/* NEU LA ADMIN VA SLOT DA CO NGUOI DAT: HIEN THI NGAY NGUOI DAT & MUC DICH */}
                         {slot.isBooked && isSysAdmin && (
                           <div className="mt-1.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
                             <p className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400">
                               <UserCheck className="w-3 h-3" />
-                              Người đặt (Admin View): {slot.bookedByEmail}
+                              Người đặt (ADMIN): {slot.bookedByEmail}
                             </p>
                             <p>Nội dung: {slot.bookedPurpose}</p>
                           </div>
@@ -574,7 +459,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                   </div>
                 </div>
 
-                {/* Cong cu chuyen trang thai nhanh cho Admin */}
                 {isSysAdmin && (
                   <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
@@ -607,7 +491,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
               </div>
             ) : (
               <p className="text-xs text-slate-400">
-                Hãy bấm vào một phòng trên mô hình 3D để kiểm tra các khung giờ còn trống.
+                Hãy bấm vào một phòng họp trên mô hình 3D để kiểm tra các Slot giờ còn trống.
               </p>
             )}
           </div>

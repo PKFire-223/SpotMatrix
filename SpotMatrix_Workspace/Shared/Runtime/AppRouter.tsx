@@ -34,6 +34,7 @@ import { ErrorBoundaryLayout } from '../../Error/Layout/ErrorBoundaryLayout';
 import { DashboardMainPages } from '../../Main/Dashboard/Pages/DashboardMainPages';
 import { FloorplanMainPages } from '../../Main/Floorplan/Pages/FloorplanMainPages';
 import { BookingCalendarPages } from '../../Main/Booking/Pages/BookingCalendarPages';
+import { QrCheckinConfirmPages } from '../../Main/Booking/Pages/QrCheckinConfirmPages';
 import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/LoginPages';
 import { NotificationHeaderBell } from '../../Main/Notification/Function/Components/NotificationHeaderBell';
 import { RealtimePopupToast } from '../../Main/Notification/Function/Components/RealtimePopupToast';
@@ -53,115 +54,104 @@ type ActiveSidebarPage =
   | 'DATAMANAGER'
   | 'AUDIT';
 
-const INITIAL_BROWSER_NODES: WorkspaceNodeItem[] = [
-  // TANG 1: KHU PHONG HOP TIEU CHUAN & BAN LAM VIEC
-  {
-    nodeId: 'NODE-M01',
-    nodeCode: 'M-01',
-    nodeLabel: 'Phòng Họp Boardroom M01 (Tầng 1)',
-    zoneType: 'MEETING_ROOM',
-    floorLevel: 1,
-    position2D: { posX: 630, posY: 145 },
-    position3D: { coordX: 2.2, coordY: 0.6, coordZ: -0.8 },
-    capacityCount: 8,
-    status: 'AVAILABLE',
-    amenitiesList: ['Máy chiếu Laser', 'Camera AI 360', 'Bảng trắng KTS'],
-    aiScore: 96,
-  },
-  {
-    nodeId: 'NODE-C01',
-    nodeCode: 'C-01',
-    nodeLabel: 'Phòng Thảo luận Nhóm C01 (Tầng 1)',
-    zoneType: 'COLLAB_HUB',
-    floorLevel: 1,
-    position2D: { posX: 425, posY: 350 },
-    position3D: { coordX: 1.5, coordY: 0.45, coordZ: 1.4 },
-    capacityCount: 6,
-    status: 'AVAILABLE',
-    amenitiesList: ['Màn hình 4K', 'Máy chiếu Laser', 'Ổ cắm âm sàn'],
-    aiScore: 94,
-  },
-  {
-    nodeId: 'NODE-A01',
-    nodeCode: 'A-01',
-    nodeLabel: 'Trạm Làm việc Dual-4K A01 (Tầng 1)',
-    zoneType: 'DESK_POD',
-    floorLevel: 1,
-    position2D: { posX: 110, posY: 125 },
-    position3D: { coordX: -2.2, coordY: 0.4, coordZ: -1.2 },
-    capacityCount: 1,
-    status: 'AVAILABLE',
-    amenitiesList: ['Màn hình 4K', 'Cổng Type-C 100W', 'Ghế Công thái học'],
-    aiScore: 95,
-  },
-  {
-    nodeId: 'NODE-A02',
-    nodeCode: 'A-02',
-    nodeLabel: 'Trạm Đồ họa Wacom A02 (Tầng 1)',
-    zoneType: 'DESK_POD',
-    floorLevel: 1,
-    position2D: { posX: 250, posY: 125 },
-    position3D: { coordX: 0, coordY: 0.4, coordZ: -1.2 },
-    capacityCount: 1,
-    status: 'OCCUPIED',
-    amenitiesList: ['Màn hình 4K', 'Bảng vẽ Wacom'],
-    aiScore: 84,
-  },
-  {
-    nodeId: 'NODE-F01',
-    nodeCode: 'F-01',
-    nodeLabel: 'Bốt Họp Kín Focus F01 (Tầng 1)',
-    zoneType: 'FOCUS_BOOTH',
-    floorLevel: 1,
-    position2D: { posX: 135, posY: 350 },
-    position3D: { coordX: -1.4, coordY: 0.5, coordZ: 1.4 },
-    capacityCount: 1,
-    status: 'RESERVED',
-    amenitiesList: ['Cách âm 40dB', 'Đèn chống mỏi mắt'],
-    aiScore: 89,
-  },
-  // TANG 2: KHU PHONG HOP CHIEN LUOC & SANG TAO
-  {
-    nodeId: 'NODE-M02',
-    nodeCode: 'M-02',
-    nodeLabel: 'Phòng Họp Chiến lược M02 (Tầng 2)',
-    zoneType: 'MEETING_ROOM',
-    floorLevel: 2,
-    position2D: { posX: 600, posY: 160 },
-    position3D: { coordX: 1.4, coordY: 1.6, coordZ: 0.6 },
-    capacityCount: 12,
-    status: 'AVAILABLE',
-    amenitiesList: ['Máy chiếu Laser', 'Camera AI 360', 'Cách âm 40dB'],
-    aiScore: 95,
-  },
-  {
-    nodeId: 'NODE-B01',
-    nodeCode: 'B-01',
-    nodeLabel: 'Phòng Nghiên cứu AI B01 (Tầng 2)',
-    zoneType: 'DESK_POD',
-    floorLevel: 2,
-    position2D: { posX: 200, posY: 150 },
-    position3D: { coordX: -1.5, coordY: 1.4, coordZ: -0.9 },
-    capacityCount: 2,
-    status: 'OCCUPIED',
-    amenitiesList: ['Màn hình 4K', 'Bảng vẽ Wacom'],
-    aiScore: 97,
-  },
-  // TANG 3 (TANG TREN CUNG): HOI TRUONG LON DAU TRUONG LA MA
-  {
+// Ham sinh du lieu 5 Tang (Tang 1..4: Moi tang 6 Phong hop chinh thuc >= 2 nguoi; Tang 5: Hoi truong 30 cho)
+function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
+  const rooms: WorkspaceNodeItem[] = [];
+  const floorTemplates = [
+    {
+      codeSuffix: '01',
+      name: 'Phòng Họp Đối tác Nhỏ',
+      zone: 'MEETING_ROOM' as WorkspaceZoneType,
+      cap: 2,
+      posX: 150,
+      posY: 115,
+      status: 'AVAILABLE' as SeatStatusType,
+    },
+    {
+      codeSuffix: '02',
+      name: 'Phòng Họp Nhóm Sprint',
+      zone: 'MEETING_ROOM' as WorkspaceZoneType,
+      cap: 6,
+      posX: 400,
+      posY: 115,
+      status: 'OCCUPIED' as SeatStatusType,
+    },
+    {
+      codeSuffix: '03',
+      name: 'Phòng Họp Boardroom Lớn',
+      zone: 'MEETING_ROOM' as WorkspaceZoneType,
+      cap: 10,
+      posX: 650,
+      posY: 115,
+      status: 'AVAILABLE' as SeatStatusType,
+    },
+    {
+      codeSuffix: '04',
+      name: 'Phòng Thảo luận Chiến lược',
+      zone: 'MEETING_ROOM' as WorkspaceZoneType,
+      cap: 4,
+      posX: 150,
+      posY: 345,
+      status: 'HOLDING' as SeatStatusType,
+    },
+    {
+      codeSuffix: '05',
+      name: 'Phòng Sáng tạo Bàn tròn',
+      zone: 'COLLAB_HUB' as WorkspaceZoneType,
+      cap: 8,
+      posX: 400,
+      posY: 345,
+      status: 'AVAILABLE' as SeatStatusType,
+    },
+    {
+      codeSuffix: '06',
+      name: 'Phòng Họp Hội đồng VIP',
+      zone: 'MEETING_ROOM' as WorkspaceZoneType,
+      cap: 12,
+      posX: 650,
+      posY: 345,
+      status: 'RESERVED' as SeatStatusType,
+    },
+  ];
+
+  for (let fl = 1; fl <= 4; fl++) {
+    floorTemplates.forEach((tpl) => {
+      const code = `M${fl}-${tpl.codeSuffix}`;
+      rooms.push({
+        nodeId: `NODE-M${fl}${tpl.codeSuffix}`,
+        nodeCode: code,
+        nodeLabel: `${tpl.name} ${code} (Tầng ${fl})`,
+        zoneType: tpl.zone,
+        floorLevel: fl,
+        position2D: { posX: tpl.posX, posY: tpl.posY },
+        position3D: { coordX: 0, coordY: 0.5, coordZ: 0 },
+        capacityCount: tpl.cap,
+        status: fl % 2 === 0 && tpl.codeSuffix === '02' ? 'AVAILABLE' : tpl.status,
+        amenitiesList: ['Màn hình 4K', 'Máy chiếu Laser', 'Camera AI 360', 'Cách âm 40dB'],
+        aiScore: 92 + (fl % 6),
+      });
+    });
+  }
+
+  // TANG 5: HOI TRUONG LON DAU TRUONG LA MA (30 NGUOI)
+  rooms.push({
     nodeId: 'NODE-H01',
     nodeCode: 'H-01',
-    nodeLabel: 'Hội trường Lớn Đấu Trường La Mã (Tầng 3)',
+    nodeLabel: 'Hội trường Lớn Đấu Trường La Mã (Tầng 5)',
     zoneType: 'COLLAB_HUB',
-    floorLevel: 3,
+    floorLevel: 5,
     position2D: { posX: 400, posY: 230 },
     position3D: { coordX: 0, coordY: 2.5, coordZ: 0 },
-    capacityCount: 26,
+    capacityCount: 30,
     status: 'AVAILABLE',
-    amenitiesList: ['Sân khấu tròn 360°', 'Màn hình Panorama', '26 Ghế Vòng cung'],
+    amenitiesList: ['Sân khấu tròn 360°', 'Màn hình Panorama', '28 Ghế Bậc thềm Vòng cung'],
     aiScore: 99,
-  },
-];
+  });
+
+  return rooms;
+}
+
+const INITIAL_FIVE_FLOOR_ROOMS = buildStandardFiveFloorRooms();
 
 const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
   {
@@ -240,9 +230,9 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const [activePage, setActivePage] = useState<ActiveSidebarPage>('OVERVIEW');
   const [workspaceNodes, setWorkspaceNodes] =
-    useState<WorkspaceNodeItem[]>(INITIAL_BROWSER_NODES);
+    useState<WorkspaceNodeItem[]>(INITIAL_FIVE_FLOOR_ROOMS);
   const [selectedNode, setSelectedNode] = useState<WorkspaceNodeItem | null>(
-    INITIAL_BROWSER_NODES[0]
+    INITIAL_FIVE_FLOOR_ROOMS[0]
   );
   const [preselectedSlot, setPreselectedSlot] = useState<{
     start: string;
@@ -252,11 +242,11 @@ const MainWorkspaceRoutes: React.FC = () => {
   const [bookingsList, setBookingsList] = useState<BookingPayloadItem[]>([
     {
       bookingId: 'BK-2026-001',
-      nodeId: 'F-01',
+      nodeId: 'M1-01',
       userEmail: 'architect.lead@spotmatrix.vn',
       startTimeIso: '08:00',
       endTimeIso: '10:00',
-      purposeNote: 'Họp Kiến trúc Hệ thống 3D',
+      purposeNote: 'Họp Kiến trúc Hệ thống 3D (Tầng 1)',
       bookingStatus: 'CONFIRMED',
     },
     {
@@ -265,7 +255,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       userEmail: 'manager.lead@spotmatrix.vn',
       startTimeIso: '13:00',
       endTimeIso: '15:00',
-      purposeNote: '[Hội trường Tầng 3 - Ghế H01-A3] Townhall Quý 4',
+      purposeNote: '[Hội trường Tầng 5 - Ghế H01-A3] Townhall Quý 4',
       bookingStatus: 'CHECKED_IN',
     },
   ]);
@@ -280,6 +270,21 @@ const MainWorkspaceRoutes: React.FC = () => {
     useState<NotificationRecordItem | null>(null);
 
   const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
+
+  // Lang nghe su kien Check-in QR tu Tab moi (/qr-checkin)
+  useEffect(() => {
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === 'spotmatrix_last_qr_checkin_id' && e.newValue) {
+        setBookingsList((prev) =>
+          prev.map((b) =>
+            b.bookingId === e.newValue ? { ...b, bookingStatus: 'CHECKED_IN' } : b
+          )
+        );
+      }
+    };
+    window.addEventListener('storage', handleStorageSync);
+    return () => window.removeEventListener('storage', handleStorageSync);
+  }, []);
 
   const pushRealtimeNotification = useCallback(
     async (
@@ -333,23 +338,12 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const fetchAllSyncedData = useCallback(async () => {
     try {
-      const [nodesRes, eqRes, trustRes, auditRes, notifRes] = await Promise.all([
-        fetch('/api/v1/floorplan/nodes').then((r) => r.json()),
+      const [eqRes, trustRes, auditRes, notifRes] = await Promise.all([
         fetch('/api/v1/datamanager/equipments').then((r) => r.json()),
         fetch('/api/v1/datamanager/trust-scores').then((r) => r.json()),
         fetch('/api/v1/datamanager/audit-logs').then((r) => r.json()),
         fetch('/api/v1/notifications').then((r) => r.json()),
       ]);
-      if (nodesRes?.success && Array.isArray(nodesRes.data) && nodesRes.data.length > 0) {
-        const hasFloor3Hall = nodesRes.data.some((n: WorkspaceNodeItem) => n.floorLevel === 3);
-        const mergedNodes = hasFloor3Hall
-          ? nodesRes.data
-          : [
-              ...nodesRes.data,
-              INITIAL_BROWSER_NODES.find((n) => n.floorLevel === 3)!,
-            ];
-        setWorkspaceNodes(mergedNodes);
-      }
       if (eqRes?.success && Array.isArray(eqRes.data)) setEquipmentsList(eqRes.data);
       if (trustRes?.success && Array.isArray(trustRes.data)) setTrustProfiles(trustRes.data);
       if (auditRes?.success && Array.isArray(auditRes.data)) setAuditLogs(auditRes.data);
@@ -361,7 +355,7 @@ const MainWorkspaceRoutes: React.FC = () => {
         );
       }
     } catch {
-      // Giu INITIAL_BROWSER_NODES
+      // Su dung INITIAL_FIVE_FLOOR_ROOMS
     }
   }, []);
 
@@ -376,9 +370,6 @@ const MainWorkspaceRoutes: React.FC = () => {
       prev.map((n) =>
         n.notificationId === notifItem.notificationId ? { ...n, isRead: true } : n
       )
-    );
-    fetch(`/api/v1/notifications/${notifItem.notificationId}/read`, { method: 'PATCH' }).catch(
-      () => {}
     );
 
     if (notifItem.relatedNodeId) {
@@ -404,7 +395,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   };
 
-  // Chuyen tu Trang So do Phong hop sang Trang Dat lich kem Phong & Slot da chon
   const handleNavigateToBookingWithSlot = (
     nodeItem: WorkspaceNodeItem,
     slotTime: { start: string; end: string }
@@ -422,9 +412,9 @@ const MainWorkspaceRoutes: React.FC = () => {
     setTimeout(() => {
       pushRealtimeNotification(
         `Xin chào ${sessionData.userProfile.fullName}`,
-        `Bạn đã đăng nhập với quyền [${sessionData.userProfile.role}]. Bấm để mở Sơ đồ Phòng họp 3D.`,
+        `Hệ thống 5 Tầng Phòng họp 3D & Hội trường đã sẵn sàng.`,
         'SYSTEM_SECURITY',
-        'NODE-M01'
+        'NODE-M101'
       );
     }, 300);
   };
@@ -438,20 +428,10 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const handleMarkAllNotificationsRead = async () => {
     setNotificationsList((prev) => prev.map((item) => ({ ...item, isRead: true })));
-    try {
-      await fetch('/api/v1/notifications/read-all', { method: 'PATCH' });
-    } catch {
-      // Bo qua
-    }
   };
 
   const handleDeleteNotification = async (notificationId: string) => {
     setNotificationsList((prev) => prev.filter((i) => i.notificationId !== notificationId));
-    try {
-      await fetch(`/api/v1/notifications/${notificationId}`, { method: 'DELETE' });
-    } catch {
-      // Bo qua
-    }
   };
 
   const handleUpdateNodeCoords = async (nodeId: string, posX: number, posY: number) => {
@@ -460,24 +440,6 @@ const MainWorkspaceRoutes: React.FC = () => {
         item.nodeId === nodeId ? { ...item, position2D: { posX, posY } } : item
       )
     );
-    setSelectedNode((prev) =>
-      prev && prev.nodeId === nodeId ? { ...prev, position2D: { posX, posY } } : prev
-    );
-
-    try {
-      await fetch(`/api/v1/floorplan/nodes/${nodeId}/coordinates`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          posX,
-          posY,
-          actorEmail: userSession?.userProfile.username || 'Systemadmin123',
-        }),
-      });
-      fetchAllSyncedData();
-    } catch {
-      // Giu state
-    }
   };
 
   const handleUpdateNodeStatus = async (nodeId: string, nextStatus: SeatStatusType) => {
@@ -487,20 +449,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     setSelectedNode((prev) =>
       prev && prev.nodeId === nodeId ? { ...prev, status: nextStatus } : prev
     );
-
-    try {
-      await fetch(`/api/v1/floorplan/nodes/${nodeId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: nextStatus,
-          actorEmail: userSession?.userProfile.username || 'Systemadmin123',
-        }),
-      });
-      fetchAllSyncedData();
-    } catch {
-      // Giu state
-    }
   };
 
   const handleCreateNewNode = async (payload: {
@@ -513,24 +461,21 @@ const MainWorkspaceRoutes: React.FC = () => {
     posY: number;
     amenitiesList: string[];
   }) => {
-    try {
-      const res = await fetch('/api/v1/floorplan/nodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...payload,
-          actorEmail: userSession?.userProfile.username || 'Systemadmin123',
-        }),
-      });
-      const data = await res.json();
-      if (data?.success && data.data) {
-        setWorkspaceNodes((prev) => [...prev, data.data]);
-        setSelectedNode(data.data);
-        fetchAllSyncedData();
-      }
-    } catch {
-      // Bo qua
-    }
+    const newNode: WorkspaceNodeItem = {
+      nodeId: `NODE-${payload.nodeCode}-${Date.now().toString().slice(-3)}`,
+      nodeCode: payload.nodeCode,
+      nodeLabel: payload.nodeLabel,
+      zoneType: payload.zoneType,
+      floorLevel: payload.floorLevel,
+      position2D: { posX: payload.posX, posY: payload.posY },
+      position3D: { coordX: 0, coordY: 0.5, coordZ: 0 },
+      capacityCount: Math.max(2, payload.capacityCount),
+      status: 'AVAILABLE',
+      amenitiesList: payload.amenitiesList,
+      aiScore: 95,
+    };
+    setWorkspaceNodes((prev) => [...prev, newNode]);
+    setSelectedNode(newNode);
   };
 
   const handleQuickBooking = (
@@ -550,8 +495,8 @@ const MainWorkspaceRoutes: React.FC = () => {
       bookingId: `BK-${Date.now().toString().slice(-4)}`,
       nodeId: codeToBook,
       userEmail: customEmail || userSession?.userProfile.userEmail || 'member@spotmatrix.vn',
-      startTimeIso: timeWindow?.start || '09:00',
-      endTimeIso: timeWindow?.end || '11:00',
+      startTimeIso: timeWindow?.start || '08:00',
+      endTimeIso: timeWindow?.end || '10:00',
       purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
       bookingStatus: 'CONFIRMED',
     };
@@ -559,7 +504,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     setBookingsList((prev) => [newBookingItem, ...prev]);
     pushRealtimeNotification(
       `Đặt lịch thành công: ${codeToBook}`,
-      `Đã xác nhận lịch "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+      `Đã tạo mã QR Check-in cho "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
       'BOOKING_EVENT',
       codeToBook.startsWith('H01-') ? codeToBook : targetNode.nodeId
     );
@@ -573,7 +518,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
     pushRealtimeNotification(
       `Check-in QR Thành công (+2 điểm)`,
-      `Bạn đã xác nhận có mặt đúng giờ cho mã vé ${bookingId}.`,
+      `Vé ${bookingId} đã được xác nhận đúng hạn. Điểm tín nhiệm +2đ.`,
       'TRUST_SCORE_ALERT'
     );
   };
@@ -610,14 +555,14 @@ const MainWorkspaceRoutes: React.FC = () => {
     {
       id: 'FLOORPLAN' as ActiveSidebarPage,
       label: 'Sơ đồ Phòng họp',
-      sub: 'Mô hình 3D & Tầng Hội trường',
+      sub: '5 Tầng 3D/2D & Hội trường',
       icon: Map,
       adminOnly: false,
     },
     {
       id: 'BOOKING' as ActiveSidebarPage,
       label: 'Đặt lịch Phòng họp',
-      sub: 'Chọn giờ & Xem trước bố cục',
+      sub: 'Xem bố cục & Mã QR Check-in',
       icon: CalendarCheck,
       adminOnly: false,
     },
@@ -639,6 +584,17 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   return (
     <Routes>
+      {/* TRANG XAC NHAN KHI QUET MA QR CHECK-IN (MO O TAB MOI HOAC DIEN THOAI) */}
+      <Route
+        path="/qr-checkin"
+        element={
+          <QrCheckinConfirmPages
+            isDark={isDark}
+            onConfirmCheckinFromUrl={handleCheckInBooking}
+          />
+        }
+      />
+
       <Route
         path="/login"
         element={
@@ -719,7 +675,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 3D Engine v3.0
+                  SpotMatrix 5-Floor 3D v3.5
                 </div>
               </aside>
 
@@ -796,8 +752,8 @@ const MainWorkspaceRoutes: React.FC = () => {
                           setSelectedNode(bestNode);
                           setActivePage('FLOORPLAN');
                           pushRealtimeNotification(
-                            `AI Đề xuất Phòng: ${bestNode.nodeCode}`,
-                            `"${bestNode.nodeLabel}" đang trống và đạt độ tương thích ${bestNode.aiScore}%.`,
+                            `AI Đề xuất Phòng họp: ${bestNode.nodeCode}`,
+                            `"${bestNode.nodeLabel}" đang trống và phù hợp nhất.`,
                             'BOOKING_EVENT',
                             bestNode.nodeId
                           );
@@ -880,7 +836,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       onMarkAllRead={handleMarkAllNotificationsRead}
                       onDeleteNotification={handleDeleteNotification}
                       onTriggerTestNotification={(title, content) =>
-                        pushRealtimeNotification(title, content, 'BOOKING_EVENT', 'NODE-M01')
+                        pushRealtimeNotification(title, content, 'BOOKING_EVENT', 'NODE-M101')
                       }
                     />
                   )}
