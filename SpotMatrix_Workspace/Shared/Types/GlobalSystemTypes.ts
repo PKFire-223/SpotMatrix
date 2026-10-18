@@ -1,6 +1,6 @@
 export type WorkspaceZoneType = 'DESK_POD' | 'MEETING_ROOM' | 'FOCUS_BOOTH' | 'COLLAB_HUB';
 
-export type SeatStatusType = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
+export type SeatStatusType = 'AVAILABLE' | 'HOLDING' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
 
 export type UserRoleType = 'EMPLOYEE' | 'MANAGER' | 'SYS_ADMIN';
 
