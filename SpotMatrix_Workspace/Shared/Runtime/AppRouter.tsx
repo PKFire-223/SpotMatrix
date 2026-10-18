@@ -12,7 +12,6 @@ import {
   CalendarCheck,
   Database,
   ShieldAlert,
-  Bell,
   Sun,
   Moon,
   LogOut,
@@ -39,6 +38,10 @@ import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/Logi
 import { NotificationHeaderBell } from '../../Main/Notification/Function/Components/NotificationHeaderBell';
 import { RealtimePopupToast } from '../../Main/Notification/Function/Components/RealtimePopupToast';
 import { NotificationCenterPages } from '../../Main/Notification/Pages/NotificationCenterPages';
+import {
+  AuditLogPages,
+  ManagedUserAccountItem,
+} from '../../Main/Auditlog/Pages/AuditLogPages';
 
 const SESSION_STORAGE_KEY = 'spotmatrix_active_session_v2';
 
@@ -51,26 +54,53 @@ type ActiveSidebarPage =
   | 'AUDIT';
 
 const INITIAL_BROWSER_NODES: WorkspaceNodeItem[] = [
+  // TANG 1: KHU PHONG HOP TIEU CHUAN & BAN LAM VIEC
+  {
+    nodeId: 'NODE-M01',
+    nodeCode: 'M-01',
+    nodeLabel: 'Phòng Họp Boardroom M01 (Tầng 1)',
+    zoneType: 'MEETING_ROOM',
+    floorLevel: 1,
+    position2D: { posX: 630, posY: 145 },
+    position3D: { coordX: 2.2, coordY: 0.6, coordZ: -0.8 },
+    capacityCount: 8,
+    status: 'AVAILABLE',
+    amenitiesList: ['Máy chiếu Laser', 'Camera AI 360', 'Bảng trắng KTS'],
+    aiScore: 96,
+  },
+  {
+    nodeId: 'NODE-C01',
+    nodeCode: 'C-01',
+    nodeLabel: 'Phòng Thảo luận Nhóm C01 (Tầng 1)',
+    zoneType: 'COLLAB_HUB',
+    floorLevel: 1,
+    position2D: { posX: 425, posY: 350 },
+    position3D: { coordX: 1.5, coordY: 0.45, coordZ: 1.4 },
+    capacityCount: 6,
+    status: 'AVAILABLE',
+    amenitiesList: ['Màn hình 4K', 'Máy chiếu Laser', 'Ổ cắm âm sàn'],
+    aiScore: 94,
+  },
   {
     nodeId: 'NODE-A01',
     nodeCode: 'A-01',
-    nodeLabel: 'Bàn Lập trình Dual-4K A01',
+    nodeLabel: 'Trạm Làm việc Dual-4K A01 (Tầng 1)',
     zoneType: 'DESK_POD',
     floorLevel: 1,
-    position2D: { posX: 110, posY: 110 },
+    position2D: { posX: 110, posY: 125 },
     position3D: { coordX: -2.2, coordY: 0.4, coordZ: -1.2 },
     capacityCount: 1,
     status: 'AVAILABLE',
     amenitiesList: ['Màn hình 4K', 'Cổng Type-C 100W', 'Ghế Công thái học'],
-    aiScore: 96,
+    aiScore: 95,
   },
   {
     nodeId: 'NODE-A02',
     nodeCode: 'A-02',
-    nodeLabel: 'Bàn Đồ họa Wacom A02',
+    nodeLabel: 'Trạm Đồ họa Wacom A02 (Tầng 1)',
     zoneType: 'DESK_POD',
     floorLevel: 1,
-    position2D: { posX: 250, posY: 110 },
+    position2D: { posX: 250, posY: 125 },
     position3D: { coordX: 0, coordY: 0.4, coordZ: -1.2 },
     capacityCount: 1,
     status: 'OCCUPIED',
@@ -78,56 +108,109 @@ const INITIAL_BROWSER_NODES: WorkspaceNodeItem[] = [
     aiScore: 84,
   },
   {
-    nodeId: 'NODE-A03',
-    nodeCode: 'A-03',
-    nodeLabel: 'Bàn Tiêu chuẩn A03',
-    zoneType: 'DESK_POD',
-    floorLevel: 1,
-    position2D: { posX: 390, posY: 110 },
-    position3D: { coordX: 0.8, coordY: 0.4, coordZ: -1.2 },
-    capacityCount: 1,
-    status: 'HOLDING',
-    amenitiesList: ['Cổng Type-C 100W', 'Ghế Công thái học'],
-    aiScore: 91,
-  },
-  {
-    nodeId: 'NODE-M01',
-    nodeCode: 'M-01',
-    nodeLabel: 'Phòng Họp Boardroom M01',
-    zoneType: 'MEETING_ROOM',
-    floorLevel: 1,
-    position2D: { posX: 560, posY: 125 },
-    position3D: { coordX: 2.2, coordY: 0.6, coordZ: -0.8 },
-    capacityCount: 8,
-    status: 'AVAILABLE',
-    amenitiesList: ['Máy chiếu Laser', 'Camera AI 360', 'Bảng trắng KTS'],
-    aiScore: 95,
-  },
-  {
     nodeId: 'NODE-F01',
     nodeCode: 'F-01',
-    nodeLabel: 'Bốt Cách âm Focus F01',
+    nodeLabel: 'Bốt Họp Kín Focus F01 (Tầng 1)',
     zoneType: 'FOCUS_BOOTH',
     floorLevel: 1,
-    position2D: { posX: 140, posY: 270 },
+    position2D: { posX: 135, posY: 350 },
     position3D: { coordX: -1.4, coordY: 0.5, coordZ: 1.4 },
     capacityCount: 1,
     status: 'RESERVED',
     amenitiesList: ['Cách âm 40dB', 'Đèn chống mỏi mắt'],
     aiScore: 89,
   },
+  // TANG 2: KHU PHONG HOP CHIEN LUOC & SANG TAO
   {
-    nodeId: 'NODE-C01',
-    nodeCode: 'C-01',
-    nodeLabel: 'Không gian Thảo luận Collab C01',
-    zoneType: 'COLLAB_HUB',
-    floorLevel: 1,
-    position2D: { posX: 350, posY: 270 },
-    position3D: { coordX: 1.5, coordY: 0.45, coordZ: 1.4 },
-    capacityCount: 6,
+    nodeId: 'NODE-M02',
+    nodeCode: 'M-02',
+    nodeLabel: 'Phòng Họp Chiến lược M02 (Tầng 2)',
+    zoneType: 'MEETING_ROOM',
+    floorLevel: 2,
+    position2D: { posX: 600, posY: 160 },
+    position3D: { coordX: 1.4, coordY: 1.6, coordZ: 0.6 },
+    capacityCount: 12,
     status: 'AVAILABLE',
-    amenitiesList: ['Máy chiếu Laser', 'Màn hình 4K', 'Ổ cắm âm sàn'],
-    aiScore: 94,
+    amenitiesList: ['Máy chiếu Laser', 'Camera AI 360', 'Cách âm 40dB'],
+    aiScore: 95,
+  },
+  {
+    nodeId: 'NODE-B01',
+    nodeCode: 'B-01',
+    nodeLabel: 'Phòng Nghiên cứu AI B01 (Tầng 2)',
+    zoneType: 'DESK_POD',
+    floorLevel: 2,
+    position2D: { posX: 200, posY: 150 },
+    position3D: { coordX: -1.5, coordY: 1.4, coordZ: -0.9 },
+    capacityCount: 2,
+    status: 'OCCUPIED',
+    amenitiesList: ['Màn hình 4K', 'Bảng vẽ Wacom'],
+    aiScore: 97,
+  },
+  // TANG 3 (TANG TREN CUNG): HOI TRUONG LON DAU TRUONG LA MA
+  {
+    nodeId: 'NODE-H01',
+    nodeCode: 'H-01',
+    nodeLabel: 'Hội trường Lớn Đấu Trường La Mã (Tầng 3)',
+    zoneType: 'COLLAB_HUB',
+    floorLevel: 3,
+    position2D: { posX: 400, posY: 230 },
+    position3D: { coordX: 0, coordY: 2.5, coordZ: 0 },
+    capacityCount: 26,
+    status: 'AVAILABLE',
+    amenitiesList: ['Sân khấu tròn 360°', 'Màn hình Panorama', '26 Ghế Vòng cung'],
+    aiScore: 99,
+  },
+];
+
+const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
+  {
+    accountCode: 'ACC-ADMIN-001',
+    username: 'Systemadmin123',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    departmentName: 'System Governance',
+    role: 'SYS_ADMIN',
+    trustScore: 100,
+    accountStatus: 'ACTIVE',
+    isOnline: true,
+    lastActiveText: 'Đang hoạt động',
+  },
+  {
+    accountCode: 'ACC-MGR-002',
+    username: 'Managerlead123',
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    departmentName: 'Workspace Operations',
+    role: 'MANAGER',
+    trustScore: 100,
+    accountStatus: 'ACTIVE',
+    isOnline: true,
+    lastActiveText: 'Đang hoạt động',
+  },
+  {
+    accountCode: 'ACC-EMP-003',
+    username: 'Employeedev123',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Backend Dev)',
+    departmentName: 'Platform Engineering',
+    role: 'EMPLOYEE',
+    trustScore: 96,
+    accountStatus: 'ACTIVE',
+    isOnline: false,
+    lastActiveText: '14 phút trước',
+  },
+  {
+    accountCode: 'ACC-EMP-004',
+    username: 'Quang',
+    userEmail: 'quang@spotmatrix.vn',
+    fullName: 'Nguyễn Văn Quang',
+    departmentName: 'Product & Engineering',
+    role: 'MANAGER',
+    trustScore: 100,
+    accountStatus: 'ACTIVE',
+    isOnline: true,
+    lastActiveText: 'Đang hoạt động',
   },
 ];
 
@@ -161,25 +244,42 @@ const MainWorkspaceRoutes: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<WorkspaceNodeItem | null>(
     INITIAL_BROWSER_NODES[0]
   );
+  const [preselectedSlot, setPreselectedSlot] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
+
   const [bookingsList, setBookingsList] = useState<BookingPayloadItem[]>([
     {
       bookingId: 'BK-2026-001',
       nodeId: 'F-01',
       userEmail: 'architect.lead@spotmatrix.vn',
-      startTimeIso: '09:00',
-      endTimeIso: '11:30',
-      purposeNote: 'Họp Kiến trúc Hệ thống 2D',
+      startTimeIso: '08:00',
+      endTimeIso: '10:00',
+      purposeNote: 'Họp Kiến trúc Hệ thống 3D',
       bookingStatus: 'CONFIRMED',
+    },
+    {
+      bookingId: 'BK-2026-002',
+      nodeId: 'H01-A3',
+      userEmail: 'manager.lead@spotmatrix.vn',
+      startTimeIso: '13:00',
+      endTimeIso: '15:00',
+      purposeNote: '[Hội trường Tầng 3 - Ghế H01-A3] Townhall Quý 4',
+      bookingStatus: 'CHECKED_IN',
     },
   ]);
   const [equipmentsList, setEquipmentsList] = useState<SharedEquipmentItem[]>([]);
   const [trustProfiles, setTrustProfiles] = useState<UserTrustProfileItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditConcurrencyLogItem[]>([]);
+  const [managedUsers, setManagedUsers] =
+    useState<ManagedUserAccountItem[]>(INITIAL_MANAGED_USERS);
 
-  // State cho phan he Thong bao Realtime (Main/Notification)
   const [notificationsList, setNotificationsList] = useState<NotificationRecordItem[]>([]);
   const [activePopupNotification, setActivePopupNotification] =
     useState<NotificationRecordItem | null>(null);
+
+  const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
 
   const pushRealtimeNotification = useCallback(
     async (
@@ -188,6 +288,8 @@ const MainWorkspaceRoutes: React.FC = () => {
       category: NotificationCategoryType = 'BOOKING_EVENT',
       relatedNodeId?: string
     ) => {
+      if (category === 'FLOORPLAN_UPDATE') return;
+
       const localItem: NotificationRecordItem = {
         notificationId: `NTF-${Date.now()}`,
         recipientEmail: userSession?.userProfile.userEmail || 'all',
@@ -203,7 +305,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       setActivePopupNotification(localItem);
 
       try {
-        const res = await fetch('/api/v1/notifications', {
+        await fetch('/api/v1/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -214,21 +316,13 @@ const MainWorkspaceRoutes: React.FC = () => {
             relatedNodeId,
           }),
         });
-        const data = await res.json();
-        if (data?.success && data.data) {
-          setNotificationsList((prev) => [
-            data.data,
-            ...prev.filter((i) => i.notificationId !== localItem.notificationId),
-          ]);
-        }
       } catch {
-        // Giu thong bao local neu mang ban
+        // Giu local
       }
     },
     [userSession]
   );
 
-  // Tu dong dong Pop-up sau 4.5 giay
   useEffect(() => {
     if (!activePopupNotification) return;
     const timer = setTimeout(() => {
@@ -247,20 +341,27 @@ const MainWorkspaceRoutes: React.FC = () => {
         fetch('/api/v1/notifications').then((r) => r.json()),
       ]);
       if (nodesRes?.success && Array.isArray(nodesRes.data) && nodesRes.data.length > 0) {
-        setWorkspaceNodes(nodesRes.data);
-        setSelectedNode((prev) =>
-          prev
-            ? nodesRes.data.find((n: WorkspaceNodeItem) => n.nodeId === prev.nodeId) ||
-              nodesRes.data[0]
-            : nodesRes.data[0]
-        );
+        const hasFloor3Hall = nodesRes.data.some((n: WorkspaceNodeItem) => n.floorLevel === 3);
+        const mergedNodes = hasFloor3Hall
+          ? nodesRes.data
+          : [
+              ...nodesRes.data,
+              INITIAL_BROWSER_NODES.find((n) => n.floorLevel === 3)!,
+            ];
+        setWorkspaceNodes(mergedNodes);
       }
       if (eqRes?.success && Array.isArray(eqRes.data)) setEquipmentsList(eqRes.data);
       if (trustRes?.success && Array.isArray(trustRes.data)) setTrustProfiles(trustRes.data);
       if (auditRes?.success && Array.isArray(auditRes.data)) setAuditLogs(auditRes.data);
-      if (notifRes?.success && Array.isArray(notifRes.data)) setNotificationsList(notifRes.data);
+      if (notifRes?.success && Array.isArray(notifRes.data)) {
+        setNotificationsList(
+          notifRes.data.filter(
+            (n: NotificationRecordItem) => n.category !== 'FLOORPLAN_UPDATE'
+          )
+        );
+      }
     } catch {
-      // Su dung du lieu local neu mang tam ngat
+      // Giu INITIAL_BROWSER_NODES
     }
   }, []);
 
@@ -270,6 +371,49 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   }, [userSession, fetchAllSyncedData]);
 
+  const handleSelectAndNavigateNotification = (notifItem: NotificationRecordItem) => {
+    setNotificationsList((prev) =>
+      prev.map((n) =>
+        n.notificationId === notifItem.notificationId ? { ...n, isRead: true } : n
+      )
+    );
+    fetch(`/api/v1/notifications/${notifItem.notificationId}/read`, { method: 'PATCH' }).catch(
+      () => {}
+    );
+
+    if (notifItem.relatedNodeId) {
+      const foundNode = workspaceNodes.find(
+        (n) =>
+          n.nodeId === notifItem.relatedNodeId || n.nodeCode === notifItem.relatedNodeId
+      );
+      if (foundNode) {
+        setSelectedNode(foundNode);
+        setActivePage('FLOORPLAN');
+        return;
+      }
+      if (notifItem.relatedNodeId.startsWith('H01-')) {
+        setActivePage('BOOKING');
+        return;
+      }
+    }
+
+    if (notifItem.category === 'BOOKING_EVENT') {
+      setActivePage('BOOKING');
+    } else {
+      setActivePage('FLOORPLAN');
+    }
+  };
+
+  // Chuyen tu Trang So do Phong hop sang Trang Dat lich kem Phong & Slot da chon
+  const handleNavigateToBookingWithSlot = (
+    nodeItem: WorkspaceNodeItem,
+    slotTime: { start: string; end: string }
+  ) => {
+    setSelectedNode(nodeItem);
+    setPreselectedSlot(slotTime);
+    setActivePage('BOOKING');
+  };
+
   const handleLoginSuccess = (sessionData: AuthenticatedUserSession) => {
     setUserSession(sessionData);
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
@@ -277,9 +421,10 @@ const MainWorkspaceRoutes: React.FC = () => {
     navigate('/dashboard', { replace: true });
     setTimeout(() => {
       pushRealtimeNotification(
-        `Chào mừng ${sessionData.userProfile.fullName}`,
-        `Bạn đã đăng nhập với quyền [${sessionData.userProfile.role}]. Dữ liệu Sơ đồ 2D đã được đồng bộ.`,
-        'SYSTEM_SECURITY'
+        `Xin chào ${sessionData.userProfile.fullName}`,
+        `Bạn đã đăng nhập với quyền [${sessionData.userProfile.role}]. Bấm để mở Sơ đồ Phòng họp 3D.`,
+        'SYSTEM_SECURITY',
+        'NODE-M01'
       );
     }, 300);
   };
@@ -289,19 +434,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     setActivePopupNotification(null);
     navigate('/login', { replace: true });
-  };
-
-  const handleMarkOneNotificationRead = async (notificationId: string) => {
-    setNotificationsList((prev) =>
-      prev.map((item) =>
-        item.notificationId === notificationId ? { ...item, isRead: true } : item
-      )
-    );
-    try {
-      await fetch(`/api/v1/notifications/${notificationId}/read`, { method: 'PATCH' });
-    } catch {
-      // Bo qua
-    }
   };
 
   const handleMarkAllNotificationsRead = async () => {
@@ -342,12 +474,6 @@ const MainWorkspaceRoutes: React.FC = () => {
           actorEmail: userSession?.userProfile.username || 'Systemadmin123',
         }),
       });
-      pushRealtimeNotification(
-        `Cập nhật tọa độ ${nodeId}`,
-        `Đã lưu vị trí mới (X=${posX}, Y=${posY}) vào MongoDB.`,
-        'FLOORPLAN_UPDATE',
-        nodeId
-      );
       fetchAllSyncedData();
     } catch {
       // Giu state
@@ -371,12 +497,6 @@ const MainWorkspaceRoutes: React.FC = () => {
           actorEmail: userSession?.userProfile.username || 'Systemadmin123',
         }),
       });
-      pushRealtimeNotification(
-        `Đổi trạng thái vị trí ${nodeId}`,
-        `Vị trí ${nodeId} vừa chuyển sang trạng thái [${nextStatus}].`,
-        'FLOORPLAN_UPDATE',
-        nodeId
-      );
       fetchAllSyncedData();
     } catch {
       // Giu state
@@ -406,12 +526,6 @@ const MainWorkspaceRoutes: React.FC = () => {
       if (data?.success && data.data) {
         setWorkspaceNodes((prev) => [...prev, data.data]);
         setSelectedNode(data.data);
-        pushRealtimeNotification(
-          `Thêm mới vị trí ${data.data.nodeCode}`,
-          `Đã bổ sung "${data.data.nodeLabel}" vào mặt bằng Tầng ${data.data.floorLevel}.`,
-          'FLOORPLAN_UPDATE',
-          data.data.nodeId
-        );
         fetchAllSyncedData();
       }
     } catch {
@@ -422,81 +536,106 @@ const MainWorkspaceRoutes: React.FC = () => {
   const handleQuickBooking = (
     targetNode: WorkspaceNodeItem,
     customEmail?: string,
-    note?: string
+    note?: string,
+    customTargetCode?: string,
+    timeWindow?: { start: string; end: string }
   ) => {
-    if (targetNode.status !== 'AVAILABLE') {
-      pushRealtimeNotification(
-        `Vị trí ${targetNode.nodeCode} đang bận`,
-        'Vui lòng chọn một bàn hoặc phòng họp khác đang ở trạng thái Trống.',
-        'BOOKING_EVENT'
-      );
-      return;
-    }
+    const codeToBook = customTargetCode || targetNode.nodeCode;
 
-    handleUpdateNodeStatus(targetNode.nodeId, 'RESERVED');
+    if (!customTargetCode || !customTargetCode.startsWith('H01-')) {
+      handleUpdateNodeStatus(targetNode.nodeId, 'RESERVED');
+    }
 
     const newBookingItem: BookingPayloadItem = {
       bookingId: `BK-${Date.now().toString().slice(-4)}`,
-      nodeId: targetNode.nodeCode,
+      nodeId: codeToBook,
       userEmail: customEmail || userSession?.userProfile.userEmail || 'member@spotmatrix.vn',
-      startTimeIso: '13:30',
-      endTimeIso: '17:30',
-      purposeNote: note || `Đặt chỗ ${targetNode.nodeLabel}`,
+      startTimeIso: timeWindow?.start || '09:00',
+      endTimeIso: timeWindow?.end || '11:00',
+      purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
       bookingStatus: 'CONFIRMED',
     };
 
     setBookingsList((prev) => [newBookingItem, ...prev]);
     pushRealtimeNotification(
-      `Đặt chỗ thành công: ${targetNode.nodeCode}`,
-      `Đã xác nhận lịch đặt "${targetNode.nodeLabel}". Vui lòng quét mã QR đúng giờ để nhận +2 điểm tín nhiệm.`,
+      `Đặt lịch thành công: ${codeToBook}`,
+      `Đã xác nhận lịch "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
       'BOOKING_EVENT',
-      targetNode.nodeId
+      codeToBook.startsWith('H01-') ? codeToBook : targetNode.nodeId
     );
   };
 
-  const sidebarItems: Array<{
-    id: ActiveSidebarPage;
-    label: string;
-    sub: string;
-    icon: React.FC<{ className?: string }>;
-  }> = [
+  const handleCheckInBooking = (bookingId: string) => {
+    setBookingsList((prev) =>
+      prev.map((b) =>
+        b.bookingId === bookingId ? { ...b, bookingStatus: 'CHECKED_IN' } : b
+      )
+    );
+    pushRealtimeNotification(
+      `Check-in QR Thành công (+2 điểm)`,
+      `Bạn đã xác nhận có mặt đúng giờ cho mã vé ${bookingId}.`,
+      'TRUST_SCORE_ALERT'
+    );
+  };
+
+  const handleCancelBooking = (bookingId: string) => {
+    setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+  };
+
+  const handleToggleBlockUser = (username: string) => {
+    setManagedUsers((prev) =>
+      prev.map((u) =>
+        u.username === username
+          ? {
+              ...u,
+              accountStatus: u.accountStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
+            }
+          : u
+      )
+    );
+  };
+
+  const handleDeleteUserAccount = (username: string) => {
+    setManagedUsers((prev) => prev.filter((u) => u.username !== username));
+  };
+
+  const sidebarItems = [
     {
-      id: 'OVERVIEW',
+      id: 'OVERVIEW' as ActiveSidebarPage,
       label: 'Tổng quan (Dashboard)',
-      sub: 'Thống kê & So sánh TB',
+      sub: 'Biểu đồ & AI So sánh',
       icon: LayoutDashboard,
+      adminOnly: false,
     },
     {
-      id: 'FLOORPLAN',
-      label: 'Sơ đồ Mặt bằng 2D',
-      sub: 'Tương tác & Kéo thả tọa độ',
+      id: 'FLOORPLAN' as ActiveSidebarPage,
+      label: 'Sơ đồ Phòng họp',
+      sub: 'Mô hình 3D & Tầng Hội trường',
       icon: Map,
+      adminOnly: false,
     },
     {
-      id: 'BOOKING',
-      label: 'Lịch Đặt chỗ & QR',
-      sub: 'Giữ chỗ 5p & Check-in',
+      id: 'BOOKING' as ActiveSidebarPage,
+      label: 'Đặt lịch Phòng họp',
+      sub: 'Chọn giờ & Xem trước bố cục',
       icon: CalendarCheck,
+      adminOnly: false,
     },
     {
-      id: 'NOTIFICATION',
-      label: 'Trung tâm Thông báo',
-      sub: 'Cảnh báo & Tin nhắn hệ thống',
-      icon: Bell,
-    },
-    {
-      id: 'DATAMANAGER',
+      id: 'DATAMANAGER' as ActiveSidebarPage,
       label: 'Thiết bị & Tín nhiệm',
       sub: 'Trust Score & Quotas',
       icon: Database,
+      adminOnly: false,
     },
     {
-      id: 'AUDIT',
-      label: 'Nhật ký Hệ thống',
-      sub: 'Concurrency & Audit Logs',
+      id: 'AUDIT' as ActiveSidebarPage,
+      label: 'Nhật ký & Quản trị User',
+      sub: 'Chỉ dành cho SYS_ADMIN',
       icon: ShieldAlert,
+      adminOnly: true,
     },
-  ];
+  ].filter((item) => !item.adminOnly || isSysAdmin);
 
   return (
     <Routes>
@@ -519,12 +658,9 @@ const MainWorkspaceRoutes: React.FC = () => {
           ) : (
             <div
               className={`min-h-screen flex flex-col lg:flex-row transition-colors duration-200 ${
-                isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50/70 text-slate-800'
+                isDark ? 'bg-[#0B1120] text-slate-100' : 'bg-[#F4F7FB] text-slate-800'
               }`}
             >
-              {/* =========================================================
-                  SIDEBAR BEN TRAI: CHI CHUA LOGO & MENU DIEU HUONG GON GANG
-                 ========================================================= */}
               <aside
                 className={`w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r flex flex-col justify-between p-4 sm:p-5 transition-colors ${
                   isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90'
@@ -533,65 +669,49 @@ const MainWorkspaceRoutes: React.FC = () => {
                 <div className="space-y-6">
                   <SpotMatrixLogo theme={isDark ? 'dark' : 'light'} variant="full" />
 
-                  <nav className="space-y-1">
-                    <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                  <nav className="space-y-1.5">
+                    <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
                       Danh mục Chức năng
                     </p>
                     {sidebarItems.map((item) => {
                       const IconComponent = item.icon;
                       const isActive = activePage === item.id;
-                      const unreadBadge =
-                        item.id === 'NOTIFICATION'
-                          ? notificationsList.filter((n) => !n.isRead).length
-                          : 0;
 
                       return (
                         <button
                           key={item.id}
                           type="button"
                           onClick={() => setActivePage(item.id)}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all ${
+                          className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-all ${
                             isActive
-                              ? isDark
-                                ? 'bg-slate-800 text-white font-semibold'
-                                : 'bg-slate-900 text-white font-semibold shadow-sm'
+                              ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20'
                               : isDark
-                              ? 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                              ? 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <IconComponent className="w-4 h-4 shrink-0 opacity-85" />
+                            <IconComponent
+                              className={`w-4 h-4 shrink-0 ${
+                                isActive ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                              }`}
+                            />
                             <div className="truncate">
                               <p className="text-xs font-bold leading-tight">{item.label}</p>
                               <p
                                 className={`text-[10px] truncate mt-0.5 ${
-                                  isActive ? 'opacity-80' : 'text-slate-400'
+                                  isActive ? 'text-indigo-100' : 'text-slate-400'
                                 }`}
                               >
                                 {item.sub}
                               </p>
                             </div>
                           </div>
-                          {unreadBadge > 0 ? (
-                            <span
-                              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                                isActive
-                                  ? 'bg-white text-slate-900'
-                                  : isDark
-                                  ? 'bg-slate-800 text-slate-200'
-                                  : 'bg-slate-200 text-slate-800'
-                              }`}
-                            >
-                              {unreadBadge}
-                            </span>
-                          ) : (
-                            <ChevronRight
-                              className={`w-3.5 h-3.5 shrink-0 ${
-                                isActive ? 'opacity-90' : 'opacity-25'
-                              }`}
-                            />
-                          )}
+                          <ChevronRight
+                            className={`w-3.5 h-3.5 shrink-0 ${
+                              isActive ? 'opacity-100' : 'opacity-25'
+                            }`}
+                          />
                         </button>
                       );
                     })}
@@ -599,79 +719,67 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix Architecture v2.0
+                  SpotMatrix 3D Engine v3.0
                 </div>
               </aside>
 
-              {/* =========================================================
-                  KHU VUC CHINH BEN PHAI (HEADER DAT CUM TAI KHOAN O BEN TRAI TREN CUNG)
-                 ========================================================= */}
               <div className="flex-1 flex flex-col min-w-0">
                 <header
                   className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3 ${
                     isDark
-                      ? 'bg-slate-950/90 border-slate-800'
-                      : 'bg-white/95 border-slate-200/90'
+                      ? 'bg-slate-900/90 border-slate-800'
+                      : 'bg-white/95 border-slate-200/90 shadow-sm'
                   }`}
                 >
-                  {/* CUM BEN TRAI TREN CUNG HEADER: THONG TIN USER + CHUONG THONG BAO + SANG/TOI + THOAT */}
                   <div className="flex flex-wrap items-center gap-2.5">
                     <div
-                      className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border text-xs ${
+                      className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border text-xs ${
                         isDark
-                          ? 'bg-slate-900 border-slate-800 text-slate-200'
+                          ? 'bg-slate-950 border-slate-800 text-slate-200'
                           : 'bg-slate-50 border-slate-200/90 text-slate-800'
                       }`}
                     >
-                      <span className="font-bold">{userSession.userProfile.fullName}</span>
+                      <span className="w-2 h-2 rounded-full bg-teal-500" title="Đang Online" />
+                      <span className="font-extrabold">{userSession.userProfile.fullName}</span>
                       <span className="text-slate-400">
                         @{userSession.userProfile.username} • Tín nhiệm:{' '}
-                        <strong className="text-slate-700 dark:text-slate-200">
+                        <strong className="text-teal-600 dark:text-teal-400">
                           {userSession.userProfile.trustScore}đ
                         </strong>
                       </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          isDark
-                            ? 'bg-slate-800 border-slate-700 text-slate-300'
-                            : 'bg-white border-slate-200 text-slate-700'
-                        }`}
-                      >
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
                         {userSession.userProfile.role}
                       </span>
                     </div>
 
-                    {/* Chuong Thong bao + Dropdown xem nhanh */}
                     <NotificationHeaderBell
                       notifications={notificationsList}
                       isDark={isDark}
-                      onMarkOneRead={handleMarkOneNotificationRead}
+                      onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onMarkAllRead={handleMarkAllNotificationsRead}
                       onNavigateNotificationPage={() => setActivePage('NOTIFICATION')}
                     />
 
-                    {/* Nut chuyen Giao dien Sang / Toi diu mat */}
                     <button
                       type="button"
                       onClick={toggleThemeMode}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
                         isDark
-                          ? 'bg-slate-900 border-slate-800 text-slate-200 hover:bg-slate-800'
-                          : 'bg-slate-100/80 border-slate-200/90 text-slate-700 hover:bg-slate-200/60'
+                          ? 'bg-slate-800 border-slate-700 text-amber-300'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
                       }`}
                     >
                       {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                       <span>{isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
                     </button>
 
-                    {/* Nut Thoat diu mat */}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition ${
                         isDark
-                          ? 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
-                          : 'bg-slate-100/80 border-slate-200/90 text-slate-700 hover:bg-slate-200/60'
+                          ? 'bg-slate-900 border-slate-800 text-rose-400 hover:bg-rose-950/50'
+                          : 'bg-white border-slate-200 text-rose-600 hover:bg-rose-50 shadow-sm'
                       }`}
                     >
                       <LogOut className="w-3.5 h-3.5" />
@@ -679,8 +787,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* BEN PHAI HEADER: TEN TRANG HIEN TAI & GOI Y AI */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -689,21 +796,17 @@ const MainWorkspaceRoutes: React.FC = () => {
                           setSelectedNode(bestNode);
                           setActivePage('FLOORPLAN');
                           pushRealtimeNotification(
-                            `AI Đề xuất Vị trí: ${bestNode.nodeCode}`,
-                            `Bàn "${bestNode.nodeLabel}" đang trống và đạt độ tương thích ${bestNode.aiScore}%.`,
+                            `AI Đề xuất Phòng: ${bestNode.nodeCode}`,
+                            `"${bestNode.nodeLabel}" đang trống và đạt độ tương thích ${bestNode.aiScore}%.`,
                             'BOOKING_EVENT',
                             bestNode.nodeId
                           );
                         }
                       }}
-                      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition ${
-                        isDark
-                          ? 'bg-slate-100 text-slate-900 border-slate-100 hover:bg-white'
-                          : 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'
-                      }`}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      AI Gợi ý Chỗ ngồi
+                      AI Gợi ý Phòng họp
                     </button>
                   </div>
                 </header>
@@ -723,11 +826,12 @@ const MainWorkspaceRoutes: React.FC = () => {
 
                       <FloorplanMainPages
                         workspaceNodes={workspaceNodes}
+                        bookingsList={bookingsList}
                         selectedNode={selectedNode}
                         userRole={userSession.userProfile.role}
                         isDark={isDark}
                         onSelectNode={(n) => setSelectedNode(n)}
-                        onTriggerQuickBooking={(n) => handleQuickBooking(n)}
+                        onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
                         onUpdateNodeCoords={handleUpdateNodeCoords}
                         onUpdateNodeStatus={handleUpdateNodeStatus}
                         onCreateNewNode={handleCreateNewNode}
@@ -738,11 +842,12 @@ const MainWorkspaceRoutes: React.FC = () => {
                   {activePage === 'FLOORPLAN' && (
                     <FloorplanMainPages
                       workspaceNodes={workspaceNodes}
+                      bookingsList={bookingsList}
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       isDark={isDark}
                       onSelectNode={(n) => setSelectedNode(n)}
-                      onTriggerQuickBooking={(n) => handleQuickBooking(n)}
+                      onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
                       onUpdateNodeCoords={handleUpdateNodeCoords}
                       onUpdateNodeStatus={handleUpdateNodeStatus}
                       onCreateNewNode={handleCreateNewNode}
@@ -752,11 +857,18 @@ const MainWorkspaceRoutes: React.FC = () => {
                   {activePage === 'BOOKING' && (
                     <BookingCalendarPages
                       bookingsList={bookingsList}
-                      onCreateNewBooking={(email, purpose) => {
+                      workspaceNodes={workspaceNodes}
+                      selectedNode={selectedNode}
+                      preselectedSlot={preselectedSlot}
+                      userEmail={userSession.userProfile.userEmail}
+                      isDark={isDark}
+                      onCreateNewBooking={(email, purpose, targetCode, timeWin) => {
                         if (selectedNode) {
-                          handleQuickBooking(selectedNode, email, purpose);
+                          handleQuickBooking(selectedNode, email, purpose, targetCode, timeWin);
                         }
                       }}
+                      onCheckInBooking={handleCheckInBooking}
+                      onCancelBooking={handleCancelBooking}
                     />
                   )}
 
@@ -764,11 +876,11 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <NotificationCenterPages
                       notifications={notificationsList}
                       isDark={isDark}
-                      onMarkOneRead={handleMarkOneNotificationRead}
+                      onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onMarkAllRead={handleMarkAllNotificationsRead}
                       onDeleteNotification={handleDeleteNotification}
                       onTriggerTestNotification={(title, content) =>
-                        pushRealtimeNotification(title, content, 'BOOKING_EVENT')
+                        pushRealtimeNotification(title, content, 'BOOKING_EVENT', 'NODE-M01')
                       }
                     />
                   )}
@@ -784,48 +896,29 @@ const MainWorkspaceRoutes: React.FC = () => {
                     />
                   )}
 
-                  {activePage === 'AUDIT' && (
-                    <div
-                      className={`p-5 rounded-2xl border space-y-3 ${
-                        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <h2 className="text-base font-bold">
-                        Nhật ký Xung đột & Truy vết Hệ thống (Audit Logs)
-                      </h2>
-                      <div className="space-y-2">
-                        {auditLogs.map((log) => (
-                          <div
-                            key={log.auditId}
-                            className={`p-3.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${
-                              isDark
-                                ? 'bg-slate-950 border-slate-800'
-                                : 'bg-slate-50 border-slate-200/80'
-                            }`}
-                          >
-                            <div>
-                              <span className="font-bold">[{log.eventCategory}]</span>{' '}
-                              <span className="text-slate-600 dark:text-slate-300">
-                                {log.detailMessage}
-                              </span>
-                            </div>
-                            <span className="text-[11px] text-slate-400">
-                              Thực hiện bởi: {log.actorEmail}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  {activePage === 'AUDIT' && isSysAdmin && (
+                    <AuditLogPages
+                      auditLogs={auditLogs}
+                      managedUsers={managedUsers}
+                      isDark={isDark}
+                      onToggleBlockUser={handleToggleBlockUser}
+                      onDeleteUserAccount={handleDeleteUserAccount}
+                    />
                   )}
                 </main>
               </div>
 
-              {/* Pop-up Thong bao Realtime diu mat o goc duoi ben phai */}
               <RealtimePopupToast
                 activePopup={activePopupNotification}
                 isDark={isDark}
                 onDismissPopup={() => setActivePopupNotification(null)}
-                onOpenNotificationPage={() => setActivePage('NOTIFICATION')}
+                onOpenNotificationPage={() => {
+                  if (activePopupNotification) {
+                    handleSelectAndNavigateNotification(activePopupNotification);
+                  } else {
+                    setActivePage('NOTIFICATION');
+                  }
+                }}
               />
             </div>
           )
