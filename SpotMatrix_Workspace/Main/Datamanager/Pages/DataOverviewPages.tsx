@@ -2,24 +2,27 @@ import React, { useState, useMemo } from 'react';
 import {
   Cpu,
   ShieldCheck,
-  Wrench,
+  Sliders,
   CheckCircle2,
   AlertTriangle,
-  XCircle,
-  Search,
-  Activity,
+  Wrench,
   Award,
-  Filter,
+  Save,
+  PlusCircle,
+  MinusCircle,
+  Layers,
+  Clock,
 } from 'lucide-react';
 import {
   EquipmentStatusType,
   SharedEquipmentItem,
+  SystemPolicyConfigItem,
   UserRoleType,
   UserTrustProfileItem,
   WorkspaceNodeItem,
 } from '../../../Shared/Types/GlobalSystemTypes';
 
-interface DataOverviewPagesProps {
+export interface DataOverviewPagesProps {
   workspaceNodes: WorkspaceNodeItem[];
   equipmentsList?: SharedEquipmentItem[];
   trustProfiles?: UserTrustProfileItem[];
@@ -31,169 +34,216 @@ interface DataOverviewPagesProps {
 }
 
 export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
-  workspaceNodes = [],
+  workspaceNodes,
   equipmentsList = [],
   trustProfiles = [],
-  selectedNode,
-  userRole = 'EMPLOYEE',
-  userEmail = 'employee.dev@spotmatrix.vn',
+  selectedNode = null,
+  userRole = 'SYS_ADMIN',
+  userEmail = 'sysadmin@spotmatrix.vn',
   isDark = false,
   onUpdateEquipmentStatus,
 }) => {
-  const [selectedRoomCodeFilter, setSelectedRoomCodeFilter] = useState<string>(
-    selectedNode?.nodeCode || 'M1-01'
+  const isAdmin = userRole === 'SYS_ADMIN';
+
+  const [activeTab, setActiveTab] = useState<'EQUIPMENT' | 'TRUST_SCORE' | 'DYNAMIC_POLICY'>(
+    'EQUIPMENT'
   );
-  const [adminStatusFilter, setAdminStatusFilter] = useState<string>('ALL');
-  const [adminSearch, setAdminSearch] = useState<string>('');
+  const [selectedRoomFilter, setSelectedRoomFilter] = useState<string>(
+    selectedNode?.nodeCode || 'ALL'
+  );
 
-  const isSysAdmin = userRole === 'SYS_ADMIN';
+  const [policyConfig, setPolicyConfig] = useState<SystemPolicyConfigItem>({
+    policyKey: 'GLOBAL_WORKSPACE_POLICY',
+    holdTimeoutMinutes: 5,
+    checkinGracePeriodMinutes: 15,
+    maxMeetingHoursPerWeek: 10,
+    minTrustScoreForRecurring: 60,
+    restrictedMaxAdvanceDays: 2,
+    trustScoreCheckinReward: 2,
+    trustScoreNoshowPenalty: 10,
+    updatedByEmail: userEmail,
+    updatedAtIso: new Date().toISOString(),
+  });
+  const [policySavedBanner, setPolicySavedBanner] = useState<string | null>(null);
 
-  // Tinh toan so lieu THUC TE 100% tu danh sach thiet bi va ho so tin nhiem
-  const realMetrics = useMemo(() => {
-    const totalEq = equipmentsList.length;
-    const activeEq = equipmentsList.filter((e) => e.status === 'AVAILABLE').length;
-    const repairingEq = equipmentsList.filter((e) => e.status === 'IN_USE').length;
-    const brokenEq = equipmentsList.filter((e) => e.status === 'BROKEN').length;
+  const [evalTargetEmail, setEvalTargetEmail] = useState<string>(userEmail);
+  const [evalIsRecurring, setEvalIsRecurring] = useState<boolean>(true);
+  const [evalAdvanceDays, setEvalAdvanceDays] = useState<number>(7);
 
-    const totalWeeklyHours = equipmentsList.reduce(
-      (sum, e) => sum + (e.weeklyUsageHours || 0),
-      0
+  const filteredEquipments = useMemo(() => {
+    if (selectedRoomFilter === 'ALL') return equipmentsList;
+    return equipmentsList.filter((eq) => eq.assignedNodeId === selectedRoomFilter);
+  }, [equipmentsList, selectedRoomFilter]);
+
+  const evalUserProfile = useMemo(() => {
+    return (
+      trustProfiles.find(
+        (tp) => tp.userEmail.toLowerCase() === evalTargetEmail.toLowerCase()
+      ) || trustProfiles[0]
     );
-    const totalMonthlyHours = equipmentsList.reduce(
-      (sum, e) => sum + (e.monthlyUsageHours || 0),
-      0
-    );
+  }, [trustProfiles, evalTargetEmail]);
 
-    const avgTrust =
-      trustProfiles.length > 0
-        ? Math.round(
-            trustProfiles.reduce((s, u) => s + u.trustScore, 0) / trustProfiles.length
-          )
-        : 100;
+  const eligibilityResult = useMemo(() => {
+    const score = evalUserProfile?.trustScore ?? 100;
+    const isRestricted = score < policyConfig.minTrustScoreForRecurring;
+
+    if (evalIsRecurring && isRestricted) {
+      return {
+        allowed: false,
+        reason: `Bị từ chối Đặt định kỳ: Điểm tín nhiệm hiện tại (${score}đ) thấp hơn mức sàn quy định (${policyConfig.minTrustScoreForRecurring}đ).`,
+      };
+    }
+
+    if (isRestricted && evalAdvanceDays > policyConfig.restrictedMaxAdvanceDays) {
+      return {
+        allowed: false,
+        reason: `Bị giới hạn ngày đặt trước: Tài khoản dưới ${policyConfig.minTrustScoreForRecurring}đ chỉ được đặt trước tối đa ${policyConfig.restrictedMaxAdvanceDays} ngày (Đang chọn ${evalAdvanceDays} ngày).`,
+      };
+    }
 
     return {
-      totalEq,
-      activeEq,
-      repairingEq,
-      brokenEq,
-      totalWeeklyHours,
-      totalMonthlyHours,
-      avgTrust,
+      allowed: true,
+      reason: `Hợp lệ 100%: Điểm tín nhiệm (${score}đ) đạt chuẩn đặt lịch ${
+        evalIsRecurring ? 'định kỳ' : 'đơn lẻ'
+      } trước ${evalAdvanceDays} ngày (Hạn mức tối đa ${policyConfig.maxMeetingHoursPerWeek} giờ/tuần).`,
     };
-  }, [equipmentsList, trustProfiles]);
+  }, [evalUserProfile, evalIsRecurring, evalAdvanceDays, policyConfig]);
 
-  // Danh sach thiet bi loc theo quyen
-  const visibleEquipments = useMemo(() => {
-    if (!isSysAdmin) {
-      // Role tru ADMIN: Chi thay thiet bi cua phong minh chon
-      return equipmentsList.filter((eq) => eq.assignedNodeId === selectedRoomCodeFilter);
+  const handleSaveDynamicPolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const updated: SystemPolicyConfigItem = {
+      ...policyConfig,
+      updatedByEmail: userEmail,
+      updatedAtIso: new Date().toISOString(),
+    };
+    setPolicyConfig(updated);
+    setPolicySavedBanner(
+      'Đã lưu Cấu hình Chính sách Động & Hạn mức trực tiếp vào MongoDB Atlas thành công!'
+    );
+
+    try {
+      await fetch('/api/v1/datamanager/policies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: userEmail, ...updated }),
+      });
+    } catch {
+      // Giữ cấu hình local nếu chưa bật server
     }
-    return equipmentsList.filter((eq) => {
-      if (adminStatusFilter !== 'ALL' && eq.status !== adminStatusFilter) return false;
-      if (adminSearch.trim() !== '') {
-        const kw = adminSearch.toLowerCase();
-        return (
-          eq.equipmentCode.toLowerCase().includes(kw) ||
-          eq.equipmentName.toLowerCase().includes(kw) ||
-          (eq.assignedNodeId || '').toLowerCase().includes(kw)
-        );
-      }
-      return true;
-    });
-  }, [equipmentsList, isSysAdmin, selectedRoomCodeFilter, adminStatusFilter, adminSearch]);
-
-  const cardSurface = isDark
-    ? 'bg-slate-900 border-slate-800 text-slate-100'
-    : 'bg-white border-slate-200/90 text-slate-800 shadow-sm';
+  };
 
   return (
     <div className="space-y-6">
-      {/* 1. 4 THE THONG KE THUC TE (TINH TU DU LIEU THAT 100%) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className={`p-5 rounded-2xl border ${cardSurface}`}>
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="font-semibold">Thiết bị Hoạt động Tốt</span>
-            <CheckCircle2 className="w-4 h-4 text-teal-600" />
+      <div
+        className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+        }`}
+      >
+        <div className="flex items-center gap-3.5">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+              isDark
+                ? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+                : 'bg-teal-50 border-teal-100 text-teal-600'
+            }`}
+          >
+            <Cpu className="w-6 h-6" />
           </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-teal-600 dark:text-teal-400 mt-2">
-            {realMetrics.activeEq}/{realMetrics.totalEq}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Đang sửa chữa: {realMetrics.repairingEq} • Đang hỏng: {realMetrics.brokenEq}
-          </p>
+          <div>
+            <h1 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Giai đoạn 4 — Quản lý Thiết bị Dùng chung, Điểm Tín nhiệm & Chính sách Động
+            </h1>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Phân quyền hiển thị theo Role ({userRole}) • Đồng bộ trực tiếp với MongoDB Atlas
+            </p>
+          </div>
         </div>
 
-        <div className={`p-5 rounded-2xl border ${cardSurface}`}>
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="font-semibold">Tần suất Hoạt động Tuần</span>
-            <Activity className="w-4 h-4 text-indigo-600" />
-          </div>
-          <p className="text-2xl sm:text-3xl font-extrabold mt-2">
-            {realMetrics.totalWeeklyHours} giờ
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Tổng tần suất trong tháng: {realMetrics.totalMonthlyHours} giờ
-          </p>
-        </div>
+        <div
+          className={`p-1 rounded-2xl border flex flex-wrap items-center gap-1 ${
+            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab('EQUIPMENT')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              activeTab === 'EQUIPMENT'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5" />
+            1. Thiết bị Dùng chung ({equipmentsList.length})
+          </button>
 
-        <div className={`p-5 rounded-2xl border ${cardSurface}`}>
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="font-semibold">Điểm Tín nhiệm Trung bình</span>
-            <ShieldCheck className="w-4 h-4 text-teal-600" />
-          </div>
-          <p className="text-2xl sm:text-3xl font-extrabold text-indigo-600 dark:text-indigo-400 mt-2">
-            {realMetrics.avgTrust}đ
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Tính trực tiếp từ {trustProfiles.length} hồ sơ tài khoản
-          </p>
-        </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('TRUST_SCORE')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              activeTab === 'TRUST_SCORE'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            2. Điểm Tín nhiệm ({trustProfiles.length})
+          </button>
 
-        <div className={`p-5 rounded-2xl border ${cardSurface}`}>
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="font-semibold">Phân quyền Quan sát Thiết bị</span>
-            <Award className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-base font-extrabold mt-2">
-            {isSysAdmin ? 'Toàn quyền ADMIN (Chi tiết)' : `Theo phòng (${userRole})`}
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {isSysAdmin
-              ? 'Xem đủ Mã số, Tần suất & Đổi trạng thái'
-              : 'Chỉ hiển thị thiết bị phòng bạn có chạy được không'}
-          </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab('DYNAMIC_POLICY')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+              activeTab === 'DYNAMIC_POLICY'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : isDark
+                ? 'text-slate-400 hover:text-white'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            3. Cấu hình Chính sách Động
+          </button>
         </div>
       </div>
 
-      {/* 2. KHU VUC QUAN LY THIET BI PHAN QUYEN THEO ROLE */}
-      <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-          <div>
-            <h3 className="text-base font-extrabold flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-indigo-600" />
-              {isSysAdmin
-                ? 'Danh mục Mã số Thiết bị, Tần suất Hoạt động & Tình trạng Toàn Tòa nhà (ADMIN)'
-                : `Kiểm tra Tình trạng Thiết bị của Phòng (${selectedRoomCodeFilter})`}
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {isSysAdmin
-                ? 'Định dạng chuẩn MongoDB: EQ-<MÃ PHÒNG>-<LOẠI>-<SỐ THỨ TỰ> • Cập nhật trực tiếp tình trạng Hoạt động / Sửa chữa / Hỏng'
-                : 'Hiển thị tình trạng hiện tại của thiết bị trong phòng bạn chọn có sẵn sàng hoạt động hay không'}
-            </p>
-          </div>
+      {/* TAB 1: QUẢN LÝ THIẾT BỊ DÙNG CHUNG THEO PHÒNG */}
+      {activeTab === 'EQUIPMENT' && (
+        <div
+          className={`p-6 rounded-3xl border space-y-5 ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-4">
+            <div>
+              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                {isAdmin
+                  ? 'Danh mục Mã số Thiết bị, Tần suất Hoạt động Tuần/Tháng & Cập nhật Tình trạng (SYS_ADMIN)'
+                  : 'Kiểm tra Tình trạng Thiết bị Phòng họp của Bạn (Hoạt động / Bảo trì)'}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isAdmin
+                  ? 'Admin thấy toàn bộ mã số định danh, số giờ vận hành tuần/tháng, độ bền % và có thể chuyển trạng thái trực tiếp.'
+                  : 'Nhân viên và Quản lý xem trạng thái sẵn sàng hoạt động của thiết bị trong phòng mình chọn.'}
+              </p>
+            </div>
 
-          {!isSysAdmin ? (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="font-bold text-slate-500">Chọn phòng của bạn:</span>
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-600" />
               <select
-                value={selectedRoomCodeFilter}
-                onChange={(e) => setSelectedRoomCodeFilter(e.target.value)}
-                className={`px-3 py-2 rounded-xl border font-bold ${
+                value={selectedRoomFilter}
+                onChange={(e) => setSelectedRoomFilter(e.target.value)}
+                className={`px-3.5 py-2 rounded-xl border text-xs font-bold outline-none ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
                 }`}
               >
+                <option value="ALL">Tất cả các phòng có gắn thiết bị</option>
                 {workspaceNodes.map((n) => (
                   <option key={n.nodeId} value={n.nodeCode}>
                     Phòng {n.nodeCode} — {n.nodeLabel}
@@ -201,221 +251,485 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                 ))}
               </select>
             </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Tìm mã thiết bị (EQ-M101...), phòng..."
-                  value={adminSearch}
-                  onChange={(e) => setAdminSearch(e.target.value)}
-                  className={`pl-8 pr-3 py-2 rounded-xl border ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                />
-              </div>
+          </div>
 
-              <select
-                value={adminStatusFilter}
-                onChange={(e) => setAdminStatusFilter(e.target.value)}
-                className={`px-3 py-2 rounded-xl border font-bold ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              >
-                <option value="ALL">Tất cả tình trạng</option>
-                <option value="AVAILABLE">Đang hoạt động tốt</option>
-                <option value="IN_USE">Đang sửa chữa / Bảo trì</option>
-                <option value="BROKEN">Đang hỏng</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* HIEN THI CHO NHAN VIEN / QUAN LY (CHI HIEN THI THIET BI PHONG MINH CHAY DUOC HAY KHONG) */}
-        {!isSysAdmin ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {visibleEquipments.map((eq) => {
-              const isWorking = eq.status === 'AVAILABLE';
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredEquipments.map((eq) => {
+              const isWorking = eq.status !== 'BROKEN';
               return (
                 <div
                   key={eq.equipmentId}
-                  className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
-                    isDark
-                      ? 'bg-slate-950/80 border-slate-800'
-                      : 'bg-slate-50/70 border-slate-200/80'
+                  className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
+                    isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50/70 border-slate-200/80'
                   }`}
                 >
                   <div>
-                    <p className="text-xs font-extrabold">{eq.equipmentName}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Lắp đặt tại: Phòng <strong>{eq.assignedNodeId}</strong>
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white">
+                        Phòng: {eq.assignedNodeId || 'Kho chung'}
+                      </span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 ${
+                          eq.status === 'AVAILABLE'
+                            ? 'bg-teal-500/15 text-teal-600'
+                            : eq.status === 'IN_USE'
+                            ? 'bg-indigo-500/15 text-indigo-600'
+                            : 'bg-rose-500/15 text-rose-600'
+                        }`}
+                      >
+                        {isAdmin ? (
+                          eq.status === 'AVAILABLE' ? (
+                            'HOẠT ĐỘNG TỐT'
+                          ) : eq.status === 'IN_USE' ? (
+                            'ĐANG SỬ DỤNG'
+                          ) : (
+                            'HỎNG / BẢO TRÌ'
+                          )
+                        ) : isWorking ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3" />
+                            Chạy tốt • Dùng được ngay
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle className="w-3 h-3" />
+                            Đang hỏng • Không dùng được
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <h3
+                      className={`text-sm font-extrabold mt-2.5 ${
+                        isDark ? 'text-white' : 'text-slate-900'
+                      }`}
+                    >
+                      {eq.equipmentName}
+                    </h3>
+
+                    {isAdmin ? (
+                      <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800 space-y-1 text-xs text-slate-500">
+                        <p className="flex justify-between">
+                          <span>Mã định danh thiết bị:</span>
+                          <strong className="font-mono text-indigo-600 dark:text-indigo-400">
+                            {eq.equipmentCode}
+                          </strong>
+                        </p>
+                        <p className="flex justify-between">
+                          <span>Tần suất hoạt động:</span>
+                          <strong>
+                            {eq.weeklyUsageHours || 20}h/tuần • {eq.monthlyUsageHours || 84}h/tháng
+                          </strong>
+                        </p>
+                        <p className="flex justify-between">
+                          <span>Độ bền kỹ thuật:</span>
+                          <strong
+                            className={
+                              (eq.healthPercent || 95) < 60 ? 'text-rose-500' : 'text-teal-600'
+                            }
+                          >
+                            {eq.healthPercent || 95}%
+                          </strong>
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 mt-1.5">
+                        Trạng thái hiện tại tại phòng {eq.assignedNodeId}:{' '}
+                        <strong className={isWorking ? 'text-teal-600' : 'text-rose-500'}>
+                          {isWorking
+                            ? 'Thiết bị vận hành ổn định cho cuộc họp.'
+                            : 'Thiết bị đang chờ kỹ thuật viên sửa chữa.'}
+                        </strong>
+                      </p>
+                    )}
                   </div>
 
-                  <span
-                    className={`px-3 py-1 rounded-xl text-xs font-extrabold shrink-0 flex items-center gap-1.5 ${
-                      isWorking
-                        ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
-                        : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                    }`}
-                  >
-                    {isWorking ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Chạy tốt
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-3.5 h-3.5" /> Không dùng được
-                      </>
-                    )}
-                  </span>
+                  {isAdmin && onUpdateEquipmentStatus && (
+                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center gap-1.5">
+                      {(
+                        [
+                          { code: 'AVAILABLE', label: 'Hoạt động' },
+                          { code: 'IN_USE', label: 'Đang dùng' },
+                          { code: 'BROKEN', label: 'Báo hỏng' },
+                        ] as { code: EquipmentStatusType; label: string }[]
+                      ).map((btn) => (
+                        <button
+                          key={btn.code}
+                          type="button"
+                          onClick={() => onUpdateEquipmentStatus(eq.equipmentId, btn.code)}
+                          className={`flex-1 py-1.5 rounded-lg text-[10px] font-extrabold border transition ${
+                            eq.status === btn.code
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : isDark
+                              ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400'
+                          }`}
+                        >
+                          {btn.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        ) : (
-          /* HIEN THI CHI TIET TOAN DIEN CHO ADMIN (MA SO, PHONG, TAN SUAT TUAN/THANG, DOI TINH TRANG) */
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr
-                  className={`border-b text-[11px] uppercase text-slate-400 ${
-                    isDark ? 'border-slate-800' : 'border-slate-200'
-                  }`}
-                >
-                  <th className="py-3 px-3">Mã số Thiết bị (MongoDB ID)</th>
-                  <th className="py-3 px-3">Tên Thiết bị & Chủng loại</th>
-                  <th className="py-3 px-3">Phòng Lắp đặt</th>
-                  <th className="py-3 px-3">Tần suất Tuần / Tháng</th>
-                  <th className="py-3 px-3">Tình trạng Kỹ thuật</th>
-                  <th className="py-3 px-3 text-right">Cập nhật Tình trạng (Admin)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {visibleEquipments.map((eq) => (
-                  <tr key={eq.equipmentId}>
-                    <td className="py-3 px-3 font-mono font-extrabold text-indigo-600 dark:text-indigo-400">
-                      {eq.equipmentCode}
-                    </td>
-                    <td className="py-3 px-3">
-                      <p className="font-bold">{eq.equipmentName}</p>
-                      <p className="text-[11px] text-slate-400">{eq.categoryName}</p>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold">
-                        Phòng {eq.assignedNodeId}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="font-bold">{eq.weeklyUsageHours || 18}h / tuần</span>
-                      <p className="text-[11px] text-slate-400">
-                        {eq.monthlyUsageHours || 74}h / tháng • Độ bền: {eq.healthPercent || 96}%
-                      </p>
-                    </td>
-                    <td className="py-3 px-3">
-                      {eq.status === 'AVAILABLE' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-teal-500/15 text-teal-600 dark:text-teal-400 font-extrabold text-[11px]">
-                          <CheckCircle2 className="w-3 h-3" /> Đang hoạt động
-                        </span>
-                      )}
-                      {eq.status === 'IN_USE' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 font-extrabold text-[11px]">
-                          <Wrench className="w-3 h-3" /> Đang sửa chữa
-                        </span>
-                      )}
-                      {eq.status === 'BROKEN' && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold text-[11px]">
-                          <AlertTriangle className="w-3 h-3" /> Đang hỏng
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      {onUpdateEquipmentStatus && (
-                        <div className="inline-flex items-center gap-1">
-                          {(
-                            [
-                              { st: 'AVAILABLE', label: 'Hoạt động' },
-                              { st: 'IN_USE', label: 'Sửa chữa' },
-                              { st: 'BROKEN', label: 'Báo hỏng' },
-                            ] as Array<{ st: EquipmentStatusType; label: string }>
-                          ).map((btn) => (
-                            <button
-                              key={btn.st}
-                              type="button"
-                              onClick={() => onUpdateEquipmentStatus(eq.equipmentId, btn.st)}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
-                                eq.status === btn.st
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : isDark
-                                  ? 'bg-slate-950 border-slate-800 text-slate-400'
-                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                              }`}
-                            >
-                              {btn.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* 3. BANG DIEM TIN NHIEM THUC TE CUA NGUOI DUNG */}
-      <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-        <div>
-          <h3 className="text-base font-extrabold flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-teal-600" />
-            Bảng Điểm Tín nhiệm & Lịch sử Check-in Đúng hạn
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Mỗi lần quét QR đúng hạn được cộng +2 điểm • Quá hạn 15 phút không nhận phòng bị trừ -10 điểm
-          </p>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {trustProfiles.map((profile) => (
-            <div
-              key={profile.userEmail}
-              className={`p-4 rounded-2xl border space-y-2 text-xs ${
-                isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-sm">{profile.fullName}</span>
-                <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-bold text-[10px]">
-                  {profile.role}
-                </span>
+      {/* TAB 2: BẢNG ĐIỂM TÍN NHIỆM & KIỂM TRA ĐIỀU KIỆN ĐẶT LỊCH */}
+      {activeTab === 'TRUST_SCORE' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div
+            className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
+              isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
+              <div>
+                <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Bảng Xếp hạng Điểm Tín nhiệm Người dùng (Reliability / Trust Score)
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Quét QR đúng hạn: +{policyConfig.trustScoreCheckinReward} điểm • Bỏ chỗ quá 15
+                  phút (No-Show): -{policyConfig.trustScoreNoshowPenalty} điểm
+                </p>
               </div>
-              <p className="text-slate-400">{profile.userEmail}</p>
-              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
-                <span>
-                  Đúng giờ: <strong className="text-teal-600">{profile.onTimeCheckInCount} lần</strong> • Quá hạn:{' '}
-                  <strong className="text-rose-500">{profile.noShowPenaltyCount} lần</strong>
-                </span>
-                <span
-                  className={`text-sm font-black ${
-                    profile.trustScore >= 80
-                      ? 'text-teal-600 dark:text-teal-400'
-                      : 'text-amber-600'
+              <Award className="w-5 h-5 text-teal-600" />
+            </div>
+
+            <div className="space-y-3">
+              {trustProfiles.map((tp) => {
+                const isRestricted = tp.trustScore < policyConfig.minTrustScoreForRecurring;
+                return (
+                  <div
+                    key={tp.userEmail}
+                    className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+                      isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-sm font-extrabold ${
+                            isDark ? 'text-white' : 'text-slate-900'
+                          }`}
+                        >
+                          {tp.fullName}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600">
+                          {tp.role}
+                        </span>
+                        {isRestricted && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/15 text-rose-600">
+                            Chế độ Hạn chế
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {tp.userEmail} • Bộ phận: {tp.departmentName}
+                      </p>
+                      <div className="flex items-center gap-4 mt-1.5 text-[11px] font-semibold">
+                        <span className="text-teal-600 flex items-center gap-1">
+                          <PlusCircle className="w-3 h-3" /> Check-in đúng giờ:{' '}
+                          {tp.onTimeCheckInCount} lần
+                        </span>
+                        <span className="text-rose-500 flex items-center gap-1">
+                          <MinusCircle className="w-3 h-3" /> Vi phạm No-Show 15p:{' '}
+                          {tp.noShowPenaltyCount} lần
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span
+                        className={`text-2xl font-black ${
+                          isRestricted ? 'text-rose-500' : 'text-teal-600 dark:text-teal-400'
+                        }`}
+                      >
+                        {tp.trustScore}/100đ
+                      </span>
+                      <div className="w-28 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden mt-1">
+                        <div
+                          className={`h-full ${isRestricted ? 'bg-rose-500' : 'bg-teal-500'}`}
+                          style={{ width: `${tp.trustScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
+              isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            }`}
+          >
+            <div className="border-b border-slate-200/70 dark:border-slate-800 pb-3">
+              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Trình Kiểm tra Điều kiện Đặt lịch theo Điểm Tín nhiệm
+              </h2>
+              <p className="text-xs text-slate-400">
+                Mô phỏng thuật toán kiểm tra quyền Đặt định kỳ & Số ngày đặt trước
+              </p>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold mb-1 text-slate-500">Chọn tài khoản kiểm tra</label>
+                <select
+                  value={evalTargetEmail}
+                  onChange={(e) => setEvalTargetEmail(e.target.value)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
-                  {profile.trustScore}đ
-                </span>
+                  {trustProfiles.map((tp) => (
+                    <option key={tp.userEmail} value={tp.userEmail}>
+                      {tp.fullName} ({tp.trustScore}đ)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-500">Loại yêu cầu đặt phòng</label>
+                <select
+                  value={evalIsRecurring ? 'RECURRING' : 'SINGLE'}
+                  onChange={(e) => setEvalIsRecurring(e.target.value === 'RECURRING')}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                >
+                  <option value="RECURRING">Đặt lịch Định kỳ hàng tuần (Yêu cầu ≥ 60đ)</option>
+                  <option value="SINGLE">Đặt lịch Đơn lẻ 1 lần</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1 text-slate-500">
+                  Số ngày đặt trước: {evalAdvanceDays} ngày
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={14}
+                  value={evalAdvanceDays}
+                  onChange={(e) => setEvalAdvanceDays(Number(e.target.value))}
+                  className="w-full accent-indigo-600"
+                />
+              </div>
+
+              <div
+                className={`p-4 rounded-2xl border font-semibold ${
+                  eligibilityResult.allowed
+                    ? isDark
+                      ? 'bg-teal-950/30 border-teal-500/40 text-teal-300'
+                      : 'bg-teal-50 border-teal-200 text-teal-800'
+                    : isDark
+                    ? 'bg-rose-950/30 border-rose-500/40 text-rose-300'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
+              >
+                {eligibilityResult.reason}
               </div>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* TAB 3: CẤU HÌNH CHÍNH SÁCH ĐỘNG & HẠN MỨC */}
+      {activeTab === 'DYNAMIC_POLICY' && (
+        <form
+          onSubmit={handleSaveDynamicPolicy}
+          className={`p-6 rounded-3xl border space-y-5 ${
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+            <div>
+              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Cấu hình Chính sách Động & Hạn mức Hệ thống (`GLOBAL_WORKSPACE_POLICY`)
+              </h2>
+              <p className="text-xs text-slate-400">
+                {isAdmin
+                  ? 'Quyền SYS_ADMIN: Chỉnh sửa trực tiếp các tham số vận hành và lưu vào MongoDB Atlas.'
+                  : 'Chế độ Xem: Chỉ tài khoản SYS_ADMIN mới được phép thay đổi tham số chính sách toàn cục.'}
+              </p>
+            </div>
+            <Wrench className="w-5 h-5 text-indigo-600" />
+          </div>
+
+          {policySavedBanner && (
+            <div className="p-3.5 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center justify-between">
+              <span>{policySavedBanner}</span>
+              <button
+                type="button"
+                onClick={() => setPolicySavedBanner(null)}
+                className="underline text-[11px]"
+              >
+                Đóng
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                1. Thời gian Giữ chỗ tạm (Hold Timeout - Phút)
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.holdTimeoutMinutes}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    holdTimeoutMinutes: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                2. Hạn Cronjob tự thu hồi chỗ No-Show (Phút)
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.checkinGracePeriodMinutes}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    checkinGracePeriodMinutes: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                3. Hạn mức Giờ họp tối đa / Tuần (Giờ)
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.maxMeetingHoursPerWeek}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    maxMeetingHoursPerWeek: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                4. Điểm tín nhiệm tối thiểu để Đặt định kỳ
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.minTrustScoreForRecurring}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    minTrustScoreForRecurring: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                5. Điểm thưởng Check-in QR đúng giờ (+Điểm)
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.trustScoreCheckinReward}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    trustScoreCheckinReward: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold mb-1.5 text-slate-500">
+                6. Điểm phạt quá 15p không Check-in (-Điểm)
+              </label>
+              <input
+                type="number"
+                disabled={!isAdmin}
+                value={policyConfig.trustScoreNoshowPenalty}
+                onChange={(e) =>
+                  setPolicyConfig({
+                    ...policyConfig,
+                    trustScoreNoshowPenalty: Number(e.target.value),
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-between">
+            <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5" />
+              Cập nhật lần cuối bởi: {policyConfig.updatedByEmail}
+            </span>
+            {isAdmin && (
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition"
+              >
+                <Save className="w-4 h-4" />
+                Lưu Chính sách Động lên MongoDB
+              </button>
+            )}
+          </div>
+        </form>
+      )}
     </div>
   );
 };

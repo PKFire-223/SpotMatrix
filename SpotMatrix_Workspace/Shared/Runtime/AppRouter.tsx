@@ -1455,8 +1455,11 @@ const MainWorkspaceRoutes: React.FC = () => {
                         equipmentsList={equipmentsList}
                         trustProfiles={trustProfiles}
                         auditLogs={auditLogs}
+                        userRole={userSession.userProfile.role}
+                        userEmail={userSession.userProfile.userEmail}
                         isDark={isDark}
                         onNavigateSection={(sec) => setActivePage(sec)}
+                        onHandleApprovalDecision={handleApprovalDecision}
                       />
 
                       <FloorplanMainPages
