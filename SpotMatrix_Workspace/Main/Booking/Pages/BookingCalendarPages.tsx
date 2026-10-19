@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar,
   Clock,
@@ -12,42 +11,80 @@ import {
   AlertCircle,
   Sparkles,
   Check,
+  Lock,
+  Timer,
+  Repeat,
+  Zap,
+  RotateCcw,
+  ShieldAlert,
 } from 'lucide-react';
-import { WorkspaceNodeItem, UserRoleType } from '../../../Shared/Types/GlobalSystemTypes';
+import {
+  AuditEventCategoryType,
+  BookingPayloadItem,
+  RecurringOptionType,
+  SeatStatusType,
+  UserRoleType,
+  WorkspaceNodeItem,
+} from '../../../Shared/Types/GlobalSystemTypes';
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
+import {
+  buildNormalizedMeetingDateRange,
+  formatIsoDateString,
+  validateSingleAndRecurringCollision,
+} from '../Function/Validators/BookingValidator';
 
-export interface BookingScheduleRecord {
-  bookingId: string;
-  nodeCode: string;
-  nodeLabel: string;
-  floorLevel: number;
-  bookingDate: string;
-  startTime: string;
-  endTime: string;
-  purposeTitle: string;
-  attendeeCount: number;
-  recurringOption: string;
-  status: 'CONFIRMED' | 'CHECKED_IN';
-  approvalStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
-  createdByUsername?: string;
-  createdByRole?: UserRoleType;
-  approvedByUsername?: string;
-  checkedInAtText?: string;
+export interface BookingTimeWindowInput {
+  start: string;
+  end: string;
+  dateIso?: string;
+  recurringOption?: RecurringOptionType;
+  occurrenceDates?: string[];
+  lockVersion?: number;
 }
 
-interface BookingCalendarPagesProps {
-  themeMode: 'light' | 'dark';
-  nodesList: WorkspaceNodeItem[];
-  bookingsList: BookingScheduleRecord[];
-  currentUser: {
-    username: string;
-    fullName: string;
-    userEmail: string;
-    role: UserRoleType;
-  };
-  onCreateNewBooking: (newItem: BookingScheduleRecord) => void;
+export interface BookingCalendarPagesProps {
+  bookingsList: BookingPayloadItem[];
+  workspaceNodes: WorkspaceNodeItem[];
+  selectedNode: WorkspaceNodeItem | null;
+  preselectedSlot?: { start: string; end: string } | null;
+  userEmail: string;
+  userRole: UserRoleType;
+  isDark: boolean;
+  onCreateNewBooking: (
+    email: string,
+    purpose: string,
+    targetCode?: string,
+    timeWindow?: BookingTimeWindowInput
+  ) => void;
+  onCheckInBooking: (bookingId: string, exactScanTimeText?: string) => void;
   onCancelBooking: (bookingId: string) => void;
-  onConfirmCheckinBooking: (bookingId: string) => void;
+  onUpdateNodeStatus?: (nodeId: string, nextStatus: SeatStatusType) => void;
+  onRecordConcurrencyAudit?: (
+    eventCategory: AuditEventCategoryType,
+    actorEmail: string,
+    targetNodeId: string,
+    detailMessage: string,
+    outcomeStatus?: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED',
+    lockVersionAttempted?: number
+  ) => void;
+  onPenalizeNoShowBooking?: (bookingId: string, userEmail: string, nodeCode: string) => void;
+}
+
+interface ActiveHoldTimerState {
+  nodeCode: string;
+  nodeId: string;
+  heldByEmail: string;
+  lockVersion: number;
+  expiresAtMs: number;
+}
+
+interface RaceSimulationBannerState {
+  nodeCode: string;
+  initialVersion: number;
+  finalVersion: number;
+  winnerEmail: string;
+  challengerEmail: string;
+  timestampText: string;
 }
 
 const AMPHITHEATER_SEATS = [
@@ -67,151 +104,310 @@ const AMPHITHEATER_SEATS = [
   'H01-B8',
 ];
 
-const formatTodayIsoDate = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
-  themeMode,
-  nodesList,
   bookingsList,
-  currentUser,
+  workspaceNodes,
+  selectedNode,
+  preselectedSlot,
+  userEmail,
+  userRole,
+  isDark,
   onCreateNewBooking,
+  onCheckInBooking,
   onCancelBooking,
-  onConfirmCheckinBooking,
+  onUpdateNodeStatus,
+  onRecordConcurrencyAudit,
+  onPenalizeNoShowBooking,
 }) => {
-  const isDark = themeMode === 'dark';
-  const [searchParams] = useSearchParams();
-
-  const [selectedRoomCode, setSelectedRoomCode] = useState<string>('M1-01');
+  const [selectedRoomCode, setSelectedRoomCode] = useState<string>(
+    selectedNode?.nodeCode || workspaceNodes[0]?.nodeCode || 'M1-01'
+  );
   const [selectedAmphitheaterSeat, setSelectedAmphitheaterSeat] = useState<string>('H01-A1');
-  const [selectedDate, setSelectedDate] = useState<string>(formatTodayIsoDate);
-  const [startTime, setStartTime] = useState<string>('08:00');
-  const [endTime, setEndTime] = useState<string>('10:00');
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    formatIsoDateString(new Date())
+  );
+  const [startTime, setStartTime] = useState<string>(preselectedSlot?.start || '08:00');
+  const [endTime, setEndTime] = useState<string>(preselectedSlot?.end || '10:00');
   const [purposeTitle, setPurposeTitle] = useState<string>(
     'Họp triển khai dự án & Review Kiến trúc Hệ thống'
   );
-  const [recurringOption, setRecurringOption] = useState<string>('NONE');
+  const [recurringOption, setRecurringOption] = useState<RecurringOptionType>('NONE');
   const [selectedBookingForQr, setSelectedBookingForQr] = useState<string>(
     bookingsList[0]?.bookingId || ''
   );
+
+  const [roomLockVersions, setRoomLockVersions] = useState<Record<string, number>>({
+    'M1-01': 1,
+    'M1-02': 2,
+    'H-01': 1,
+  });
+  const [activeHoldMap, setActiveHoldMap] = useState<Record<string, ActiveHoldTimerState>>({});
+  const [nowTickMs, setNowTickMs] = useState<number>(() => Date.now());
+  const [raceSimResult, setRaceSimResult] = useState<RaceSimulationBannerState | null>(null);
+  const [cronSweepBanner, setCronSweepBanner] = useState<string | null>(null);
+
   const [checkinErrorAlert, setCheckinErrorAlert] = useState<string | null>(null);
   const [bookingFormError, setBookingFormError] = useState<string | null>(null);
   const [bookingSuccessBanner, setBookingSuccessBanner] = useState<string | null>(null);
 
-  // Đồng bộ tham số URL (?room=...&slot=...) hoặc localStorage khi chuyển từ trang Sơ đồ Phòng họp sang
   useEffect(() => {
-    const queryRoom = searchParams.get('room');
-    const querySlot = searchParams.get('slot');
-
-    if (queryRoom && nodesList.some((item) => item.nodeCode === queryRoom)) {
-      setSelectedRoomCode(queryRoom);
+    if (selectedNode?.nodeCode) {
+      setSelectedRoomCode(selectedNode.nodeCode);
     }
-    if (querySlot && querySlot.includes('-')) {
-      const [slotStart, slotEnd] = querySlot.split('-').map((s) => s.trim());
-      if (slotStart && slotEnd) {
-        setStartTime(slotStart);
-        setEndTime(slotEnd);
-      }
-    }
+  }, [selectedNode]);
 
-    try {
-      const rawPreselect = localStorage.getItem('spotmatrix_preselect_booking');
-      if (rawPreselect) {
-        const parsed = JSON.parse(rawPreselect);
-        if (parsed.nodeCode && nodesList.some((item) => item.nodeCode === parsed.nodeCode)) {
-          setSelectedRoomCode(parsed.nodeCode);
-        }
-        if (parsed.startTime && parsed.endTime) {
-          setStartTime(parsed.startTime);
-          setEndTime(parsed.endTime);
-        }
-        localStorage.removeItem('spotmatrix_preselect_booking');
-      }
-    } catch {
-      // Bỏ qua nếu dữ liệu tạm không hợp lệ
-    }
-  }, [searchParams, nodesList]);
-
-  // Đảm bảo luôn có 1 vé hợp lệ được chọn khi danh sách thay đổi (thêm mới hoặc xóa vé)
   useEffect(() => {
-    if (bookingsList.length === 0) {
+    if (preselectedSlot?.start && preselectedSlot?.end) {
+      setStartTime(preselectedSlot.start);
+      setEndTime(preselectedSlot.end);
+    }
+  }, [preselectedSlot]);
+
+  const bookingsCount = bookingsList.length;
+  const newestBookingId = bookingsList[0]?.bookingId || '';
+  useEffect(() => {
+    if (bookingsCount === 0) {
       setSelectedBookingForQr('');
       return;
     }
-    const stillExists = bookingsList.some((item) => item.bookingId === selectedBookingForQr);
-    if (!selectedBookingForQr || !stillExists) {
-      setSelectedBookingForQr(bookingsList[0].bookingId);
+    if (newestBookingId) {
+      setSelectedBookingForQr(newestBookingId);
     }
-  }, [bookingsList, selectedBookingForQr]);
+  }, [bookingsCount, newestBookingId]);
 
   const currentRoomNode = useMemo(() => {
-    return nodesList.find((item) => item.nodeCode === selectedRoomCode) || nodesList[0];
-  }, [nodesList, selectedRoomCode]);
+    return (
+      workspaceNodes.find((item) => item.nodeCode === selectedRoomCode) ||
+      selectedNode ||
+      workspaceNodes[0]
+    );
+  }, [workspaceNodes, selectedRoomCode, selectedNode]);
 
   const isAmphitheaterSelected =
     currentRoomNode?.floorLevel === 5 || currentRoomNode?.nodeCode === 'H-01';
 
-  // Chuẩn hóa thời gian Bắt đầu & Kết thúc thành đối tượng Date chính xác (Xử lý ca họp qua nửa đêm & nhầm lẫn 12h/24h)
-  const buildNormalizedMeetingDateRange = (
-    bookingDateStr: string,
-    startTimeStr: string,
-    endTimeStr: string
-  ): { startDateObj: Date; endDateObj: Date; earliestCheckinTime: Date } => {
-    const now = new Date();
-    const dateParts = (bookingDateStr || formatTodayIsoDate()).split('-').map(Number);
-    const year = dateParts[0] || now.getFullYear();
-    const month = (dateParts[1] || now.getMonth() + 1) - 1;
-    const day = dateParts[2] || now.getDate();
+  const targetBookableCode = isAmphitheaterSelected
+    ? selectedAmphitheaterSeat
+    : currentRoomNode?.nodeCode || 'M1-01';
 
-    const [rawStartHour = 8, rawStartMin = 0] = (startTimeStr || '08:00').split(':').map(Number);
-    const [rawEndHour = 10, rawEndMin = 0] = (endTimeStr || '10:00').split(':').map(Number);
+  const currentTargetLockVersion = roomLockVersions[targetBookableCode] || 1;
+  const activeHoldForTarget = activeHoldMap[targetBookableCode] || null;
 
-    let normalizedStartHour = rawStartHour;
-    // Khắc phục trường hợp người dùng gõ 12:xx (ý là 00:xx sáng hôm sau) và kết thúc lúc 01:xx - 05:xx sáng
-    if (rawStartHour === 12 && rawEndHour >= 1 && rawEndHour <= 5) {
-      normalizedStartHour = 0;
+  const handleReleaseHoldInternal = useCallback(
+    (codeToRelease: string, reasonText: string) => {
+      const holdItem = activeHoldMap[codeToRelease];
+      if (!holdItem) return;
+
+      const nextVer = (roomLockVersions[codeToRelease] || 1) + 1;
+      setRoomLockVersions((prev) => ({ ...prev, [codeToRelease]: nextVer }));
+      setActiveHoldMap((prev) => {
+        const clone = { ...prev };
+        delete clone[codeToRelease];
+        return clone;
+      });
+
+      if (onUpdateNodeStatus && holdItem.nodeId) {
+        onUpdateNodeStatus(holdItem.nodeId, 'AVAILABLE');
+      }
+
+      onRecordConcurrencyAudit?.(
+        'POLICY_CONFIG_UPDATED',
+        holdItem.heldByEmail,
+        codeToRelease,
+        `[Hết hạn / Nhả Giữ chỗ 5 Phút] Vị trí ${codeToRelease} đã tự động chuyển về Trống (${reasonText}, lockVersion -> v${nextVer}).`,
+        'SUCCESS',
+        nextVer
+      );
+
+      fetch(`/api/v1/bookings/hold/${encodeURIComponent(codeToRelease)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: holdItem.heldByEmail, reason: reasonText }),
+      }).catch(() => {});
+    },
+    [activeHoldMap, roomLockVersions, onUpdateNodeStatus, onRecordConcurrencyAudit]
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const currentMs = Date.now();
+      setNowTickMs(currentMs);
+
+      Object.values(activeHoldMap).forEach((holdItem) => {
+        if (holdItem.expiresAtMs <= currentMs) {
+          handleReleaseHoldInternal(holdItem.nodeCode, 'TIMEOUT_5_MINUTES_EXPIRED');
+        }
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [activeHoldMap, handleReleaseHoldInternal]);
+
+  // 1. Bắt đầu Giữ chỗ 5 phút (Hold 5p) kèm Optimistic Locking
+  const handleStartFiveMinuteHold = async () => {
+    if (!currentRoomNode) return;
+    setBookingFormError(null);
+    setBookingSuccessBanner(null);
+
+    const expectedVersion = currentTargetLockVersion;
+    const nextVersion = expectedVersion + 1;
+    const expiresAtMs = Date.now() + 5 * 60 * 1000;
+
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBookableCode]: nextVersion,
+    }));
+
+    setActiveHoldMap((prev) => ({
+      ...prev,
+      [targetBookableCode]: {
+        nodeCode: targetBookableCode,
+        nodeId: currentRoomNode.nodeId,
+        heldByEmail: userEmail,
+        lockVersion: nextVersion,
+        expiresAtMs,
+      },
+    }));
+
+    onUpdateNodeStatus?.(currentRoomNode.nodeId, 'HOLDING');
+    onRecordConcurrencyAudit?.(
+      'OPTIMISTIC_LOCK_WIN',
+      userEmail,
+      targetBookableCode,
+      `[Giữ chỗ 5 Phút - Optimistic Lock] ${userEmail} khóa tạm 5 phút vị trí ${targetBookableCode} thành công (lockVersion: v${expectedVersion} -> v${nextVersion}).`,
+      'SUCCESS',
+      nextVersion
+    );
+
+    setBookingSuccessBanner(
+      `Đã kích hoạt giữ chỗ 5 phút (Hold 5p) cho vị trí ${targetBookableCode} (Lock Version: v${expectedVersion} → v${nextVersion}). Bạn có 05:00 để hoàn tất đặt lịch.`
+    );
+
+    try {
+      await fetch('/api/v1/bookings/hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: targetBookableCode,
+          userEmail,
+          username: userEmail.split('@')[0],
+          expectedLockVersion: expectedVersion,
+        }),
+      });
+    } catch {
+      // Giữ trạng thái local
     }
-
-    const startDateObj = new Date(year, month, day, normalizedStartHour, rawStartMin, 0, 0);
-    const endDateObj = new Date(year, month, day, rawEndHour, rawEndMin, 0, 0);
-
-    // Nếu người dùng đặt lịch vào buổi đêm (21:00 - 23:59) cho ca họp rạng sáng (00:00 - 05:59) nhưng giữ nguyên ngày hôm nay
-    const isSameDayAsNow =
-      now.getFullYear() === year && now.getMonth() === month && now.getDate() === day;
-    if (isSameDayAsNow && now.getHours() >= 21 && normalizedStartHour < 6) {
-      startDateObj.setDate(startDateObj.getDate() + 1);
-      endDateObj.setDate(endDateObj.getDate() + 1);
-    }
-
-    // Nếu giờ kết thúc nhỏ hơn hoặc bằng giờ bắt đầu (ví dụ: 23:56 -> 01:56), tự động cộng thêm 1 ngày cho giờ kết thúc
-    if (endDateObj <= startDateObj) {
-      endDateObj.setDate(endDateObj.getDate() + 1);
-    }
-
-    // Mở cổng Check-in sớm tối đa 2 tiếng (120 phút) trước giờ bắt đầu
-    const earliestCheckinTime = new Date(startDateObj.getTime() - 2 * 60 * 60 * 1000);
-
-    return { startDateObj, endDateObj, earliestCheckinTime };
   };
 
-  // Kiểm tra điều kiện Check-in sớm tối đa 2 tiếng trước giờ bắt đầu
+  // 2. Mô phỏng 2 người bấm đặt cùng 1 vị trí tại cùng 1 thời điểm (Test Optimistic Locking)
+  const handleSimulateOptimisticLockRace = async () => {
+    if (!currentRoomNode) return;
+    setBookingFormError(null);
+
+    const baseVer = currentTargetLockVersion;
+    const winnerVer = baseVer + 1;
+    const challengerEmail = 'challenger.concurrent@spotmatrix.vn';
+    const expiresAtMs = Date.now() + 5 * 60 * 1000;
+
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBookableCode]: winnerVer,
+    }));
+
+    setActiveHoldMap((prev) => ({
+      ...prev,
+      [targetBookableCode]: {
+        nodeCode: targetBookableCode,
+        nodeId: currentRoomNode.nodeId,
+        heldByEmail: userEmail,
+        lockVersion: winnerVer,
+        expiresAtMs,
+      },
+    }));
+
+    onUpdateNodeStatus?.(currentRoomNode.nodeId, 'HOLDING');
+
+    onRecordConcurrencyAudit?.(
+      'OPTIMISTIC_LOCK_WIN',
+      userEmail,
+      targetBookableCode,
+      `[Optimistic Lock WIN] Request #1 từ ${userEmail} gửi lockVersion=v${baseVer} khớp DB -> Nâng khóa ${targetBookableCode} lên v${winnerVer} và giữ chỗ 5 phút.`,
+      'SUCCESS',
+      winnerVer
+    );
+
+    onRecordConcurrencyAudit?.(
+      'OPTIMISTIC_LOCK_REJECTED',
+      challengerEmail,
+      targetBookableCode,
+      `[Optimistic Lock REJECTED - HTTP 409] Request #2 từ ${challengerEmail} gửi cùng lockVersion=v${baseVer} nhưng DB đã ở v${winnerVer}. Hệ thống tự động chặn đặt trùng!`,
+      'CONFLICT_BLOCKED',
+      baseVer
+    );
+
+    setRaceSimResult({
+      nodeCode: targetBookableCode,
+      initialVersion: baseVer,
+      finalVersion: winnerVer,
+      winnerEmail: userEmail,
+      challengerEmail,
+      timestampText: new Date().toLocaleTimeString('vi-VN'),
+    });
+
+    try {
+      await fetch('/api/v1/bookings/simulate-race', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nodeId: targetBookableCode,
+          winnerEmail: userEmail,
+          challengerEmail,
+        }),
+      });
+    } catch {
+      // Giữ kết quả mô phỏng trên giao diện
+    }
+  };
+
+  // 3. Kiểm tra va chạm lịch Đơn lẻ (Single) & Định kỳ (Recurring)
+  const liveCollisionValidation = useMemo(() => {
+    return validateSingleAndRecurringCollision(
+      targetBookableCode,
+      selectedDate,
+      startTime,
+      endTime,
+      recurringOption,
+      bookingsList
+    );
+  }, [
+    targetBookableCode,
+    selectedDate,
+    startTime,
+    endTime,
+    recurringOption,
+    bookingsList,
+  ]);
+
   const validateCheckinTimeWindow = (
-    booking: BookingScheduleRecord
+    booking: BookingPayloadItem
   ): {
     allowed: boolean;
     reason: string;
     windowLabel: string;
+    noShowDeadlineLabel: string;
+    secondsUntilNoShowRevoke: number;
   } => {
-    const now = new Date();
-    const { startDateObj, endDateObj, earliestCheckinTime } = buildNormalizedMeetingDateRange(
-      booking.bookingDate,
-      booking.startTime,
-      booking.endTime
+    const now = new Date(nowTickMs);
+    const bookingDateStr = booking.bookingDateIso || formatIsoDateString(now);
+    const {
+      startDateObj,
+      endDateObj,
+      earliestCheckinTime,
+      noShowDeadlineTime,
+    } = buildNormalizedMeetingDateRange(
+      bookingDateStr,
+      booking.startTimeIso,
+      booking.endTimeIso
     );
 
     const earliestStr = `${String(earliestCheckinTime.getHours()).padStart(2, '0')}:${String(
@@ -223,21 +419,32 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const endStr = `${String(endDateObj.getHours()).padStart(2, '0')}:${String(
       endDateObj.getMinutes()
     ).padStart(2, '0')}`;
+    const deadlineStr = `${String(noShowDeadlineTime.getHours()).padStart(2, '0')}:${String(
+      noShowDeadlineTime.getMinutes()
+    ).padStart(2, '0')}`;
+
     const windowLabel = `${earliestStr} – ${endStr}`;
+    const secondsUntilNoShowRevoke = Math.floor(
+      (noShowDeadlineTime.getTime() - now.getTime()) / 1000
+    );
 
     if (now < earliestCheckinTime) {
       return {
         allowed: false,
         reason: `Chưa đến giờ mở Check-in! Quy định chỉ nhận Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (Mở cổng từ ${earliestStr} đến ${startStr}).`,
         windowLabel,
+        noShowDeadlineLabel: deadlineStr,
+        secondsUntilNoShowRevoke,
       };
     }
 
     if (now > endDateObj) {
       return {
         allowed: false,
-        reason: `Ca họp (${booking.startTime} - ${booking.endTime}) đã kết thúc, không thể Check-in.`,
+        reason: `Ca họp (${booking.startTimeIso} - ${booking.endTimeIso}) đã kết thúc, không thể Check-in.`,
         windowLabel,
+        noShowDeadlineLabel: deadlineStr,
+        secondsUntilNoShowRevoke,
       };
     }
 
@@ -245,78 +452,113 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       allowed: true,
       reason: `Đang trong khung giờ Check-in hợp lệ (${earliestStr} – ${endStr}).`,
       windowLabel,
+      noShowDeadlineLabel: deadlineStr,
+      secondsUntilNoShowRevoke,
     };
   };
 
-  // Kiểm tra xung đột trùng lịch phòng/ghế trong cùng khung giờ và ngày
-  const checkScheduleConflict = (
-    targetNodeCode: string,
-    targetDate: string,
-    candidateStartStr: string,
-    candidateEndStr: string
-  ): BookingScheduleRecord | null => {
-    const candidateRange = buildNormalizedMeetingDateRange(
-      targetDate,
-      candidateStartStr,
-      candidateEndStr
+  // 4. Thực thi Cronjob 15 phút tự thu hồi chỗ đối với vé quá hạn không Check-in
+  const handleRunFifteenMinuteCronSweep = async (forceBookingId?: string) => {
+    const targetBooking = forceBookingId
+      ? bookingsList.find((b) => b.bookingId === forceBookingId)
+      : bookingsList.find((b) => {
+          if (b.bookingStatus !== 'CONFIRMED' || b.approvalStatus === 'REJECTED') return false;
+          const check = validateCheckinTimeWindow(b);
+          return check.secondsUntilNoShowRevoke <= 0;
+        }) ||
+        bookingsList.find(
+          (b) => b.bookingId === selectedBookingForQr && b.bookingStatus === 'CONFIRMED'
+        );
+
+    if (!targetBooking) {
+      setCronSweepBanner(
+        'Cronjob 15p đã quét toàn bộ danh sách: Hiện không có vé nào vi phạm quá hạn 15 phút chưa Check-in.'
+      );
+      return;
+    }
+
+    if (targetBooking.bookingStatus === 'CHECKED_IN') {
+      setCronSweepBanner(
+        `Vé ${targetBooking.bookingId} (${targetBooking.nodeId}) đã quét QR Check-in đúng hạn nên được bảo toàn vị trí!`
+      );
+      return;
+    }
+
+    const nextVer = (roomLockVersions[targetBooking.nodeId] || 1) + 1;
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBooking.nodeId]: nextVer,
+    }));
+
+    if (onPenalizeNoShowBooking) {
+      onPenalizeNoShowBooking(
+        targetBooking.bookingId,
+        targetBooking.userEmail,
+        targetBooking.nodeId
+      );
+    } else {
+      onCancelBooking(targetBooking.bookingId);
+    }
+
+    const matchedRoom = workspaceNodes.find((n) => n.nodeCode === targetBooking.nodeId);
+    if (matchedRoom && onUpdateNodeStatus) {
+      onUpdateNodeStatus(matchedRoom.nodeId, 'AVAILABLE');
+    }
+
+    onRecordConcurrencyAudit?.(
+      'AUTO_RELEASE_NO_SHOW',
+      targetBooking.userEmail,
+      targetBooking.nodeId,
+      `[Cronjob 15 Phút Tự Thu Hồi Chỗ] Vé ${targetBooking.bookingId} tại ${targetBooking.nodeId} (${targetBooking.startTimeIso}-${targetBooking.endTimeIso}) quá 15 phút không Check-in QR. Đã tự động thu hồi phòng, tăng Lock lên v${nextVer} và trừ 10 điểm tín nhiệm của ${targetBooking.userEmail}.`,
+      'AUTO_REVOKED',
+      nextVer
     );
 
-    for (const existing of bookingsList) {
-      if (existing.approvalStatus === 'REJECTED') continue;
-      if (existing.nodeCode !== targetNodeCode || existing.bookingDate !== targetDate) continue;
+    setCronSweepBanner(
+      `[Cronjob 15p Tự Thu Hồi Thành Công] Đã thu hồi vé ${targetBooking.bookingId} (${targetBooking.nodeId}) do quá 15 phút không quét QR Check-in, giải phóng phòng về Trống (Lock v${nextVer}) và trừ 10 điểm tín nhiệm của ${targetBooking.userEmail}!`
+    );
 
-      const existingRange = buildNormalizedMeetingDateRange(
-        existing.bookingDate,
-        existing.startTime,
-        existing.endTime
-      );
-
-      // Hai khoảng thời gian giao nhau khi StartA < EndB và EndA > StartB
-      if (
-        candidateRange.startDateObj < existingRange.endDateObj &&
-        candidateRange.endDateObj > existingRange.startDateObj
-      ) {
-        return existing;
-      }
+    try {
+      await fetch('/api/v1/bookings/cron/sweep-noshow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceTargetBookingId: targetBooking.bookingId }),
+      });
+    } catch {
+      // Giữ kết quả trên client
     }
-    return null;
   };
 
-  // Danh sách các ghế Hội trường đã có người đặt trong khung giờ đang chọn (để hiển thị trực quan trên bản xem trước)
   const occupiedAmphitheaterSeatsInSlot = useMemo(() => {
     const occupiedSet = new Set<string>();
     if (!isAmphitheaterSelected) return occupiedSet;
 
     const candidateRange = buildNormalizedMeetingDateRange(selectedDate, startTime, endTime);
     for (const item of bookingsList) {
-      if (item.approvalStatus === 'REJECTED') continue;
-      if (item.bookingDate !== selectedDate) continue;
-      if (!AMPHITHEATER_SEATS.includes(item.nodeCode)) continue;
+      if (item.approvalStatus === 'REJECTED' || item.bookingStatus === 'CANCELLED') continue;
+      const itemDate = item.bookingDateIso || formatIsoDateString(new Date());
+      if (itemDate !== selectedDate) continue;
+      if (!AMPHITHEATER_SEATS.includes(item.nodeId)) continue;
 
       const existingRange = buildNormalizedMeetingDateRange(
-        item.bookingDate,
-        item.startTime,
-        item.endTime
+        itemDate,
+        item.startTimeIso,
+        item.endTimeIso
       );
       if (
         candidateRange.startDateObj < existingRange.endDateObj &&
         candidateRange.endDateObj > existingRange.startDateObj
       ) {
-        occupiedSet.add(item.nodeCode);
+        occupiedSet.add(item.nodeId);
       }
     }
     return occupiedSet;
   }, [isAmphitheaterSelected, selectedDate, startTime, endTime, bookingsList]);
 
-  // Nút điền nhanh khung giờ hợp lệ (Bắt đầu sau 30 phút tính từ hiện tại) để test Check-in QR ngay lập tức
   const handleFillQuickCheckinSlot = () => {
     const now = new Date();
     const startCandidate = new Date(now.getTime() + 30 * 60 * 1000);
     const endCandidate = new Date(now.getTime() + 90 * 60 * 1000);
-
-    const year = startCandidate.getFullYear();
-    const month = String(startCandidate.getMonth() + 1).padStart(2, '0');
-    const day = String(startCandidate.getDate()).padStart(2, '0');
 
     const startStr = `${String(startCandidate.getHours()).padStart(2, '0')}:${String(
       startCandidate.getMinutes()
@@ -325,7 +567,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       endCandidate.getMinutes()
     ).padStart(2, '0')}`;
 
-    setSelectedDate(`${year}-${month}-${day}`);
+    setSelectedDate(formatIsoDateString(startCandidate));
     setStartTime(startStr);
     setEndTime(endStr);
     setBookingFormError(null);
@@ -340,51 +582,67 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     setBookingSuccessBanner(null);
     setCheckinErrorAlert(null);
 
-    const finalCode = isAmphitheaterSelected ? selectedAmphitheaterSeat : currentRoomNode.nodeCode;
+    const finalCode = targetBookableCode;
     const finalLabel = isAmphitheaterSelected
       ? `[Hội trường Tầng 5 - Ghế ${selectedAmphitheaterSeat}] ${purposeTitle}`
       : purposeTitle;
 
-    // Kiểm tra trùng lịch trước khi tạo
-    const conflictItem = checkScheduleConflict(finalCode, selectedDate, startTime, endTime);
-    if (conflictItem) {
+    const existingHold = activeHoldMap[finalCode];
+    if (
+      existingHold &&
+      existingHold.heldByEmail.toLowerCase() !== userEmail.toLowerCase() &&
+      existingHold.expiresAtMs > Date.now()
+    ) {
       setBookingFormError(
-        `Vị trí ${finalCode} đã có lịch đặt trong khung giờ (${conflictItem.startTime} – ${conflictItem.endTime}) bởi @${
-          conflictItem.createdByUsername || 'System'
-        }. Vui lòng chọn khung giờ hoặc vị trí khác.`
+        `[Optimistic Lock Blocked] Vị trí ${finalCode} đang được giữ chỗ 5 phút bởi ${existingHold.heldByEmail} (Lock v${existingHold.lockVersion}).`
       );
       return;
     }
 
-    // Quy tắc phân quyền: EMPLOYEE đặt phải chờ MANAGER hoặc SYS_ADMIN duyệt; MANAGER/ADMIN được duyệt tự động
-    const isEmployeeRole = currentUser.role === 'EMPLOYEE';
-    const newBookingId = `BK-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (liveCollisionValidation.hasCollision) {
+      setBookingFormError(
+        liveCollisionValidation.firstConflictMessage ||
+          `Phát hiện va chạm lịch tại vị trí ${finalCode}. Vui lòng chọn khung giờ khác.`
+      );
+      return;
+    }
 
-    const newRecord: BookingScheduleRecord = {
-      bookingId: newBookingId,
-      nodeCode: finalCode,
-      nodeLabel: finalLabel,
-      floorLevel: currentRoomNode.floorLevel,
-      bookingDate: selectedDate,
-      startTime,
-      endTime,
-      purposeTitle,
-      attendeeCount: isAmphitheaterSelected ? 1 : currentRoomNode.capacityCount,
+    const nextLockVer = currentTargetLockVersion + 1;
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [finalCode]: nextLockVer,
+    }));
+
+    if (activeHoldMap[finalCode]) {
+      setActiveHoldMap((prev) => {
+        const clone = { ...prev };
+        delete clone[finalCode];
+        return clone;
+      });
+    }
+
+    onCreateNewBooking(userEmail, finalLabel, finalCode, {
+      start: startTime,
+      end: endTime,
+      dateIso: selectedDate,
       recurringOption,
-      status: 'CONFIRMED',
-      approvalStatus: isEmployeeRole ? 'PENDING_APPROVAL' : 'APPROVED',
-      createdByUsername: currentUser.username,
-      createdByRole: currentUser.role,
-      approvedByUsername: isEmployeeRole ? undefined : currentUser.username,
-    };
+      occurrenceDates: liveCollisionValidation.occurrenceDates,
+      lockVersion: nextLockVer,
+    });
 
-    onCreateNewBooking(newRecord);
-    // Tự động chuyển khung QR sang đúng vé vừa đặt để tránh quét nhầm vé cũ
-    setSelectedBookingForQr(newBookingId);
+    const cycleLabel =
+      recurringOption === 'NONE'
+        ? 'Đơn lẻ (1 buổi)'
+        : recurringOption === 'DAILY'
+        ? `Định kỳ Hàng ngày (${liveCollisionValidation.occurrenceDates.length} buổi)`
+        : recurringOption === 'WEEKLY'
+        ? `Định kỳ Hàng tuần (${liveCollisionValidation.occurrenceDates.length} tuần)`
+        : `Định kỳ Hàng tháng (${liveCollisionValidation.occurrenceDates.length} tháng)`;
+
     setBookingSuccessBanner(
-      isEmployeeRole
-        ? `Đã gửi yêu cầu đặt phòng ${finalCode} (${startTime} – ${endTime}). Hệ thống đã gửi thông báo tới Quản lý & Admin để phê duyệt.`
-        : `Đã tạo và phê duyệt vé ${newBookingId} cho vị trí ${finalCode} (${startTime} – ${endTime}).`
+      userRole === 'EMPLOYEE'
+        ? `Đã gửi yêu cầu đặt vị trí ${finalCode} (${startTime} – ${endTime}, ${cycleLabel}, Lock v${nextLockVer}) lên MongoDB. Đang chờ Quản lý hoặc Admin phê duyệt.`
+        : `Đã xác nhận đặt vị trí ${finalCode} (${startTime} – ${endTime}, ${cycleLabel}, Lock v${nextLockVer}) và đồng bộ lên MongoDB.`
     );
   };
 
@@ -397,17 +655,17 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const activeBookingTimeValidation = useMemo(() => {
     if (!activeQrBooking) return null;
     return validateCheckinTimeWindow(activeQrBooking);
-  }, [activeQrBooking]);
+  }, [activeQrBooking, nowTickMs]);
 
   const qrTargetCheckinUrl = useMemo(() => {
     if (!activeQrBooking) return `${window.location.origin}/qr-checkin`;
     const params = new URLSearchParams({
       bookingId: activeQrBooking.bookingId,
-      room: activeQrBooking.nodeCode,
-      floor: String(activeQrBooking.floorLevel),
-      slot: `${activeQrBooking.startTime}-${activeQrBooking.endTime}`,
-      date: activeQrBooking.bookingDate,
-      title: activeQrBooking.nodeLabel,
+      room: activeQrBooking.nodeId,
+      slot: `${activeQrBooking.startTimeIso} - ${activeQrBooking.endTimeIso}`,
+      date: activeQrBooking.bookingDateIso || formatIsoDateString(new Date()),
+      email: activeQrBooking.userEmail,
+      title: activeQrBooking.purposeNote,
     });
     return `${window.location.origin}/qr-checkin?${params.toString()}`;
   }, [activeQrBooking]);
@@ -438,9 +696,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       return;
     }
 
-    onConfirmCheckinBooking(activeQrBooking.bookingId);
+    const now = new Date();
+    const frozenTime = `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+    onCheckInBooking(activeQrBooking.bookingId, frozenTime);
     window.open(qrTargetCheckinUrl, '_blank', 'noopener,noreferrer');
   };
+
+  const holdRemainingSeconds = activeHoldForTarget
+    ? Math.max(0, Math.ceil((activeHoldForTarget.expiresAtMs - nowTickMs) / 1000))
+    : 0;
+  const holdMinutesPart = String(Math.floor(holdRemainingSeconds / 60)).padStart(2, '0');
+  const holdSecondsPart = String(holdRemainingSeconds % 60).padStart(2, '0');
+  const holdProgressPercent = Math.min(100, Math.round((holdRemainingSeconds / 300) * 100));
 
   return (
     <div className="space-y-5">
@@ -462,16 +729,16 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           </div>
           <div>
             <h1 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Đặt lịch Phòng họp, Xem trước Bố cục & Cấp Mã QR Check-in
+              Giai đoạn 3 — Đặt chỗ Thời gian thực, Giữ chỗ 5 phút & Chống trùng lịch
             </h1>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Quy tắc: Check-in mở trước giờ họp tối đa 2 tiếng • Nhân viên đặt phòng cần Quản lý
-              hoặc Admin xác nhận
+              Optimistic Locking (v{currentTargetLockVersion}) • Đếm ngược 5 phút giữ chỗ • Kiểm tra
+              va chạm Đơn lẻ & Định kỳ • Cronjob 15 phút tự thu hồi No-Show
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleFillQuickCheckinSlot}
@@ -480,27 +747,200 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25'
                 : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
             }`}
-            title="Tự động điền giờ bắt đầu sau 30 phút tính từ bây giờ để kiểm thử Quét QR ngay lập tức"
           >
             <Sparkles className="w-3.5 h-3.5" />
             Điền nhanh Giờ Test Check-in Ngay
           </button>
 
           <span
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold border ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 ${
               isDark
                 ? 'bg-teal-500/10 border-teal-500/20 text-teal-300'
                 : 'bg-teal-50 border-teal-200 text-teal-700'
             }`}
           >
-            Đang chọn: {currentRoomNode?.nodeCode} ({currentRoomNode?.capacityCount} người)
+            <Lock className="w-3.5 h-3.5" />
+            {targetBookableCode} • Lock v{currentTargetLockVersion}
           </span>
         </div>
       </div>
 
-      {/* Main Grid: Left Booking & Layout Preview (7 cols) | Right QR Check-in & Ticket List (5 cols) */}
+      {/* THANH CÔNG CỤ GIAI ĐOẠN 3: GIỮ CHỖ 5 PHÚT, OPTIMISTIC LOCKING & CRONJOB 15 PHÚT */}
+      <div
+        className={`p-5 rounded-3xl border space-y-4 ${
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
+              <Lock className="w-3 h-3" />
+              Optimistic Lock: v{currentTargetLockVersion}
+            </span>
+            <span
+              className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}
+            >
+              Điều khiển Giữ chỗ 5 phút (Hold 5p), Chống đặt trùng đồng thời & Cronjob 15 phút
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {!activeHoldForTarget ? (
+              <button
+                type="button"
+                onClick={handleStartFiveMinuteHold}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center gap-1.5 transition"
+              >
+                <Timer className="w-3.5 h-3.5" />
+                Giữ chỗ tạm 5 phút ({targetBookableCode})
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleReleaseHoldInternal(targetBookableCode, 'DEMO_FAST_FORWARD_5M_TIMEOUT')
+                  }
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5 transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Tua hết 5p (Test Tự Nhả Chỗ)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleReleaseHoldInternal(targetBookableCode, 'USER_MANUAL_RELEASE')
+                  }
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 hover:bg-rose-500/25 transition"
+                >
+                  Nhả giữ chỗ
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSimulateOptimisticLockRace}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition ${
+                isDark
+                  ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25'
+                  : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Mô phỏng 2 Người Đặt Cùng Lúc (Optimistic Lock)
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleRunFifteenMinuteCronSweep(activeQrBooking?.bookingId)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition ${
+                isDark
+                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25'
+                  : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5" />
+              Chạy Cronjob 15p Thu Hồi No-Show Ngay
+            </button>
+          </div>
+        </div>
+
+        {activeHoldForTarget && (
+          <div
+            className={`p-4 rounded-2xl border ${
+              isDark
+                ? 'bg-amber-950/25 border-amber-500/30 text-amber-200'
+                : 'bg-amber-50/80 border-amber-200 text-amber-900'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2 text-xs font-bold">
+                <Timer className="w-4 h-4 text-amber-600 animate-pulse" />
+                <span>
+                  Đang giữ chỗ tạm thời 5 phút cho vị trí{' '}
+                  <strong>{activeHoldForTarget.nodeCode}</strong> • Người giữ:{' '}
+                  <strong>{activeHoldForTarget.heldByEmail}</strong> (Lock v
+                  {activeHoldForTarget.lockVersion})
+                </span>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-extrabold tracking-wider">
+                Còn lại: {holdMinutesPart}:{holdSecondsPart}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-amber-200/60 dark:bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-amber-500 transition-all duration-700"
+                style={{ width: `${holdProgressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {raceSimResult && (
+          <div
+            className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+              isDark
+                ? 'bg-indigo-950/30 border-indigo-500/30 text-slate-200'
+                : 'bg-indigo-50/70 border-indigo-200 text-slate-800'
+            }`}
+          >
+            <div className="space-y-1 text-xs">
+              <div className="font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                <Zap className="w-4 h-4" />
+                Kết quả Kiểm thử Optimistic Locking tại {raceSimResult.nodeCode} (Lúc{' '}
+                {raceSimResult.timestampText}):
+              </div>
+              <p>
+                • <strong>Request #1 ({raceSimResult.winnerEmail})</strong> gửi{' '}
+                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                <span className="text-teal-600 dark:text-teal-400 font-bold">
+                  THÀNH CÔNG (Nâng khóa lên v{raceSimResult.finalVersion} & giữ chỗ 5 phút)
+                </span>
+              </p>
+              <p>
+                • <strong>Request #2 ({raceSimResult.challengerEmail})</strong> gửi cùng{' '}
+                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                <span className="text-rose-600 dark:text-rose-400 font-bold">
+                  BỊ CHẶN (HTTP 409 Conflict do DB đã ở v{raceSimResult.finalVersion})
+                </span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRaceSimResult(null)}
+              className="text-xs font-bold underline opacity-75 hover:opacity-100 self-end sm:self-center shrink-0"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
+
+        {cronSweepBanner && (
+          <div
+            className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs font-semibold ${
+              isDark
+                ? 'bg-rose-950/30 border-rose-500/30 text-rose-200'
+                : 'bg-rose-50 border-rose-200 text-rose-800'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{cronSweepBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCronSweepBanner(null)}
+              className="text-[11px] underline shrink-0"
+            >
+              Đóng
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* CỘT TRÁI: FORM ĐẶT PHÒNG & BẢN XEM TRƯỚC BỐ CỤC TƯƠNG ỨNG */}
         <div
           className={`lg:col-span-7 p-6 rounded-3xl border flex flex-col justify-between ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -560,7 +1000,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                           : `Tầng ${floorNum} — Khu Phòng họp Chính thức`
                       }
                     >
-                      {nodesList
+                      {workspaceNodes
                         .filter((n) => n.floorLevel === floorNum)
                         .map((room) => (
                           <option key={room.nodeId} value={room.nodeCode}>
@@ -579,7 +1019,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     isDark ? 'text-slate-300' : 'text-slate-700'
                   }`}
                 >
-                  2. Ngày họp
+                  2. Ngày bắt đầu họp
                 </label>
                 <input
                   type="date"
@@ -648,24 +1088,95 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     isDark ? 'text-slate-300' : 'text-slate-700'
                   }`}
                 >
-                  Lặp định kỳ
+                  Chu kỳ đặt lịch (Đơn lẻ / Định kỳ)
                 </label>
                 <select
                   value={recurringOption}
-                  onChange={(e) => setRecurringOption(e.target.value)}
+                  onChange={(e) =>
+                    setRecurringOption(e.target.value as RecurringOptionType)
+                  }
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
                     isDark
                       ? 'bg-slate-950 border-slate-800 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
-                  <option value="NONE">Đặt đơn lẻ (1 lần)</option>
-                  <option value="WEEKLY">Lặp hàng tuần (Weekly)</option>
+                  <option value="NONE">Đặt đơn lẻ (1 lần duy nhất)</option>
+                  <option value="DAILY">Lặp hàng ngày (5 ngày liên tiếp)</option>
+                  <option value="WEEKLY">Lặp hàng tuần (4 tuần cùng thứ)</option>
+                  <option value="MONTHLY">Lặp hàng tháng (3 tháng liên tiếp)</option>
                 </select>
               </div>
             </div>
 
-            {/* BẢN XEM TRƯỚC BỐ CỤC PHÒNG TƯƠNG ỨNG */}
+            {/* MA TRẬN KIỂM TRA VA CHẠM LỊCH ĐƠN LẺ & ĐỊNH KỲ */}
+            <div
+              className={`p-4 rounded-2xl border ${
+                liveCollisionValidation.hasCollision
+                  ? isDark
+                    ? 'bg-rose-950/20 border-rose-500/40'
+                    : 'bg-rose-50/70 border-rose-200'
+                  : isDark
+                  ? 'bg-slate-950/90 border-slate-800'
+                  : 'bg-teal-50/40 border-teal-200/80'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <Repeat
+                    className={`w-4 h-4 ${
+                      liveCollisionValidation.hasCollision ? 'text-rose-500' : 'text-teal-600'
+                    }`}
+                  />
+                  <span
+                    className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}
+                  >
+                    Kiểm tra Va chạm Lịch ({liveCollisionValidation.occurrenceChecks.length} buổi):
+                  </span>
+                </div>
+                <span
+                  className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold ${
+                    liveCollisionValidation.hasCollision
+                      ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
+                      : 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
+                  }`}
+                >
+                  {liveCollisionValidation.hasCollision
+                    ? 'PHÁT HIỆN TRÙNG LỊCH'
+                    : 'TẤT CẢ CÁC KỲ ĐỀU TRỐNG'}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {liveCollisionValidation.occurrenceChecks.map((occ) => (
+                  <div
+                    key={occ.dateIso}
+                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 ${
+                      occ.hasConflict
+                        ? isDark
+                          ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                          : 'bg-white border-rose-300 text-rose-700'
+                        : isDark
+                        ? 'bg-slate-900 border-slate-700 text-teal-300'
+                        : 'bg-white border-teal-200 text-teal-800'
+                    }`}
+                  >
+                    <span>
+                      Kỳ #{occ.occurrenceIndex}: {occ.dateIso}
+                    </span>
+                    {occ.hasConflict ? (
+                      <span className="text-[10px] font-extrabold text-rose-500">
+                        (Trùng {occ.conflictBooking?.bookingId})
+                      </span>
+                    ) : (
+                      <Check className="w-3.5 h-3.5 text-teal-600" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* BẢN XEM TRƯỚC BỐ CỤC PHÒNG */}
             <div
               className={`p-5 rounded-2xl border ${
                 isDark
@@ -729,7 +1240,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-3">
-                  {/* Sơ đồ 2D thu nhỏ mô phỏng đúng hình dáng bàn và số lượng ghế */}
                   <div
                     className={`relative w-72 h-36 rounded-2xl border-2 flex items-center justify-center ${
                       isDark
@@ -814,22 +1324,23 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 shrink-0"
+                disabled={liveCollisionValidation.hasCollision}
+                className={`px-6 py-2.5 rounded-xl text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 shrink-0 transition ${
+                  liveCollisionValidation.hasCollision
+                    ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'
+                }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {currentUser.role === 'EMPLOYEE'
-                  ? `Gửi Yêu cầu Đặt ${
-                      isAmphitheaterSelected ? selectedAmphitheaterSeat : currentRoomNode?.nodeCode
-                    }`
-                  : `Xác nhận Đặt Phòng ${
-                      isAmphitheaterSelected ? selectedAmphitheaterSeat : currentRoomNode?.nodeCode
-                    }`}
+                {userRole === 'EMPLOYEE'
+                  ? `Gửi Yêu cầu Đặt ${targetBookableCode}`
+                  : `Xác nhận Đặt Phòng ${targetBookableCode}`}
               </button>
             </div>
           </form>
         </div>
 
-        {/* CỘT PHẢI: MÃ QR THẬT QUÉT ĐƯỢC CÓ LOGO Ở GIỮA & NÚT DEMO NHẢY TAB MỚI */}
+        {/* CỘT PHẢI: MÃ QR THẬT QUÉT ĐƯỢC, CRONJOB 15P & DANH SÁCH VÉ */}
         <div
           className={`lg:col-span-5 p-6 rounded-3xl border flex flex-col justify-between ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -844,10 +1355,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   }`}
                 >
                   <QrCode className="w-4 h-4 text-teal-600" />
-                  Mã QR Check-in Thực tế & Danh sách Vé
+                  Mã QR Check-in Thực tế & Giám sát Cronjob 15p
                 </h2>
                 <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Mở nhận Check-in sớm tối đa 2 tiếng trước giờ bắt đầu
+                  Mở Check-in trước 2 tiếng • Quá 15 phút sau giờ bắt đầu tự động thu hồi chỗ
                 </p>
               </div>
             </div>
@@ -859,7 +1370,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               </div>
             )}
 
-            {/* KHUNG HIỂN THỊ MÃ QR THẬT CÓ LOGO SPOTMATRIX Ở CHÍNH GIỮA */}
             {activeQrBooking ? (
               <div
                 className={`p-5 rounded-2xl border text-center mb-4 ${
@@ -867,40 +1377,45 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 }`}
               >
                 <div className="text-xs font-extrabold text-indigo-600 mb-1">
-                  Vé: {activeQrBooking.bookingId} • Phòng: {activeQrBooking.nodeCode} •{' '}
-                  {activeQrBooking.startTime} – {activeQrBooking.endTime}
+                  Vé: {activeQrBooking.bookingId} • Phòng: {activeQrBooking.nodeId} •{' '}
+                  {activeQrBooking.startTimeIso} – {activeQrBooking.endTimeIso}
                 </div>
 
-                {/* Badge báo trạng thái khung giờ thực tế của vé đang chọn */}
                 {activeBookingTimeValidation && (
-                  <div className="mb-2.5 flex items-center justify-center">
+                  <div className="mb-2.5 flex flex-wrap items-center justify-center gap-1.5">
                     <span
                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        activeQrBooking.status === 'CHECKED_IN'
+                        activeQrBooking.bookingStatus === 'CHECKED_IN'
                           ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                           : activeBookingTimeValidation.allowed
                           ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
                           : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                       }`}
                     >
-                      {activeQrBooking.status === 'CHECKED_IN' ? (
+                      {activeQrBooking.bookingStatus === 'CHECKED_IN' ? (
                         <>
                           <Check className="w-3 h-3" />
-                          Đã Check-in lúc: {activeQrBooking.checkedInAtText || 'Đúng hạn'}
+                          Đã Check-in lúc: {activeQrBooking.checkedInAtIso || 'Đúng hạn'}
                         </>
                       ) : activeBookingTimeValidation.allowed ? (
                         <>
                           <Check className="w-3 h-3" />
-                          Sẵn sàng quét QR (Khung giờ mở: {activeBookingTimeValidation.windowLabel})
+                          Sẵn sàng quét QR (Mở: {activeBookingTimeValidation.windowLabel})
                         </>
                       ) : (
                         <>
                           <Clock className="w-3 h-3" />
-                          Khung giờ mở Check-in: {activeBookingTimeValidation.windowLabel} (Ngày{' '}
-                          {activeQrBooking.bookingDate})
+                          Khung giờ mở Check-in: {activeBookingTimeValidation.windowLabel}
                         </>
                       )}
                     </span>
+
+                    {activeQrBooking.bookingStatus !== 'CHECKED_IN' && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                        <Timer className="w-3 h-3" />
+                        Hạn Cronjob 15p thu hồi: {activeBookingTimeValidation.noShowDeadlineLabel}
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -909,10 +1424,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     src={realQrImageSrc}
                     alt="SpotMatrix Check-in QR Code"
                     className={`w-44 h-44 object-contain rounded-lg ${
-                      activeQrBooking.approvalStatus !== 'APPROVED' ? 'opacity-25 blur-[2px]' : ''
+                      activeQrBooking.approvalStatus === 'PENDING_APPROVAL' ||
+                      activeQrBooking.approvalStatus === 'REJECTED'
+                        ? 'opacity-25 blur-[2px]'
+                        : ''
                     }`}
                   />
-                  {/* Ô nhỏ ở chính giữa chứa Logo SpotMatrix */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-11 h-11 rounded-xl bg-white p-1 shadow-md border border-slate-200 flex items-center justify-center">
                       <SpotMatrixLogo variant="icon" theme="light" className="scale-90" />
@@ -942,6 +1459,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
               {bookingsList.map((item) => {
                 const isSelected = activeQrBooking?.bookingId === item.bookingId;
+                const occCount = item.occurrenceDates?.length || 1;
                 return (
                   <div
                     key={item.bookingId}
@@ -962,18 +1480,23 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 text-white">
-                          {item.nodeCode}
+                          {item.nodeId}
                         </span>
                         <span
-                          className={`text-xs font-bold truncate max-w-[165px] ${
+                          className={`text-xs font-bold truncate max-w-[150px] ${
                             isDark ? 'text-white' : 'text-slate-900'
                           }`}
                         >
-                          {item.nodeLabel}
+                          {item.purposeNote}
                         </span>
+                        {occCount > 1 && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-600">
+                            Lặp {occCount} kỳ
+                          </span>
+                        )}
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            item.status === 'CHECKED_IN'
+                            item.bookingStatus === 'CHECKED_IN'
                               ? 'bg-teal-500/15 text-teal-600'
                               : item.approvalStatus === 'PENDING_APPROVAL'
                               ? 'bg-amber-500/15 text-amber-600'
@@ -982,8 +1505,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                               : 'bg-indigo-500/15 text-indigo-600'
                           }`}
                         >
-                          {item.status === 'CHECKED_IN'
-                            ? `ĐÃ QUÉT (${item.checkedInAtText || 'Đúng hạn'})`
+                          {item.bookingStatus === 'CHECKED_IN'
+                            ? `ĐÃ QUÉT (${item.checkedInAtIso || 'Đúng hạn'})`
                             : item.approvalStatus === 'PENDING_APPROVAL'
                             ? 'CHỜ QUẢN LÝ/ADMIN DUYỆT'
                             : item.approvalStatus === 'REJECTED'
@@ -998,11 +1521,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       >
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-indigo-500" />
-                          {item.bookingDate} • {item.startTime} – {item.endTime}
+                          {item.bookingDateIso || formatIsoDateString(new Date())} •{' '}
+                          {item.startTimeIso} – {item.endTimeIso}
                         </span>
-                        {item.approvedByUsername && (
-                          <span>• Duyệt bởi: @{item.approvedByUsername}</span>
-                        )}
+                        {item.lockVersion && <span>• Lock v{item.lockVersion}</span>}
                       </div>
                     </div>
 
@@ -1032,8 +1554,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           >
             <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              Vé đang chọn hiển thị khung viền xanh tím. Bấm vào bất kỳ vé nào bên dưới để đổi mã
-              QR tương ứng.
+              Mọi thao tác Giữ chỗ 5p, Optimistic Lock và Thu hồi No-Show 15p đều tự động ghi vết vào
+              Nhật ký Quản trị & MongoDB Atlas.
             </span>
           </div>
         </div>

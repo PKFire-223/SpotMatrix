@@ -40,7 +40,10 @@ import { ErrorBoundaryLayout } from '../../Error/Layout/ErrorBoundaryLayout';
 import { DashboardMainPages } from '../../Main/Dashboard/Pages/DashboardMainPages';
 import { DataOverviewPages } from '../../Main/Datamanager/Pages/DataOverviewPages';
 import { FloorplanMainPages } from '../../Main/Floorplan/Pages/FloorplanMainPages';
-import { BookingCalendarPages } from '../../Main/Booking/Pages/BookingCalendarPages';
+import {
+  BookingCalendarPages,
+  BookingTimeWindowInput,
+} from '../../Main/Booking/Pages/BookingCalendarPages';
 import { QrCheckinConfirmPages } from '../../Main/Booking/Pages/QrCheckinConfirmPages';
 import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/LoginPages';
 import {
@@ -143,6 +146,7 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
         status: fl % 2 === 0 && tpl.codeSuffix === '02' ? 'AVAILABLE' : tpl.status,
         amenitiesList: ['Màn hình 4K', 'Máy chiếu Laser', 'Camera AI 360', 'Cách âm 40dB'],
         aiScore: 92 + (fl % 6),
+        lockVersion: 1,
       });
     });
   }
@@ -159,6 +163,7 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
     status: 'AVAILABLE',
     amenitiesList: ['Sân khấu tròn 360°', 'Màn hình Panorama', '28 Ghế Bậc thềm Vòng cung'],
     aiScore: 99,
+    lockVersion: 1,
   });
 
   return rooms;
@@ -326,6 +331,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
   const avatarDropdownRef = useRef<HTMLDivElement | null>(null);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState<boolean>(false);
+  const [isSyncingMongo, setIsSyncingMongo] = useState<boolean>(false);
 
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('spotmatrix_theme_mode');
@@ -348,9 +354,17 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   });
 
-  // Lưu trữ tùy chỉnh Avatar & Ảnh nền Background của người dùng
   const [profileCustomMap, setProfileCustomMap] = useState<
-    Record<string, { avatarUrl: string | null; backgroundUrl: string | null; phoneNumber: string; jobTitle: string; bioText: string }>
+    Record<
+      string,
+      {
+        avatarUrl: string | null;
+        backgroundUrl: string | null;
+        phoneNumber: string;
+        jobTitle: string;
+        bioText: string;
+      }
+    >
   >(() => {
     try {
       const raw = localStorage.getItem(PROFILE_CUSTOM_STORAGE_KEY);
@@ -382,6 +396,9 @@ const MainWorkspaceRoutes: React.FC = () => {
       startTimeIso: '08:00',
       endTimeIso: '10:00',
       purposeNote: 'Họp Kiến trúc Hệ thống 3D (Tầng 1)',
+      recurringOption: 'NONE',
+      occurrenceDates: [new Date().toISOString().slice(0, 10)],
+      lockVersion: 1,
       bookingStatus: 'CONFIRMED',
       approvalStatus: 'APPROVED',
       approvedByUsername: 'Managerlead123',
@@ -396,6 +413,9 @@ const MainWorkspaceRoutes: React.FC = () => {
       startTimeIso: '13:00',
       endTimeIso: '15:00',
       purposeNote: '[Hội trường Tầng 5 - Ghế H01-A3] Townhall Quý 4',
+      recurringOption: 'NONE',
+      occurrenceDates: [new Date().toISOString().slice(0, 10)],
+      lockVersion: 2,
       bookingStatus: 'CHECKED_IN',
       approvalStatus: 'APPROVED',
       approvedByUsername: 'Systemadmin123',
@@ -428,6 +448,74 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
 
+  const fetchAccountProfileAndWorkspaceFromMongo = useCallback(async (username: string) => {
+    try {
+      const [profileRes, bookingsRes, trustRes, auditRes] = await Promise.allSettled([
+        fetch(`/api/v1/auth/profile/${encodeURIComponent(username)}`),
+        fetch('/api/v1/bookings'),
+        fetch('/api/v1/datamanager/trust-scores'),
+        fetch('/api/v1/datamanager/audit-logs'),
+      ]);
+
+      if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+        const json = await profileRes.value.json();
+        if (json?.success && json.data) {
+          const p = json.data;
+          setProfileCustomMap((prev) => {
+            const nextMap = {
+              ...prev,
+              [username]: {
+                avatarUrl: p.avatarUrl ?? prev[username]?.avatarUrl ?? null,
+                backgroundUrl: p.backgroundUrl ?? prev[username]?.backgroundUrl ?? null,
+                phoneNumber: p.phoneNumber || prev[username]?.phoneNumber || '0908 123 456',
+                jobTitle: p.jobTitle || prev[username]?.jobTitle || 'Senior System Member',
+                bioText:
+                  p.bioText ||
+                  prev[username]?.bioText ||
+                  'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+              },
+            };
+            try {
+              localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
+            } catch {
+              // Bỏ qua nếu bộ nhớ đệm đầy
+            }
+            return nextMap;
+          });
+        }
+      }
+
+      if (bookingsRes.status === 'fulfilled' && bookingsRes.value.ok) {
+        const bJson = await bookingsRes.value.json();
+        if (bJson?.success && Array.isArray(bJson.data) && bJson.data.length > 0) {
+          setBookingsList(bJson.data);
+        }
+      }
+
+      if (trustRes.status === 'fulfilled' && trustRes.value.ok) {
+        const tJson = await trustRes.value.json();
+        if (tJson?.success && Array.isArray(tJson.data) && tJson.data.length > 0) {
+          setTrustProfiles(tJson.data);
+        }
+      }
+
+      if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
+        const aJson = await auditRes.value.json();
+        if (aJson?.success && Array.isArray(aJson.data) && aJson.data.length > 0) {
+          setAuditLogs(aJson.data);
+        }
+      }
+    } catch {
+      // Giữ nguyên state dự phòng nếu Backend chưa bật
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userSession?.userProfile.username) {
+      fetchAccountProfileAndWorkspaceFromMongo(userSession.userProfile.username);
+    }
+  }, [userSession?.userProfile.username, fetchAccountProfileAndWorkspaceFromMongo]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -446,14 +534,17 @@ const MainWorkspaceRoutes: React.FC = () => {
       eventCategory: AuditConcurrencyLogItem['eventCategory'],
       actorEmail: string,
       targetNodeId: string,
-      detailMessage: string
+      detailMessage: string,
+      outcomeStatus: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED' = 'SUCCESS',
+      lockVersionAttempted?: number
     ) => {
       const newAudit: AuditConcurrencyLogItem = {
         auditId: `AUD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
         eventCategory,
         actorEmail,
         targetNodeId,
-        outcomeStatus: 'SUCCESS',
+        lockVersionAttempted,
+        outcomeStatus,
         detailMessage,
         createdAtIso: new Date().toISOString(),
       };
@@ -539,6 +630,40 @@ const MainWorkspaceRoutes: React.FC = () => {
     setActivePage('OVERVIEW');
     navigate('/dashboard', { replace: true });
 
+    const incomingProfile = sessionData.userProfile as AuthenticatedUserSession['userProfile'] & {
+      avatarUrl?: string | null;
+      backgroundUrl?: string | null;
+      phoneNumber?: string;
+      jobTitle?: string;
+      bioText?: string;
+    };
+    if (incomingProfile.username) {
+      setProfileCustomMap((prev) => ({
+        ...prev,
+        [incomingProfile.username]: {
+          avatarUrl:
+            incomingProfile.avatarUrl ?? prev[incomingProfile.username]?.avatarUrl ?? null,
+          backgroundUrl:
+            incomingProfile.backgroundUrl ??
+            prev[incomingProfile.username]?.backgroundUrl ??
+            null,
+          phoneNumber:
+            incomingProfile.phoneNumber ||
+            prev[incomingProfile.username]?.phoneNumber ||
+            '0908 123 456',
+          jobTitle:
+            incomingProfile.jobTitle ||
+            prev[incomingProfile.username]?.jobTitle ||
+            'Senior System Member',
+          bioText:
+            incomingProfile.bioText ||
+            prev[incomingProfile.username]?.bioText ||
+            'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+        },
+      }));
+      fetchAccountProfileAndWorkspaceFromMongo(incomingProfile.username);
+    }
+
     setManagedUsers((prev) => {
       const exists = prev.some(
         (u) => u.username.toLowerCase() === sessionData.userProfile.username.toLowerCase()
@@ -617,6 +742,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     decision: 'APPROVED' | 'REJECTED'
   ) => {
     const actorUsername = userSession?.userProfile.username || 'Systemadmin123';
+    const approvedTimeStr = new Date().toLocaleTimeString('vi-VN');
 
     setBookingsList((prev) =>
       prev.map((b) =>
@@ -625,12 +751,22 @@ const MainWorkspaceRoutes: React.FC = () => {
               ...b,
               approvalStatus: decision,
               approvedByUsername: actorUsername,
-              approvedAtIso: new Date().toLocaleTimeString('vi-VN'),
+              approvedAtIso: approvedTimeStr,
               bookingStatus: decision === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED',
             }
           : b
       )
     );
+
+    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}/approval`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        approvalStatus: decision,
+        approvedByUsername: actorUsername,
+        approvedAtIso: approvedTimeStr,
+      }),
+    }).catch(() => {});
 
     setNotificationsList((prev) =>
       prev.map((n) =>
@@ -694,6 +830,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       status: 'AVAILABLE',
       amenitiesList: payload.amenitiesList,
       aiScore: 95,
+      lockVersion: 1,
     };
     setWorkspaceNodes((prev) => [...prev, newNode]);
     setSelectedNode(newNode);
@@ -704,7 +841,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     customEmail?: string,
     note?: string,
     customTargetCode?: string,
-    timeWindow?: { start: string; end: string; dateIso?: string }
+    timeWindow?: BookingTimeWindowInput
   ) => {
     const codeToBook = customTargetCode || targetNode.nodeCode;
     const currentRole = userSession?.userProfile.role || 'EMPLOYEE';
@@ -716,6 +853,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
 
     const newBookingId = `BK-${Date.now().toString().slice(-4)}`;
+    const baseDate = timeWindow?.dateIso || new Date().toISOString().slice(0, 10);
     const newBookingItem: BookingPayloadItem = {
       bookingId: newBookingId,
       nodeId: codeToBook,
@@ -723,10 +861,13 @@ const MainWorkspaceRoutes: React.FC = () => {
       requesterUsername: userSession?.userProfile.username || 'Employeedev123',
       requesterRole: currentRole,
       departmentName: userSession?.userProfile.departmentName || 'Product & Engineering',
-      bookingDateIso: timeWindow?.dateIso || new Date().toISOString().slice(0, 10),
+      bookingDateIso: baseDate,
       startTimeIso: timeWindow?.start || '08:00',
       endTimeIso: timeWindow?.end || '10:00',
       purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
+      recurringOption: timeWindow?.recurringOption || 'NONE',
+      occurrenceDates: timeWindow?.occurrenceDates || [baseDate],
+      lockVersion: timeWindow?.lockVersion || (targetNode.lockVersion || 1) + 1,
       bookingStatus: 'CONFIRMED',
       approvalStatus: isEmployeeRequest ? 'PENDING_APPROVAL' : 'APPROVED',
       approvedByUsername: isEmployeeRequest
@@ -735,6 +876,27 @@ const MainWorkspaceRoutes: React.FC = () => {
     };
 
     setBookingsList((prev) => [newBookingItem, ...prev]);
+
+    recordRealtimeAuditLog(
+      'OPTIMISTIC_LOCK_WIN',
+      newBookingItem.userEmail,
+      codeToBook,
+      `[Đặt lịch Thành công - Lock v${newBookingItem.lockVersion}] @${
+        newBookingItem.requesterUsername
+      } đặt ${codeToBook} (${newBookingItem.startTimeIso}-${
+        newBookingItem.endTimeIso
+      }, Chu kỳ: ${newBookingItem.recurringOption}, Số kỳ: ${
+        newBookingItem.occurrenceDates?.length || 1
+      }).`,
+      'SUCCESS',
+      newBookingItem.lockVersion
+    );
+
+    fetch('/api/v1/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newBookingItem),
+    }).catch(() => {});
 
     if (isEmployeeRequest) {
       pushRealtimeNotification(
@@ -764,6 +926,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
 
     const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+    const targetEmail = targetBk?.userEmail || userSession?.userProfile.userEmail || '';
 
     setBookingsList((prev) =>
       prev.map((b) =>
@@ -773,11 +936,72 @@ const MainWorkspaceRoutes: React.FC = () => {
       )
     );
 
+    setTrustProfiles((prev) =>
+      prev.map((tp) =>
+        tp.userEmail.toLowerCase() === targetEmail.toLowerCase()
+          ? {
+              ...tp,
+              trustScore: Math.min(100, tp.trustScore + 2),
+              onTimeCheckInCount: tp.onTimeCheckInCount + 1,
+              updatedAtIso: new Date().toISOString(),
+            }
+          : tp
+      )
+    );
+
+    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}/checkin`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkedInAtIso: frozenTime }),
+    }).catch(() => {});
+
+    if (targetEmail) {
+      fetch('/api/v1/datamanager/trust-scores/adjust', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userEmail: targetEmail,
+          eventType: 'QR_CHECKIN_ONTIME',
+          targetNodeId: targetBk?.nodeId || 'M1-01',
+        }),
+      }).catch(() => {});
+    }
+
     recordRealtimeAuditLog(
       'QR_CHECKIN_SUCCESS',
-      targetBk?.userEmail || userSession?.userProfile.username || 'User',
+      targetEmail || userSession?.userProfile.username || 'User',
       targetBk?.nodeId || bookingId,
       `Xác nhận quét mã QR đúng hạn cho vé ${bookingId} tại thời điểm cố định: [${frozenTime}] (+2 điểm tín nhiệm).`
+    );
+  };
+
+  // Xử lý khi Cronjob 15 phút tự thu hồi chỗ (Auto-Release No-Show) & Trừ 10 điểm tín nhiệm
+  const handlePenalizeNoShowBooking = (
+    bookingId: string,
+    targetUserEmail: string,
+    nodeCode: string
+  ) => {
+    setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+
+    setTrustProfiles((prev) =>
+      prev.map((tp) => {
+        if (tp.userEmail.toLowerCase() !== targetUserEmail.toLowerCase()) return tp;
+        const nextScore = Math.max(0, tp.trustScore - 10);
+        return {
+          ...tp,
+          trustScore: nextScore,
+          noShowPenaltyCount: tp.noShowPenaltyCount + 1,
+          isRestrictedMode: nextScore < 60,
+          updatedAtIso: new Date().toISOString(),
+        };
+      })
+    );
+
+    pushRealtimeNotification(
+      `[Cronjob 15p] Tự động thu hồi chỗ ${nodeCode}`,
+      `Vé ${bookingId} quá 15 phút không quét QR Check-in. Đã giải phóng vị trí ${nodeCode} và trừ 10 điểm tín nhiệm của ${targetUserEmail}.`,
+      'SYSTEM_POLICY',
+      nodeCode
     );
   };
 
@@ -790,10 +1014,20 @@ const MainWorkspaceRoutes: React.FC = () => {
         eq.equipmentId === equipmentId ? { ...eq, status: nextStatus } : eq
       )
     );
+
+    fetch(`/api/v1/datamanager/equipments/${encodeURIComponent(equipmentId)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus }),
+    }).catch(() => {});
   };
 
   const handleCancelBooking = (bookingId: string) => {
     setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+
+    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   };
 
   const handleToggleBlockUser = (username: string) => {
@@ -813,7 +1047,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     setManagedUsers((prev) => prev.filter((u) => u.username !== username));
   };
 
-  // Lưu thay đổi Hồ sơ cá nhân & Ảnh Avatar / Ảnh bìa Background
   const currentUsernameKey = userSession?.userProfile.username || 'default';
   const currentCustomProfile = profileCustomMap[currentUsernameKey] || {
     avatarUrl: null,
@@ -823,7 +1056,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
   };
 
-  const handleSaveProfileCustomization = (updated: UserProfileCustomization) => {
+  const handleSaveProfileCustomization = async (updated: UserProfileCustomization) => {
     const nextMap = {
       ...profileCustomMap,
       [currentUsernameKey]: {
@@ -835,7 +1068,11 @@ const MainWorkspaceRoutes: React.FC = () => {
       },
     };
     setProfileCustomMap(nextMap);
-    localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
+    try {
+      localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
+    } catch {
+      // Bỏ qua nếu vượt dung lượng localStorage
+    }
 
     if (userSession) {
       const nextSession: AuthenticatedUserSession = {
@@ -849,6 +1086,29 @@ const MainWorkspaceRoutes: React.FC = () => {
       };
       setUserSession(nextSession);
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
+    }
+
+    setIsSyncingMongo(true);
+    try {
+      await fetch('/api/v1/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: updated.username,
+          fullName: updated.fullName,
+          userEmail: updated.userEmail,
+          departmentName: updated.departmentName,
+          phoneNumber: updated.phoneNumber,
+          jobTitle: updated.jobTitle,
+          bioText: updated.bioText,
+          avatarUrl: updated.avatarUrl,
+          backgroundUrl: updated.backgroundUrl,
+        }),
+      });
+    } catch {
+      // Giữ bản lưu cục bộ nếu mạng tạm thời gián đoạn
+    } finally {
+      setIsSyncingMongo(false);
     }
   };
 
@@ -870,7 +1130,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     {
       id: 'BOOKING' as ActiveSidebarPage,
       label: 'Đặt lịch Phòng họp',
-      sub: 'Xem bố cục & Mã QR Check-in',
+      sub: 'Giữ 5p, Lock & QR Check-in',
       icon: CalendarCheck,
       adminOnly: false,
     },
@@ -982,7 +1242,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v4.2
+                  SpotMatrix 5-Floor 3D v4.5 (Phase 3 Lock & Hold)
                 </div>
               </aside>
 
@@ -1031,7 +1291,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* NGOAI CUNG BEN PHAI HEADER: NUT AVATAR TRON & POP-UP NHO DINH BEN PHAI */}
+                  {/* NGOÀI CÙNG BÊN PHẢI HEADER: NÚT AVATAR TRÒN & POP-UP NHỎ DÍNH BÊN PHẢI */}
                   <div className="relative ml-auto" ref={avatarDropdownRef}>
                     <button
                       type="button"
@@ -1122,7 +1382,6 @@ const MainWorkspaceRoutes: React.FC = () => {
                         </div>
 
                         <div className="p-2 space-y-1 text-xs font-semibold">
-                          {/* DÒNG 1: CHUYỂN ĐẾN TRANG HỒ SƠ CÁ NHÂN (CÓ UPLOAD AVT & BACKGROUND) */}
                           <button
                             type="button"
                             onClick={() => {
@@ -1137,7 +1396,6 @@ const MainWorkspaceRoutes: React.FC = () => {
                             <span>Hồ sơ Cá nhân & Ảnh đại diện</span>
                           </button>
 
-                          {/* DÒNG 2: CHUYỂN ĐỔI NHANH GIAO DIỆN SÁNG / TỐI */}
                           <button
                             type="button"
                             onClick={toggleThemeMode}
@@ -1158,7 +1416,6 @@ const MainWorkspaceRoutes: React.FC = () => {
                             </span>
                           </button>
 
-                          {/* DÒNG 3: CHUYỂN ĐẾN TRANG CÀI ĐẶT HỆ THỐNG & TÀI KHOẢN */}
                           <button
                             type="button"
                             onClick={() => {
@@ -1241,13 +1498,25 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       isDark={isDark}
-                      onCreateNewBooking={(email, purpose, targetCode, timeWin) => {
-                        if (selectedNode) {
-                          handleQuickBooking(selectedNode, email, purpose, targetCode, timeWin);
+                      onCreateNewBooking={(
+                        email: string,
+                        purpose: string,
+                        targetCode?: string,
+                        timeWin?: BookingTimeWindowInput
+                      ) => {
+                        const matchedNode =
+                          workspaceNodes.find((n) => n.nodeCode === targetCode) ||
+                          selectedNode ||
+                          workspaceNodes[0];
+                        if (matchedNode) {
+                          handleQuickBooking(matchedNode, email, purpose, targetCode, timeWin);
                         }
                       }}
                       onCheckInBooking={handleCheckInBooking}
                       onCancelBooking={handleCancelBooking}
+                      onUpdateNodeStatus={handleUpdateNodeStatus}
+                      onRecordConcurrencyAudit={recordRealtimeAuditLog}
+                      onPenalizeNoShowBooking={handlePenalizeNoShowBooking}
                     />
                   )}
 
@@ -1295,7 +1564,6 @@ const MainWorkspaceRoutes: React.FC = () => {
                     />
                   )}
 
-                  {/* TRANG HỒ SƠ CÁ NHÂN (MỞ TỪ DÒNG 1 POP-UP AVATAR) */}
                   {activePage === 'PROFILE' && (
                     <ProfilePages
                       profileData={{
@@ -1314,11 +1582,11 @@ const MainWorkspaceRoutes: React.FC = () => {
                       }}
                       userBookings={bookingsList}
                       isDark={isDark}
+                      isSyncingMongo={isSyncingMongo}
                       onSaveProfileCustomization={handleSaveProfileCustomization}
                     />
                   )}
 
-                  {/* TRANG CÀI ĐẶT HỆ THỐNG (MỞ TỪ DÒNG 3 POP-UP AVATAR) */}
                   {activePage === 'SETTINGS' && (
                     <SettingsPages
                       isDark={isDark}

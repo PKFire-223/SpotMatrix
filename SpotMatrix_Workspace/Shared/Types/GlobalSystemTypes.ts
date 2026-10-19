@@ -1,12 +1,17 @@
 export type WorkspaceZoneType = 'DESK_POD' | 'MEETING_ROOM' | 'FOCUS_BOOTH' | 'COLLAB_HUB';
 
-export type SeatStatusType = 'AVAILABLE' | 'HOLDING' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
+export type SeatStatusType =
+  | 'AVAILABLE'
+  | 'OCCUPIED'
+  | 'RESERVED'
+  | 'HOLDING'
+  | 'MAINTENANCE';
 
 export type UserRoleType = 'EMPLOYEE' | 'MANAGER' | 'SYS_ADMIN';
 
 export type EquipmentStatusType = 'AVAILABLE' | 'IN_USE' | 'BROKEN';
 
-export type BookingApprovalStatusType = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+export type RecurringOptionType = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export type AuditEventCategoryType =
   | 'OPTIMISTIC_LOCK_WIN'
@@ -19,9 +24,23 @@ export type AuditEventCategoryType =
 export type NotificationCategoryType =
   | 'BOOKING_EVENT'
   | 'BOOKING_APPROVAL_REQUEST'
-  | 'FLOORPLAN_UPDATE'
-  | 'TRUST_SCORE_ALERT'
-  | 'SYSTEM_SECURITY';
+  | 'SECURITY_ALERT'
+  | 'SYSTEM_POLICY'
+  | 'FLOORPLAN_UPDATE';
+
+export interface NotificationRecordItem {
+  notificationId: string;
+  recipientEmail: string;
+  titleText: string;
+  contentText: string;
+  category: NotificationCategoryType;
+  isRead: boolean;
+  relatedNodeId?: string;
+  approvalBookingId?: string;
+  approvalHandledStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvalHandledBy?: string;
+  createdAtIso: string;
+}
 
 export interface WorkspaceNodeItem {
   nodeId: string;
@@ -36,6 +55,8 @@ export interface WorkspaceNodeItem {
   amenitiesList: string[];
   aiScore?: number;
   lockVersion?: number;
+  holdByEmail?: string | null;
+  holdExpiresAtIso?: string | null;
 }
 
 export interface BookingPayloadItem {
@@ -49,8 +70,15 @@ export interface BookingPayloadItem {
   startTimeIso: string;
   endTimeIso: string;
   purposeNote: string;
-  bookingStatus: 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED';
-  approvalStatus?: BookingApprovalStatusType;
+  recurringOption?: RecurringOptionType;
+  recurringSeriesId?: string | null;
+  occurrenceDates?: string[];
+  lockVersion?: number;
+  holdExpiresAtIso?: string | null;
+  noShowDeadlineIso?: string | null;
+  autoReleasedReason?: string | null;
+  bookingStatus: 'HOLDING' | 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED';
+  approvalStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   approvedByUsername?: string | null;
   approvedAtIso?: string | null;
   checkedInAtIso?: string | null;
@@ -104,20 +132,5 @@ export interface AuditConcurrencyLogItem {
   lockVersionAttempted?: number;
   outcomeStatus: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED';
   detailMessage: string;
-  createdAtIso: string;
-}
-
-export interface NotificationRecordItem {
-  notificationId: string;
-  recipientEmail: string;
-  targetRole?: UserRoleType | 'ALL';
-  titleText: string;
-  contentText: string;
-  category: NotificationCategoryType;
-  isRead: boolean;
-  relatedNodeId?: string;
-  approvalBookingId?: string;
-  approvalHandledStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
-  approvalHandledBy?: string;
   createdAtIso: string;
 }

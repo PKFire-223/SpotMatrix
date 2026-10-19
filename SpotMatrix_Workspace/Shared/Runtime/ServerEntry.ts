@@ -8,15 +8,12 @@ import { bookingRouter } from '../../Main/Booking/Function/Routes/BookingRoutes'
 import { aiRouter } from '../../Ai/Function/Routes/AiRoutes';
 import { datamanagerRouter } from '../../Main/Datamanager/Function/Routes/DatamanagerRoutes';
 import { authRouter } from '../../Main/Auth/Function/Routes/AuthRoutes';
-import { notificationRouter } from '../../Main/Notification/Function/Routes/NotificationRoutes';
 import { healthCheckRouter } from '../../Error/Function/Routes/HealthCheckRoutes';
 import { handleGlobalException } from '../../Error/Function/Middlewares/GlobalErrorMiddleware';
-import { seedDefaultAccountsToMongo } from '../../Main/Auth/Function/Services/AuthService';
 
 async function bootstrapBackendServer(): Promise<void> {
   const envConfig = loadSystemEnvConfig();
   await connectMongoDatabase();
-  await seedDefaultAccountsToMongo();
 
   const appServer = express();
 
@@ -27,14 +24,15 @@ async function bootstrapBackendServer(): Promise<void> {
       credentials: true,
     })
   );
-  appServer.use(express.json());
+  // Mở giới hạn 15MB để lưu chuỗi ảnh Avatar & Background (Base64) trực tiếp vào MongoDB Atlas
+  appServer.use(express.json({ limit: '15mb' }));
+  appServer.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
   appServer.use('/api/v1/floorplan', floorplanRouter);
   appServer.use('/api/v1/bookings', bookingRouter);
   appServer.use('/api/v1/ai', aiRouter);
   appServer.use('/api/v1/datamanager', datamanagerRouter);
   appServer.use('/api/v1/auth', authRouter);
-  appServer.use('/api/v1/notifications', notificationRouter);
   appServer.use('/api/v1/system', healthCheckRouter);
 
   appServer.use(handleGlobalException);

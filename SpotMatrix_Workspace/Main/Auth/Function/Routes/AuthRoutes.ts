@@ -1,27 +1,20 @@
 import { Router } from 'express';
 import {
   handleConfirmPasswordReset,
-  handleGetCurrentUserProfile,
-  handleListUsers,
-  handleRequestPasswordReset,
-  handleSeedSampleUsers,
-  handleUserLogin,
-  handleUserRegister,
+  handleGetUserProfileFromMongo,
+  handleLoginAccount,
+  handleRegisterAccount,
+  handleRequestPasswordOtp,
+  handleUpdateUserProfileInMongo,
 } from '../Controllers/AuthController';
-import { requireAllowedRoles, verifyAccessToken } from '../Middlewares/JwtAuthMiddleware';
 
 export const authRouter = Router();
 
-authRouter.post('/login', handleUserLogin);
-authRouter.post('/register', handleUserRegister);
-authRouter.post('/forgot-password/request', handleRequestPasswordReset);
+authRouter.post('/login', handleLoginAccount);
+authRouter.post('/register', handleRegisterAccount);
+authRouter.post('/forgot-password/request-otp', handleRequestPasswordOtp);
 authRouter.post('/forgot-password/confirm', handleConfirmPasswordReset);
-authRouter.post('/seed', handleSeedSampleUsers);
 
-authRouter.get('/me', verifyAccessToken, handleGetCurrentUserProfile);
-authRouter.get(
-  '/users',
-  verifyAccessToken,
-  requireAllowedRoles(['SYS_ADMIN', 'MANAGER']),
-  handleListUsers
-);
+// API đọc và ghi Hồ sơ + Ảnh Avatar + Ảnh nền Background trực tiếp trên MongoDB Atlas
+authRouter.get('/profile/:username', handleGetUserProfileFromMongo);
+authRouter.put('/profile', handleUpdateUserProfileInMongo);
