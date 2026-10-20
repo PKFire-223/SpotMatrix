@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import dotenv from 'dotenv';
 import { UserRoleType } from '../../../../Shared/Types/GlobalSystemTypes';
 import {
   AccountLifecycleStatus,
@@ -12,6 +13,8 @@ import {
   createUnauthorizedException,
   createValidationException,
 } from '../../../../Error/Function/Models/AppExceptionModel';
+
+dotenv.config();
 
 export interface AuthenticatedUserProfileDto {
   accountCode: string;
@@ -61,23 +64,56 @@ interface InternalMemoryAccountRecord {
   lastLoginAt: Date | null;
 }
 
-const PEPPER_SECRET =
-  process.env.PASSWORD_PEPPER_SECRET || 'spotmatrix_scrypt_pepper_2026_v2';
-const JWT_SECRET =
-  process.env.JWT_ACCESS_SECRET || 'spotmatrix_super_secret_access_key_2026_enterprise';
-const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
-const LOCK_DURATION_MINUTES = Number(process.env.ACCOUNT_LOCK_MINUTES || 15);
-const OTP_EXPIRES_MINUTES = Number(process.env.OTP_EXPIRES_MINUTES || 10);
+function getPepperSecret(): string {
+  return (
+    process.env.PASSWORD_PEPPER_SECRET ||
+    'spotmatrix_scrypt_pepper_secret_v3_2026'
+  ).trim();
+}
+
+function getJwtSecret(): string {
+  return (
+    process.env.JWT_ACCESS_SECRET ||
+    'spotmatrix_super_secret_access_key_2026_enterprise'
+  ).trim();
+}
+
+function getMaxLoginAttempts(): number {
+  return Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
+}
+
+function getLockDurationMinutes(): number {
+  return Number(process.env.ACCOUNT_LOCK_MINUTES || 15);
+}
+
+function getOtpExpiresMinutes(): number {
+  return Number(process.env.OTP_EXPIRES_MINUTES || 10);
+}
+
+const LEGACY_PEPPER_CANDIDATES = [
+  'spotmatrix_scrypt_pepper_secret_v3_2026',
+  'spotmatrix_scrypt_pepper_2026_v2',
+  'spotmatrix_pepper_v2_2026_enterprise',
+  'spotmatrix_default_pepper_2026',
+  'spotmatrix_pepper_secret_2026',
+  'spotmatrix_secret_pepper_2026',
+  'spotmatrix_enterprise_pepper_2026',
+  '',
+];
 
 const memoryAccountsStore = new Map<string, InternalMemoryAccountRecord>();
 let isDefaultSeeded = false;
 
 export function hashPasswordWithScrypt(
   rawPassword: string,
-  saltHex?: string
+  saltHex?: string,
+  customPepper?: string
 ): { salt: string; hash: string } {
   const salt = saltHex || crypto.randomBytes(16).toString('hex');
-  const derivedKey = crypto.scryptSync(`${rawPassword}:${PEPPER_SECRET}`, salt, 64);
+  const pepperToUse =
+    customPepper !== undefined ? customPepper : getPepperSecret();
+  const secretInput = pepperToUse ? `${rawPassword}:${pepperToUse}` : rawPassword;
+  const derivedKey = crypto.scryptSync(secretInput, salt, 64);
   return {
     salt,
     hash: derivedKey.toString('hex'),
@@ -89,15 +125,56 @@ export function verifyPasswordWithScrypt(
   saltHex: string,
   expectedHashHex: string
 ): boolean {
+  if (!rawPassword || !saltHex || !expectedHashHex) {
+    return false;
+  }
+
+  let expectedBuffer: Buffer;
   try {
-    const { hash } = hashPasswordWithScrypt(rawPassword, saltHex);
-    const bufA = Buffer.from(hash, 'hex');
-    const bufB = Buffer.from(expectedHashHex, 'hex');
-    if (bufA.length !== bufB.length) return false;
-    return crypto.timingSafeEqual(bufA, bufB);
+    expectedBuffer = Buffer.from(expectedHashHex, 'hex');
   } catch {
     return false;
   }
+
+  const candidatePeppers = Array.from(
+    new Set([getPepperSecret(), ...LEGACY_PEPPER_CANDIDATES])
+  );
+
+  for (const candidatePepper of candidatePeppers) {
+    const inputVariants: Array<{ secret: string; salt: string }> = [
+      {
+        secret: candidatePepper ? `${rawPassword}:${candidatePepper}` : rawPassword,
+        salt: saltHex,
+      },
+      {
+        secret: candidatePepper ? `${rawPassword}${candidatePepper}` : rawPassword,
+        salt: saltHex,
+      },
+      {
+        secret: rawPassword,
+        salt: candidatePepper ? `${saltHex}:${candidatePepper}` : saltHex,
+      },
+    ];
+
+    for (const variant of inputVariants) {
+      try {
+        const derivedHex = crypto
+          .scryptSync(variant.secret, variant.salt, 64)
+          .toString('hex');
+        const actualBuffer = Buffer.from(derivedHex, 'hex');
+        if (
+          actualBuffer.length === expectedBuffer.length &&
+          crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+        ) {
+          return true;
+        }
+      } catch {
+        // Bỏ qua biến thể lỗi và thử biến thể tiếp theo
+      }
+    }
+  }
+
+  return false;
 }
 
 export function validateStrongPasswordPolicy(password: string): {
@@ -108,13 +185,22 @@ export function validateStrongPasswordPolicy(password: string): {
     return { valid: false, reason: 'Mật khẩu phải có tối thiểu 8 ký tự.' };
   }
   if (!/[A-Z]/.test(password)) {
-    return { valid: false, reason: 'Mật khẩu phải chứa ít nhất 1 chữ cái viết HOA (A-Z).' };
+    return {
+      valid: false,
+      reason: 'Mật khẩu phải chứa ít nhất 1 chữ cái viết HOA (A-Z).',
+    };
   }
   if (!/[a-z]/.test(password)) {
-    return { valid: false, reason: 'Mật khẩu phải chứa ít nhất 1 chữ cái viết thường (a-z).' };
+    return {
+      valid: false,
+      reason: 'Mật khẩu phải chứa ít nhất 1 chữ cái viết thường (a-z).',
+    };
   }
   if (!/[0-9]/.test(password)) {
-    return { valid: false, reason: 'Mật khẩu phải chứa ít nhất 1 chữ số (0-9).' };
+    return {
+      valid: false,
+      reason: 'Mật khẩu phải chứa ít nhất 1 chữ số (0-9).',
+    };
   }
   return { valid: true };
 }
@@ -124,9 +210,10 @@ export function generateSessionToken(
   userEmail = 'user@spotmatrix.vn',
   role: UserRoleType = 'EMPLOYEE'
 ): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString(
-    'base64url'
-  );
+  const jwtSecret = getJwtSecret();
+  const header = Buffer.from(
+    JSON.stringify({ alg: 'HS256', typ: 'JWT' })
+  ).toString('base64url');
   const payload = Buffer.from(
     JSON.stringify({
       sub: username,
@@ -137,7 +224,7 @@ export function generateSessionToken(
     })
   ).toString('base64url');
   const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', jwtSecret)
     .update(`${header}.${payload}`)
     .digest('base64url');
   return `${header}.${payload}.${signature}`;
@@ -150,15 +237,18 @@ export function verifyJwtAccessToken(token: string): {
   role?: UserRoleType;
 } {
   try {
+    const jwtSecret = getJwtSecret();
     const parts = token.split('.');
     if (parts.length !== 3) return { valid: false };
     const [header, payload, signature] = parts;
     const expectedSig = crypto
-      .createHmac('sha256', JWT_SECRET)
+      .createHmac('sha256', jwtSecret)
       .update(`${header}.${payload}`)
       .digest('base64url');
     if (signature !== expectedSig) return { valid: false };
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const decoded = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8')
+    );
     if (decoded.exp && decoded.exp < Math.floor(Date.now() / 1000)) {
       return { valid: false };
     }
@@ -186,9 +276,11 @@ export async function ensureDefaultAccountsSeeded(): Promise<void> {
   }> = [
     {
       accountCode: 'ACC-ADMIN-001',
-      username: process.env.SYS_ADMIN_USERNAME || 'Systemadmin123',
-      userEmail: process.env.SYS_ADMIN_EMAIL || 'sysadmin@spotmatrix.vn',
-      rawPassword: process.env.SYS_ADMIN_PASSWORD || 'Password123',
+      username: (process.env.SYS_ADMIN_USERNAME || 'Systemadmin123').trim(),
+      userEmail: (
+        process.env.SYS_ADMIN_EMAIL || 'sysadmin@spotmatrix.vn'
+      ).trim(),
+      rawPassword: (process.env.SYS_ADMIN_PASSWORD || 'Password123').trim(),
       fullName: 'System Administrator (SpotMatrix)',
       departmentName: 'System Governance & Security',
       role: 'SYS_ADMIN',
@@ -241,7 +333,8 @@ export async function ensureDefaultAccountsSeeded(): Promise<void> {
             : item.role === 'MANAGER'
             ? 'Engineering Manager'
             : 'Full-Stack Developer',
-        bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+        bioText:
+          'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
         failedLoginAttempts: 0,
         lockUntilDate: null,
         resetOtpCodeHash: null,
@@ -255,8 +348,11 @@ export async function ensureDefaultAccountsSeeded(): Promise<void> {
   if (getMongoConnectionState()) {
     for (const item of defaultUsers) {
       const norm = item.username.toLowerCase().trim();
-      const exists = await UserAccountModel.findOne({ usernameNormalized: norm }).lean();
-      if (!exists) {
+      const existingDoc = (await UserAccountModel.findOne({
+        usernameNormalized: norm,
+      })) as UserAccountDocument | null;
+
+      if (!existingDoc) {
         const { salt, hash } = hashPasswordWithScrypt(item.rawPassword);
         await UserAccountModel.create({
           schemaVersion: 3,
@@ -280,8 +376,45 @@ export async function ensureDefaultAccountsSeeded(): Promise<void> {
               : item.role === 'MANAGER'
               ? 'Engineering Manager'
               : 'Full-Stack Developer',
-          bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+          bioText:
+            'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
         });
+      } else {
+        // Kiểm tra xem Hash trong MongoDB Atlas có khớp chuẩn với mật khẩu .env hiện tại hay không
+        const expectedCurrentHash = hashPasswordWithScrypt(
+          item.rawPassword,
+          existingDoc.passwordSalt,
+          getPepperSecret()
+        ).hash;
+
+        let needsUpdate = false;
+        if (existingDoc.passwordHash !== expectedCurrentHash) {
+          const { salt, hash } = hashPasswordWithScrypt(item.rawPassword);
+          existingDoc.passwordSalt = salt;
+          existingDoc.passwordHash = hash;
+          needsUpdate = true;
+        }
+
+        if (
+          existingDoc.accountStatus === 'LOCKED' ||
+          (existingDoc.failedLoginAttempts &&
+            existingDoc.failedLoginAttempts > 0) ||
+          existingDoc.lockUntilDate !== null
+        ) {
+          existingDoc.accountStatus = 'ACTIVE';
+          existingDoc.failedLoginAttempts = 0;
+          existingDoc.lockUntilDate = null;
+          needsUpdate = true;
+        }
+
+        if (existingDoc.role !== item.role) {
+          existingDoc.role = item.role;
+          needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+          await existingDoc.save();
+        }
       }
     }
   }
@@ -309,7 +442,7 @@ export async function loginUserAccount(
   )
     .trim()
     .toLowerCase();
-  const rawPassword = String(payload.password || '');
+  const rawPassword = String(payload.password || '').trim();
 
   if (!rawIdentifier || !rawPassword) {
     throw createValidationException(
@@ -317,6 +450,8 @@ export async function loginUserAccount(
     );
   }
 
+  const maxAttempts = getMaxLoginAttempts();
+  const lockMinutes = getLockDurationMinutes();
   const isMongoOnline = getMongoConnectionState();
 
   if (isMongoOnline) {
@@ -344,7 +479,7 @@ export async function loginUserAccount(
         (new Date(userDoc.lockUntilDate).getTime() - Date.now()) / 60000
       );
       throw createForbiddenException(
-        `Tài khoản đang bị khóa bảo mật do nhập sai mật khẩu quá ${MAX_LOGIN_ATTEMPTS} lần. Vui lòng thử lại sau ${waitMin} phút.`
+        `Tài khoản đang bị khóa bảo mật do nhập sai mật khẩu quá ${maxAttempts} lần. Vui lòng thử lại sau ${waitMin} phút.`
       );
     }
 
@@ -356,20 +491,32 @@ export async function loginUserAccount(
 
     if (!isPasswordMatch) {
       const nextAttempts = (userDoc.failedLoginAttempts || 0) + 1;
-      const shouldLock = nextAttempts >= MAX_LOGIN_ATTEMPTS;
+      const shouldLock = nextAttempts >= maxAttempts;
       userDoc.failedLoginAttempts = nextAttempts;
       if (shouldLock) {
         userDoc.accountStatus = 'LOCKED';
-        userDoc.lockUntilDate = new Date(Date.now() + LOCK_DURATION_MINUTES * 60000);
+        userDoc.lockUntilDate = new Date(Date.now() + lockMinutes * 60000);
       }
       await userDoc.save();
 
-      const remaining = Math.max(0, MAX_LOGIN_ATTEMPTS - nextAttempts);
+      const remaining = Math.max(0, maxAttempts - nextAttempts);
       throw createUnauthorizedException(
         shouldLock
-          ? `Bạn đã nhập sai mật khẩu ${MAX_LOGIN_ATTEMPTS} lần liên tiếp. Tài khoản bị khóa tạm thời ${LOCK_DURATION_MINUTES} phút!`
+          ? `Bạn đã nhập sai mật khẩu ${maxAttempts} lần liên tiếp. Tài khoản bị khóa tạm thời ${lockMinutes} phút!`
           : `Mật khẩu không chính xác! Bạn còn ${remaining} lần thử trước khi tài khoản bị khóa.`
       );
+    }
+
+    // Tự động nâng cấp chuẩn Hash mới nhất nếu tài khoản cũ khớp qua Legacy Pepper
+    const { hash: currentPepperHash } = hashPasswordWithScrypt(
+      rawPassword,
+      userDoc.passwordSalt,
+      getPepperSecret()
+    );
+    if (currentPepperHash !== userDoc.passwordHash) {
+      const refreshed = hashPasswordWithScrypt(rawPassword);
+      userDoc.passwordSalt = refreshed.salt;
+      userDoc.passwordHash = refreshed.hash;
     }
 
     userDoc.failedLoginAttempts = 0;
@@ -430,11 +577,15 @@ export async function loginUserAccount(
   }
 
   if (foundMem.accountStatus === 'SUSPENDED') {
-    throw createForbiddenException('Tài khoản đã bị Quản trị viên đình chỉ hoạt động.');
+    throw createForbiddenException(
+      'Tài khoản đã bị Quản trị viên đình chỉ hoạt động.'
+    );
   }
 
   if (foundMem.lockUntilDate && foundMem.lockUntilDate.getTime() > Date.now()) {
-    const waitMin = Math.ceil((foundMem.lockUntilDate.getTime() - Date.now()) / 60000);
+    const waitMin = Math.ceil(
+      (foundMem.lockUntilDate.getTime() - Date.now()) / 60000
+    );
     throw createForbiddenException(
       `Tài khoản đang bị khóa bảo mật. Vui lòng thử lại sau ${waitMin} phút.`
     );
@@ -447,9 +598,9 @@ export async function loginUserAccount(
   );
   if (!isMatch) {
     foundMem.failedLoginAttempts += 1;
-    if (foundMem.failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
+    if (foundMem.failedLoginAttempts >= maxAttempts) {
       foundMem.accountStatus = 'LOCKED';
-      foundMem.lockUntilDate = new Date(Date.now() + LOCK_DURATION_MINUTES * 60000);
+      foundMem.lockUntilDate = new Date(Date.now() + lockMinutes * 60000);
     }
     throw createUnauthorizedException('Mật khẩu không chính xác!');
   }
@@ -488,7 +639,7 @@ export async function loginUserAccount(
   };
 }
 
-// 2. Đăng ký tài khoản mới (Chặn tự nâng quyền SYS_ADMIN trái phép từ trang công khai)
+// 2. Đăng ký tài khoản mới (Mặc định phân quyền an toàn là EMPLOYEE hoặc MANAGER, chặn tự nâng quyền SYS_ADMIN trái phép)
 export async function registerUserAccount(payload: {
   username?: string;
   userEmail?: string;
@@ -504,18 +655,20 @@ export async function registerUserAccount(payload: {
   const userEmail = String(payload.userEmail || '')
     .trim()
     .toLowerCase();
-  const rawPassword = String(payload.password || '');
+  const rawPassword = String(payload.password || '').trim();
   const fullName = String(payload.fullName || username).trim();
   const departmentName = String(
     payload.departmentName || 'Product & Engineering'
   ).trim();
 
-  // Bảo mật Phân quyền: Chỉ cho phép tạo EMPLOYEE hoặc MANAGER khi đăng ký công khai
+  // Bảo mật Phân quyền: Khi đăng ký mới từ trang công khai, chỉ cho phép EMPLOYEE hoặc MANAGER (không cho phép tự tạo thêm SYS_ADMIN)
   const safeRole: UserRoleType =
     payload.role === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE';
 
   if (username.length < 4) {
-    throw createValidationException('Tên tài khoản (Username) phải có từ 4 ký tự trở lên.');
+    throw createValidationException(
+      'Tên tài khoản (Username) phải có từ 4 ký tự trở lên.'
+    );
   }
   if (!userEmail.includes('@')) {
     throw createValidationException('Địa chỉ Email không hợp lệ.');
@@ -523,7 +676,9 @@ export async function registerUserAccount(payload: {
 
   const pwdCheck = validateStrongPasswordPolicy(rawPassword);
   if (!pwdCheck.valid) {
-    throw createValidationException(pwdCheck.reason || 'Mật khẩu chưa đủ mạnh.');
+    throw createValidationException(
+      pwdCheck.reason || 'Mật khẩu chưa đủ mạnh.'
+    );
   }
 
   const { salt, hash } = hashPasswordWithScrypt(rawPassword);
@@ -558,7 +713,8 @@ export async function registerUserAccount(payload: {
       backgroundUrl: null,
       phoneNumber: '0908 123 456',
       jobTitle: safeRole === 'MANAGER' ? 'Team Manager' : 'Project Member',
-      bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+      bioText:
+        'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
       lastLoginAt: new Date(),
     });
 
@@ -611,7 +767,8 @@ export async function registerUserAccount(payload: {
     backgroundUrl: null,
     phoneNumber: '0908 123 456',
     jobTitle: safeRole === 'MANAGER' ? 'Team Manager' : 'Project Member',
-    bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+    bioText:
+      'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
     failedLoginAttempts: 0,
     lockUntilDate: null,
     resetOtpCodeHash: null,
@@ -663,19 +820,24 @@ export async function requestPasswordResetOtp(
     .toLowerCase();
 
   if (!rawIdentifier) {
-    throw createValidationException('Vui lòng nhập Tên đăng nhập hoặc Email để nhận mã OTP.');
+    throw createValidationException(
+      'Vui lòng nhập Tên đăng nhập hoặc Email để nhận mã OTP.'
+    );
   }
 
+  const otpExpiresMinutes = getOtpExpiresMinutes();
   const otpCode = String(Math.floor(100000 + Math.random() * 900000));
   const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
-  const expiresAt = new Date(Date.now() + OTP_EXPIRES_MINUTES * 60000);
+  const expiresAt = new Date(Date.now() + otpExpiresMinutes * 60000);
 
   if (getMongoConnectionState()) {
     const userDoc = await UserAccountModel.findOne({
       $or: [{ usernameNormalized: rawIdentifier }, { userEmail: rawIdentifier }],
     });
     if (!userDoc) {
-      throw createValidationException('Không tìm thấy tài khoản khớp với thông tin đã nhập.');
+      throw createValidationException(
+        'Không tìm thấy tài khoản khớp với thông tin đã nhập.'
+      );
     }
     userDoc.resetOtpCodeHash = otpHash;
     userDoc.resetOtpExpiresAt = expiresAt;
@@ -683,7 +845,7 @@ export async function requestPasswordResetOtp(
 
     return {
       otpDemoCode: otpCode,
-      expiresInMinutes: OTP_EXPIRES_MINUTES,
+      expiresInMinutes: otpExpiresMinutes,
       maskedTarget: userDoc.userEmail,
     };
   }
@@ -699,7 +861,9 @@ export async function requestPasswordResetOtp(
   });
 
   if (!foundMem) {
-    throw createValidationException('Không tìm thấy tài khoản khớp với thông tin đã nhập.');
+    throw createValidationException(
+      'Không tìm thấy tài khoản khớp với thông tin đã nhập.'
+    );
   }
 
   foundMem.resetOtpCodeHash = otpHash;
@@ -707,12 +871,12 @@ export async function requestPasswordResetOtp(
 
   return {
     otpDemoCode: otpCode,
-    expiresInMinutes: OTP_EXPIRES_MINUTES,
+    expiresInMinutes: otpExpiresMinutes,
     maskedTarget: foundMem.userEmail,
   };
 }
 
-// 4. Xác nhận mã OTP & Đặt lại mật khẩu mới
+// 4. Xác nhận mã OTP & Đặt lại mật khẩu mới (Hỗ trợ cả truyền 1 object hoặc 3 tham số rời)
 export async function confirmPasswordResetWithOtp(
   arg1:
     | string
@@ -731,17 +895,24 @@ export async function confirmPasswordResetWithOtp(
   )
     .trim()
     .toLowerCase();
-  const otpCode = String(typeof arg1 === 'string' ? arg2 || '' : arg1?.otpCode || '').trim();
+  const otpCode = String(
+    typeof arg1 === 'string' ? arg2 || '' : arg1?.otpCode || ''
+  ).trim();
   const newPassword = String(
     typeof arg1 === 'string' ? arg3 || '' : arg1?.newPassword || ''
-  );
+  ).trim();
 
   const pwdCheck = validateStrongPasswordPolicy(newPassword);
   if (!pwdCheck.valid) {
-    throw createValidationException(pwdCheck.reason || 'Mật khẩu mới chưa đủ mạnh.');
+    throw createValidationException(
+      pwdCheck.reason || 'Mật khẩu mới chưa đủ mạnh.'
+    );
   }
 
-  const inputOtpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
+  const inputOtpHash = crypto
+    .createHash('sha256')
+    .update(otpCode)
+    .digest('hex');
   const { salt, hash } = hashPasswordWithScrypt(newPassword);
 
   if (getMongoConnectionState()) {
@@ -749,10 +920,14 @@ export async function confirmPasswordResetWithOtp(
       $or: [{ usernameNormalized: rawIdentifier }, { userEmail: rawIdentifier }],
     });
     if (!userDoc || !userDoc.resetOtpCodeHash || !userDoc.resetOtpExpiresAt) {
-      throw createValidationException('Yêu cầu đặt lại mật khẩu không hợp lệ hoặc chưa tạo OTP.');
+      throw createValidationException(
+        'Yêu cầu đặt lại mật khẩu không hợp lệ hoặc chưa tạo OTP.'
+      );
     }
     if (new Date(userDoc.resetOtpExpiresAt).getTime() < Date.now()) {
-      throw createValidationException('Mã OTP đã hết hạn. Vui lòng lấy mã OTP mới.');
+      throw createValidationException(
+        'Mã OTP đã hết hạn. Vui lòng lấy mã OTP mới.'
+      );
     }
     if (userDoc.resetOtpCodeHash !== inputOtpHash) {
       throw createValidationException('Mã xác thực OTP không chính xác.');
@@ -782,7 +957,9 @@ export async function confirmPasswordResetWithOtp(
   });
 
   if (!foundMem || foundMem.resetOtpCodeHash !== inputOtpHash) {
-    throw createValidationException('Mã xác thực OTP không chính xác hoặc đã hết hạn.');
+    throw createValidationException(
+      'Mã xác thực OTP không chính xác hoặc đã hết hạn.'
+    );
   }
 
   foundMem.passwordSalt = salt;
@@ -796,6 +973,7 @@ export async function confirmPasswordResetWithOtp(
   return { resetSuccess: true, username: foundMem.username };
 }
 
+// Export thêm các bí danh (Aliases) để tương thích 100% với mọi phiên bản Controller
 export const loginAccount = loginUserAccount;
 export const authenticateUserAccount = loginUserAccount;
 export const registerAccount = registerUserAccount;
