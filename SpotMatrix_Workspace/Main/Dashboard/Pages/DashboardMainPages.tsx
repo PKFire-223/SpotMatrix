@@ -20,6 +20,7 @@ import {
   Award,
   CalendarCheck,
   RefreshCw,
+  Settings2,
 } from 'lucide-react';
 import {
   AuditConcurrencyLogItem,
@@ -56,16 +57,66 @@ export interface DashboardMainPagesProps {
   ) => void;
 }
 
+type AiPersonaRoleKey =
+  | 'SPATIAL_ARCHITECT'
+  | 'EXECUTIVE_ANALYST'
+  | 'SECURITY_AUDITOR'
+  | 'FRIENDLY_CONCIERGE';
+
+interface AiPersonaPresetItem {
+  key: AiPersonaRoleKey;
+  shortLabel: string;
+  badgeText: string;
+  openingPrefix: string;
+  systemPrompt: string;
+}
+
 interface AiChatMessageItem {
   messageId: string;
   sender: 'AI' | 'USER';
   title?: string;
+  personaBadge?: string;
   contentText: string;
   timestampText: string;
   isSummaryReport?: boolean;
 }
 
 const SESSION_STORAGE_KEY = 'spotmatrix_active_session_v2';
+
+const AI_PERSONA_PRESETS: Record<AiPersonaRoleKey, AiPersonaPresetItem> = {
+  SPATIAL_ARCHITECT: {
+    key: 'SPATIAL_ARCHITECT',
+    shortLabel: 'Kiến trúc sư 3D',
+    badgeText: 'Vai trò: Kiến trúc sư Không gian 3D',
+    openingPrefix: 'Dưới góc độ Kiến trúc Không gian 5 Tầng:',
+    systemPrompt:
+      'Bạn là Kiến trúc sư Trưởng điều phối không gian 3D/2D của tòa nhà SpotMatrix 5 tầng. Luôn tư vấn dựa trên sức chứa, bố cục bàn tròn/bàn dài/đấu trường La Mã, độ cách âm 40dB và thiết bị đi kèm.',
+  },
+  EXECUTIVE_ANALYST: {
+    key: 'EXECUTIVE_ANALYST',
+    shortLabel: 'Chuyên gia Số liệu',
+    badgeText: 'Vai trò: Chuyên gia Phân tích Dữ liệu (BI)',
+    openingPrefix: 'Theo số liệu thống kê thực tế & đối chuẩn 30 ngày:',
+    systemPrompt:
+      'Bạn là Chuyên gia Phân tích Dữ liệu Quản trị (BI Analyst). Luôn trả lời kèm con số định lượng chính xác (tỷ lệ lấp đầy %, chênh lệch so với trung bình 52%, điểm tín nhiệm và tần suất giờ hoạt động thiết bị).',
+  },
+  SECURITY_AUDITOR: {
+    key: 'SECURITY_AUDITOR',
+    shortLabel: 'Thanh tra Bảo mật',
+    badgeText: 'Vai trò: Thanh tra Bảo mật & Kỷ luật',
+    openingPrefix: 'Theo quy chuẩn Bảo mật RBAC & Kỷ luật Đặt lịch:',
+    systemPrompt:
+      'Bạn là Thanh tra Bảo mật & Quản trị Rủi ro. Tập trung phân tích khóa phiên bản Optimistic Locking (lockVersion), giữ chỗ 5 phút, quy định Check-in QR trước 2 tiếng, Cronjob 15 phút tự thu hồi No-Show (-10 điểm) và phân quyền 3 Role.',
+  },
+  FRIENDLY_CONCIERGE: {
+    key: 'FRIENDLY_CONCIERGE',
+    shortLabel: 'Trợ lý Lễ tân',
+    badgeText: 'Vai trò: Trợ lý Lễ tân Thông minh',
+    openingPrefix: 'Mình xin hỗ trợ nhanh cho bạn như sau:',
+    systemPrompt:
+      'Bạn là Trợ lý Lễ tân thân thiện, nhiệt tình và linh hoạt. Hãy hướng dẫn từng bước dễ hiểu, gợi ý ngay phòng trống tốt nhất và hỗ trợ người dùng giải quyết mọi thắc mắc nhanh chóng.',
+  },
+};
 
 export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
   workspaceNodes,
@@ -104,6 +155,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     };
   }, [propUserRole, propUserEmail]);
 
+  // Bảo mật RBAC: Tài khoản nào chỉ được xem góc nhìn của đúng role đó (riêng SYS_ADMIN có thể chuyển xem thử 3 role)
   const [selectedRoleView, setSelectedRoleView] = useState<UserRoleType>(sessionInfo.role);
   useEffect(() => {
     setSelectedRoleView(sessionInfo.role);
@@ -111,11 +163,26 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   const [demandSimulationPercent, setDemandSimulationPercent] = useState<number>(100);
 
+  // State cho Khung Chat AI Bên Phải + Thiết lập Vai trò Nền (System Persona)
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
+  const [selectedPersonaKey, setSelectedPersonaKey] =
+    useState<AiPersonaRoleKey>('SPATIAL_ARCHITECT');
+  const [isPersonaConfigExpanded, setIsPersonaConfigExpanded] = useState<boolean>(false);
+  const [customSystemPrompt, setCustomSystemPrompt] = useState<string>(
+    AI_PERSONA_PRESETS.SPATIAL_ARCHITECT.systemPrompt
+  );
   const [chatInputText, setChatInputText] = useState<string>('');
+  const [isAiThinking, setIsAiThinking] = useState<boolean>(false);
   const [isSpeakingTts, setIsSpeakingTts] = useState<boolean>(false);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  const activePersona = AI_PERSONA_PRESETS[selectedPersonaKey];
+
+  const handleSelectPersonaPreset = (nextKey: AiPersonaRoleKey) => {
+    setSelectedPersonaKey(nextKey);
+    setCustomSystemPrompt(AI_PERSONA_PRESETS[nextKey].systemPrompt);
+  };
 
   const dashboardMetrics = useMemo(() => {
     const totalNodes = workspaceNodes.length || 25;
@@ -168,6 +235,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
     return {
       totalNodes,
+      availableNodes,
       availableCount: availableNodes.length,
       holdingCount: holdingNodes.length,
       occupiedOrReservedCount: occupiedOrReserved.length,
@@ -194,6 +262,28 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     sessionInfo.username,
   ]);
 
+  const buildLiveWorkspaceContextSnapshot = (): string => {
+    const freeList = dashboardMetrics.availableNodes
+      .slice(0, 8)
+      .map((n) => `${n.nodeCode} (Tầng ${n.floorLevel}, ${n.capacityCount} chỗ)`)
+      .join(', ');
+    const brokenList =
+      dashboardMetrics.brokenEquipments
+        .map((e) => `${e.equipmentCode} tại ${e.assignedNodeId}`)
+        .join(', ') || 'Không có';
+    return `Người hỏi: ${sessionInfo.fullName} (@${sessionInfo.username}, Vai trò: ${sessionInfo.role}, Tín nhiệm: ${
+      dashboardMetrics.myTrustProfile?.trustScore || 100
+    }/100). Tổng số phòng: ${dashboardMetrics.totalNodes} (5 tầng). Đang trống: ${
+      dashboardMetrics.availableCount
+    } phòng (${freeList}). Lấp đầy: ${dashboardMetrics.occupancyRate}%. Lịch đặt hoạt động: ${
+      dashboardMetrics.activeBookingsCount
+    }. Đơn chờ duyệt: ${
+      dashboardMetrics.pendingApprovals.length
+    }. Điểm tín nhiệm TB: ${dashboardMetrics.avgTrustScore}/100. Thiết bị tốt: ${
+      dashboardMetrics.workingEquipmentsCount
+    }/${dashboardMetrics.totalEquipmentsCount}. Thiết bị hỏng: ${brokenList}.`;
+  };
+
   const buildSynthesizedExecutiveSummary = (): string => {
     const {
       totalNodes,
@@ -210,30 +300,31 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
     const brokenText =
       brokenEquipments.length > 0
-        ? `Hiện có ${brokenEquipments.length} thiết bị đang báo hỏng cần bảo trì là ${brokenEquipments
+        ? `Hiện có ${brokenEquipments.length} thiết bị báo hỏng cần bảo trì là ${brokenEquipments
             .map((e) => `${e.equipmentCode} tại phòng ${e.assignedNodeId}`)
             .join(', ')}.`
         : 'Tất cả thiết bị tại 5 tầng đều hoạt động tốt.';
 
     const approvalText =
       pendingApprovals.length > 0
-        ? `Có ${pendingApprovals.length} yêu cầu đặt phòng của nhân viên đang chờ Quản lý hoặc Admin phê duyệt.`
-        : 'Không có yêu cầu đặt phòng nào đang tồn đọng.';
+        ? `Có ${pendingApprovals.length} yêu cầu đặt phòng của nhân viên đang chờ phê duyệt.`
+        : 'Không có yêu cầu đặt phòng nào tồn đọng.';
 
     const recommendText = topRecommendedNode
-      ? `AI đề xuất phòng tối ưu nhất hiện tại là ${topRecommendedNode.nodeCode} (${topRecommendedNode.nodeLabel}) với điểm tương thích ${topRecommendedNode.aiScore || 96} trên 100.`
+      ? `Phòng tối ưu nhất hiện tại là ${topRecommendedNode.nodeCode} (${topRecommendedNode.nodeLabel}) với điểm tương thích ${topRecommendedNode.aiScore || 96} trên 100.`
       : 'Hiện tất cả các phòng đang kín lịch.';
 
-    return `Báo cáo tổng hợp hệ thống SpotMatrix thời gian thực cho ${sessionInfo.fullName}: Toàn tòa nhà 5 tầng đang có tỷ lệ lấp đầy ${occupancyRate}%, còn trống ${availableCount} trên tổng số ${totalNodes} không gian họp và hội trường. Đang có ${activeBookingsCount} lịch đặt chỗ hoạt động. ${approvalText} Điểm tín nhiệm trung bình toàn hệ thống đạt ${avgTrustScore} trên 100 điểm. Về thiết bị dùng chung, có ${workingEquipmentsCount} trên ${totalEquipmentsCount} thiết bị sẵn sàng phục vụ. ${brokenText} ${recommendText}`;
+    return `${activePersona.openingPrefix} Toàn tòa nhà 5 tầng đang có tỷ lệ lấp đầy ${occupancyRate}%, còn trống ${availableCount} trên tổng số ${totalNodes} không gian họp và hội trường. Đang có ${activeBookingsCount} lịch đặt chỗ hoạt động. ${approvalText} Điểm tín nhiệm trung bình toàn hệ thống đạt ${avgTrustScore} trên 100 điểm. Về thiết bị dùng chung, có ${workingEquipmentsCount} trên ${totalEquipmentsCount} thiết bị sẵn sàng phục vụ. ${brokenText} ${recommendText}`;
   };
 
   const [chatMessages, setChatMessages] = useState<AiChatMessageItem[]>(() => [
     {
       messageId: 'MSG-WELCOME-01',
       sender: 'AI',
-      title: 'Trợ lý AI SpotMatrix Co-Pilot',
+      title: 'Trợ lý AI SpotMatrix Co-Pilot (Đa Vai trò)',
+      personaBadge: AI_PERSONA_PRESETS.SPATIAL_ARCHITECT.badgeText,
       contentText:
-        'Xin chào! Tôi là Trợ lý AI Phân tích Không gian & Dữ liệu của SpotMatrix. Bạn có thể bấm nút "Tổng hợp & Nghe Tóm tắt Dữ liệu" bên dưới để tôi phân tích toàn bộ 5 tầng và đọc báo cáo bằng giọng nói, hoặc đặt câu hỏi trực tiếp cho tôi.',
+        'Xin chào! Tôi đã được thiết lập vai trò nền để hỗ trợ bạn chuyên sâu hơn. Bạn có thể đổi Vai trò Nền của tôi ở thanh phía trên (Kiến trúc sư 3D, Chuyên gia Số liệu, Thanh tra Bảo mật, hoặc Trợ lý Lễ tân), bấm "Tổng hợp & Đọc Tóm tắt", hoặc hỏi bất kỳ câu hỏi nào (VD: "Tìm phòng trống cho 8 người", "Tầng 2 còn phòng nào?", "Phòng M1-03 thiết bị sao rồi?").',
       timestampText: new Date().toLocaleTimeString('vi-VN', {
         hour: '2-digit',
         minute: '2-digit',
@@ -317,6 +408,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       messageId: newMsgId,
       sender: 'AI',
       title: 'Bản Tổng hợp Dữ liệu Thời gian thực (5 Tầng & MongoDB)',
+      personaBadge: activePersona.badgeText,
       contentText: summaryText,
       timestampText: new Date().toLocaleTimeString('vi-VN', {
         hour: '2-digit',
@@ -333,9 +425,15 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     }
   };
 
-  const generateSmartAiAnswer = (questionRaw: string): { title: string; reply: string } => {
-    const q = questionRaw.toLowerCase();
+  // Bộ Suy luận Đa Ý định Linh hoạt (Flexible Multi-Intent NLP Engine) kết hợp Vai trò Nền (Persona)
+  const generateFlexibleLocalAiAnswer = (
+    questionRaw: string
+  ): { title: string; reply: string } => {
+    const q = questionRaw.trim();
+    const qLower = q.toLowerCase();
+    const prefix = activePersona.openingPrefix;
     const {
+      availableNodes,
       availableCount,
       totalNodes,
       occupancyRate,
@@ -344,21 +442,123 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       brokenEquipments,
       topRecommendedNode,
       myTrustProfile,
+      myBookings,
     } = dashboardMetrics;
 
-    if (q.includes('tóm tắt') || q.includes('tổng hợp') || q.includes('báo cáo')) {
+    // 1. Nhận diện câu hỏi về một Mã phòng cụ thể (VD: "M1-02", "M2-05", "H-01", "m1-03")
+    const roomCodeMatch = q.match(/\b(M[1-4]-0[1-6]|H-01|H01)\b/i);
+    if (roomCodeMatch) {
+      const normalizedCode =
+        roomCodeMatch[1].toUpperCase() === 'H01'
+          ? 'H-01'
+          : roomCodeMatch[1].toUpperCase();
+      const targetNode = workspaceNodes.find((n) => n.nodeCode === normalizedCode);
+      if (targetNode) {
+        const roomEqs = equipmentsList.filter(
+          (eq) => eq.assignedNodeId === normalizedCode
+        );
+        const roomBks = bookingsList.filter(
+          (b) =>
+            b.nodeId.startsWith(normalizedCode.replace('-', '')) ||
+            b.nodeId === normalizedCode
+        );
+        const statusVn =
+          targetNode.status === 'AVAILABLE'
+            ? 'Đang trống (Có thể đặt ngay)'
+            : targetNode.status === 'HOLDING'
+            ? 'Đang được giữ tạm 5 phút'
+            : 'Đã có lịch đặt / Đang họp';
+        const eqSummary =
+          roomEqs.length > 0
+            ? roomEqs
+                .map(
+                  (e) =>
+                    `${e.equipmentName} (${
+                      e.status === 'BROKEN' ? 'Đang báo hỏng' : 'Hoạt động tốt'
+                    })`
+                )
+                .join(', ')
+            : 'Trang bị tiêu chuẩn (Màn hình 4K, Camera AI 360, Cách âm 40dB)';
+
+        return {
+          title: `Chi tiết Không gian Phòng ${normalizedCode}`,
+          reply: `${prefix} Phòng ${targetNode.nodeCode} (${targetNode.nodeLabel}) nằm tại Tầng ${targetNode.floorLevel}, sức chứa ${targetNode.capacityCount} người, hiện tại [${statusVn}]. Thiết bị đi kèm: ${eqSummary}. Hiện có ${roomBks.length} lịch đặt liên quan tới không gian này.`,
+        };
+      }
+    }
+
+    // 2. Nhận diện câu hỏi theo Tầng cụ thể (VD: "tầng 1", "tầng 2", "tầng 3", "tầng 4", "tầng 5", "hội trường")
+    const floorMatch = qLower.match(/tầng\s*([1-5])/i);
+    if (floorMatch || qLower.includes('hội trường') || qLower.includes('la mã')) {
+      const floorNum = floorMatch ? Number(floorMatch[1]) : 5;
+      const floorNodes = workspaceNodes.filter((n) => n.floorLevel === floorNum);
+      const freeOnFloor = floorNodes.filter((n) => n.status === 'AVAILABLE');
+
+      if (floorNum === 5) {
+        return {
+          title: 'Thông tin Tầng 5 — Hội trường Đấu trường La Mã (H-01)',
+          reply: `${prefix} Tầng 5 là Hội trường Lớn Đấu trường La Mã (Mã H-01, sức chứa 30 người) với Bục Diễn Giả tròn ở trung tâm và các dãy ghế bậc thềm vòng cung H01-A1 đến H01-B8. Người dùng có thể chọn đặt trước từng vị trí ghế ngồi riêng biệt và xoay mô hình 3D 360° trực tiếp.`,
+        };
+      }
+
+      return {
+        title: `Trạng thái Mặt bằng Tầng ${floorNum}`,
+        reply: `${prefix} Tầng ${floorNum} có tổng cộng ${floorNodes.length} phòng họp chính thức, hiện đang trống ${freeOnFloor.length} phòng: ${
+          freeOnFloor.length > 0
+            ? freeOnFloor
+                .map((n) => `${n.nodeCode} (${n.capacityCount} người)`)
+                .join(', ')
+            : 'Tất cả các phòng trên tầng này đang bận'
+        }. Bạn có thể mở trang Sơ đồ Phòng họp để xem mô hình 3D chi tiết của Tầng ${floorNum}.`,
+      };
+    }
+
+    // 3. Nhận diện câu hỏi tìm phòng theo Số lượng người (VD: "họp 6 người", "nhóm 10 người", "cho 4 người", "15 người")
+    const peopleMatch = qLower.match(/(\d+)\s*(người|chỗ|ghế|thành viên|nhân sự)/i);
+    if (peopleMatch) {
+      const requiredCap = Number(peopleMatch[1]);
+      if (requiredCap > 12) {
+        return {
+          title: `Tư vấn Không gian cho ${requiredCap} người`,
+          reply: `${prefix} Với quy mô ${requiredCap} người (vượt quá sức chứa 12 người của phòng họp thường), lựa chọn tối ưu nhất là chuyển lên Hội trường Lớn Đấu trường La Mã H-01 tại Tầng 5 (sức chứa 30 người, màn hình LED Panorama 360°).`,
+        };
+      }
+
+      const matchingFree = availableNodes
+        .filter((n) => n.capacityCount >= requiredCap && n.floorLevel <= 4)
+        .sort((a, b) => a.capacityCount - b.capacityCount || (b.aiScore || 0) - (a.aiScore || 0));
+
+      if (matchingFree.length > 0) {
+        const bestFit = matchingFree[0];
+        const others = matchingFree
+          .slice(1, 4)
+          .map((n) => `${n.nodeCode} (Tầng ${n.floorLevel}, ${n.capacityCount} chỗ)`)
+          .join(', ');
+        return {
+          title: `Đề xuất Phòng họp Tối ưu cho ${requiredCap} người`,
+          reply: `${prefix} Để họp ${requiredCap} người tiết kiệm diện tích và hiệu quả nhất, tôi đề xuất phòng ${bestFit.nodeCode} (${bestFit.nodeLabel}, sức chứa chuẩn ${bestFit.capacityCount} người, điểm AI ${bestFit.aiScore || 95}/100). ${
+            others ? `Các phương án dự phòng đang trống khác: ${others}.` : ''
+          }`,
+        };
+      }
+    }
+
+    // 4. Câu hỏi về Tóm tắt / Báo cáo tổng quát
+    if (qLower.includes('tóm tắt') || qLower.includes('tổng hợp') || qLower.includes('báo cáo')) {
       return {
         title: 'Báo cáo Tổng hợp Dữ liệu Hệ thống',
         reply: buildSynthesizedExecutiveSummary(),
       };
     }
 
+    // 5. Câu hỏi về Phòng trống / Gợi ý chung
     if (
-      q.includes('phòng') &&
-      (q.includes('trống') || q.includes('gợi ý') || q.includes('tốt nhất'))
+      qLower.includes('trống') ||
+      qLower.includes('gợi ý') ||
+      qLower.includes('tốt nhất') ||
+      qLower.includes('đề xuất')
     ) {
-      const freeRooms = workspaceNodes
-        .filter((n) => n.status === 'AVAILABLE')
+      const freeRooms = availableNodes
         .slice(0, 5)
         .map(
           (n) =>
@@ -367,29 +567,31 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         .join('; ');
       return {
         title: 'Gợi ý Phòng họp Đang Trống Tối ưu',
-        reply: `Hiện có ${availableCount}/${totalNodes} phòng đang trống. Đề xuất số 1 là ${
+        reply: `${prefix} Hiện có ${availableCount}/${totalNodes} không gian đang trống. Đề xuất số 1 là ${
           topRecommendedNode?.nodeCode || 'M1-01'
         } (${
           topRecommendedNode?.nodeLabel || 'Phòng họp Tầng 1'
-        }). Các lựa chọn hàng đầu khác gồm: ${freeRooms}.`,
+        }). Các lựa chọn hàng đầu khác: ${freeRooms}.`,
       };
     }
 
+    // 6. Câu hỏi về Thiết bị / Bảo trì
     if (
-      q.includes('thiết bị') ||
-      q.includes('hỏng') ||
-      q.includes('máy chiếu') ||
-      q.includes('màn hình')
+      qLower.includes('thiết bị') ||
+      qLower.includes('hỏng') ||
+      qLower.includes('máy chiếu') ||
+      qLower.includes('màn hình') ||
+      qLower.includes('camera')
     ) {
       if (brokenEquipments.length === 0) {
         return {
           title: 'Tình trạng Thiết bị Dùng chung',
-          reply: `Toàn bộ ${equipmentsList.length} thiết bị trên 5 tầng đều đang hoạt động tốt (0 thiết bị hỏng).`,
+          reply: `${prefix} Toàn bộ ${equipmentsList.length} thiết bị trên 5 tầng đều đang hoạt động tốt (0 thiết bị hỏng).`,
         };
       }
       return {
         title: 'Cảnh báo Thiết bị & Bảo trì',
-        reply: `Đang có ${
+        reply: `${prefix} Đang có ${
           brokenEquipments.length
         } thiết bị gặp sự cố cần bảo trì: ${brokenEquipments
           .map(
@@ -398,21 +600,21 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 eq.healthPercent || 45
               }%`
           )
-          .join('. ')}. Các phòng còn lại thiết bị đều hoạt động 100%.`,
+          .join('. ')}. Các phòng còn lại thiết bị đều hoạt động ổn định.`,
       };
     }
 
-    if (q.includes('duyệt') || q.includes('chờ') || q.includes('nhân viên')) {
+    // 7. Câu hỏi về Phê duyệt / Đơn chờ duyệt
+    if (qLower.includes('duyệt') || qLower.includes('chờ') || qLower.includes('phê duyệt')) {
       if (pendingApprovals.length === 0) {
         return {
           title: 'Trạng thái Phê duyệt Đặt phòng',
-          reply:
-            'Hiện tại toàn bộ đơn đặt phòng của nhân viên đã được xử lý, không có đơn nào chờ duyệt.',
+          reply: `${prefix} Hiện tại toàn bộ đơn đặt phòng của nhân viên đã được xử lý, không có đơn nào tồn đọng.`,
         };
       }
       return {
         title: `Danh sách ${pendingApprovals.length} Đơn Chờ Phê duyệt`,
-        reply: `Có ${
+        reply: `${prefix} Có ${
           pendingApprovals.length
         } yêu cầu đang chờ Quản lý hoặc Admin duyệt: ${pendingApprovals
           .map(
@@ -425,31 +627,82 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       };
     }
 
+    // 8. Câu hỏi về Quy định Check-in QR / Giữ chỗ 5p / Optimistic Lock / Cronjob 15p / Điểm tín nhiệm
     if (
-      q.includes('tín nhiệm') ||
-      q.includes('điểm') ||
-      q.includes('no-show') ||
-      q.includes('thu hồi')
+      qLower.includes('quy định') ||
+      qLower.includes('quy tắc') ||
+      qLower.includes('check-in') ||
+      qLower.includes('checkin') ||
+      qLower.includes('qr') ||
+      qLower.includes('lock') ||
+      qLower.includes('5 phút') ||
+      qLower.includes('15 phút') ||
+      qLower.includes('tín nhiệm') ||
+      qLower.includes('điểm')
     ) {
       return {
-        title: 'Phân tích Điểm Tín nhiệm & Kỷ luật Check-in',
-        reply: `Điểm tín nhiệm trung bình toàn hệ thống là ${avgTrustScore}/100 điểm. Điểm cá nhân của bạn đang là ${
+        title: 'Quy chuẩn Vận hành, Check-in QR & Điểm Tín nhiệm',
+        reply: `${prefix} Hệ thống áp dụng 4 quy tắc cốt lõi: (1) Giữ chỗ tạm thời 5 phút bảo vệ bằng khóa phiên bản Optimistic Locking chống 2 người đặt đè cùng lúc; (2) Chỉ mở cổng quét QR Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (+2 điểm tín nhiệm khi quét đúng hạn); (3) Cronjob tự động thu hồi phòng và trừ -10 điểm nếu quá 15 phút sau giờ bắt đầu mà chưa Check-in; (4) Điểm cá nhân của bạn đang là ${
           myTrustProfile?.trustScore || 100
-        }/100 điểm. Quy tắc hiện hành: Check-in QR đúng hạn được cộng +2 điểm; quá 15 phút không Check-in bị Cronjob tự thu hồi phòng và trừ -10 điểm (dưới 60 điểm sẽ bị khóa đặt lịch định kỳ).`,
+        }/100 (trung bình hệ thống: ${avgTrustScore}/100).`,
+      };
+    }
+
+    // 9. Câu hỏi về Lịch cá nhân của người đang hỏi ("lịch của tôi", "tôi đặt phòng nào")
+    if (
+      qLower.includes('của tôi') ||
+      qLower.includes('tôi đã đặt') ||
+      qLower.includes('vé của mình')
+    ) {
+      if (myBookings.length === 0) {
+        return {
+          title: 'Lịch Đặt phòng Cá nhân',
+          reply: `${prefix} Hiện tại tài khoản @${sessionInfo.username} chưa có lịch đặt phòng nào. Bạn có thể chuyển sang mục "Đặt lịch Phòng họp" để chọn phòng nhé!`,
+        };
+      }
+      return {
+        title: `Lịch Đặt phòng của @${sessionInfo.username} (${myBookings.length} vé)`,
+        reply: `${prefix} Bạn đang có ${myBookings.length} lịch đặt: ${myBookings
+          .map(
+            (b) =>
+              `Vé ${b.bookingId} tại vị trí ${b.nodeId} (${b.bookingDateIso || 'Hôm nay'}, ${ b.startTimeIso }-${b.endTimeIso}, Trạng thái: ${
+                b.bookingStatus === 'CHECKED_IN'
+                  ? 'Đã quét QR'
+                  : b.approvalStatus === 'PENDING_APPROVAL'
+                  ? 'Chờ duyệt'
+                  : 'Đã duyệt'
+              })`
+          )
+          .join('; ')}.`,
+      };
+    }
+
+    // 10. Chào hỏi / Hỏi vai trò của AI
+    if (
+      qLower.includes('xin chào') ||
+      qLower.includes('hello') ||
+      qLower.includes('bạn là ai') ||
+      qLower.includes('vai trò')
+    ) {
+      return {
+        title: `Chào ${sessionInfo.fullName}!`,
+        reply: `${prefix} Tôi đang hoạt động với chỉ thị nền: "${customSystemPrompt}". Tôi nắm rõ trạng thái thời gian thực của toàn bộ 25 không gian họp trên 5 tầng, lịch đặt, thiết bị và điểm tín nhiệm. Bạn cứ hỏi tự nhiên về bất kỳ tầng nào, số người họp, hoặc mã phòng cụ thể nhé!`,
       };
     }
 
     return {
-      title: 'Phân tích AI SpotMatrix',
-      reply: `Theo dữ liệu thời gian thực: Mật độ lấp đầy hiện đạt ${occupancyRate}% (trung bình 30 ngày là 52%), còn trống ${availableCount} phòng. Phòng tối ưu nhất hiện tại là ${
+      title: `Phân tích Linh hoạt theo Vai trò (${activePersona.shortLabel})`,
+      reply: `${prefix} Về câu hỏi "${q}" của bạn: Hiện tòa nhà 5 tầng đang đạt mật độ ${occupancyRate}% (còn trống ${availableCount}/${totalNodes} không gian, điểm tín nhiệm TB đạt ${avgTrustScore}/100). Phòng có điểm tối ưu cao nhất đang sẵn sàng là ${
         topRecommendedNode?.nodeCode || 'M1-01'
-      }. Bạn có muốn tôi đọc tóm tắt chi tiết toàn bộ hệ thống không?`,
+      } (Tầng ${topRecommendedNode?.floorLevel || 1}, sức chứa ${
+        topRecommendedNode?.capacityCount || 2
+      } người). Bạn có thể cho tôi biết số lượng người dự họp hoặc tầng bạn muốn ngồi để tôi lọc chính xác hơn nhé!`,
     };
   };
 
-  const handleSendQuestionToAi = (customPrompt?: string) => {
+  const handleSendQuestionToAi = async (customPrompt?: string) => {
     const textToSend = (customPrompt ?? chatInputText).trim();
-    if (!textToSend) return;
+    if (!textToSend || isAiThinking) return;
 
     const userMsg: AiChatMessageItem = {
       messageId: `MSG-USR-${Date.now()}`,
@@ -461,23 +714,59 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       }),
     };
 
-    const aiResponse = generateSmartAiAnswer(textToSend);
-    const aiMsgId = `MSG-AI-${Date.now() + 1}`;
+    setChatMessages((prev) => [...prev, userMsg]);
+    if (!customPrompt) {
+      setChatInputText('');
+    }
+
+    setIsAiThinking(true);
+    let finalTitle = `Phản hồi từ ${activePersona.shortLabel}`;
+    let finalReplyText = '';
+
+    try {
+      const response = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          promptText: textToSend,
+          personaLabel: activePersona.badgeText,
+          systemPersonaPrompt: customSystemPrompt,
+          workspaceContextText: buildLiveWorkspaceContextSnapshot(),
+          conversationHistory: chatMessages.slice(-4),
+        }),
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        if (json?.replyText) {
+          finalTitle = `${activePersona.shortLabel} (${json.provider || 'Gemini AI'})`;
+          finalReplyText = json.replyText;
+        }
+      }
+    } catch {
+      // Tự động dùng bộ suy luận đa ý định nội bộ
+    }
+
+    if (!finalReplyText) {
+      const localResult = generateFlexibleLocalAiAnswer(textToSend);
+      finalTitle = localResult.title;
+      finalReplyText = localResult.reply;
+    }
+
     const aiMsg: AiChatMessageItem = {
-      messageId: aiMsgId,
+      messageId: `MSG-AI-${Date.now() + 1}`,
       sender: 'AI',
-      title: aiResponse.title,
-      contentText: aiResponse.reply,
+      title: finalTitle,
+      personaBadge: activePersona.badgeText,
+      contentText: finalReplyText,
       timestampText: new Date().toLocaleTimeString('vi-VN', {
         hour: '2-digit',
         minute: '2-digit',
       }),
     };
 
-    setChatMessages((prev) => [...prev, userMsg, aiMsg]);
-    if (!customPrompt) {
-      setChatInputText('');
-    }
+    setChatMessages((prev) => [...prev, aiMsg]);
+    setIsAiThinking(false);
   };
 
   const hourlyComparisonBars = [
@@ -513,7 +802,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 Bảng Điều khiển Đa tầng (Dashboard) & Phân tích AI
               </h1>
               <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-indigo-600 text-white">
-                Chế độ: {selectedRoleView}
+                Quyền: {selectedRoleView}
               </span>
             </div>
             <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -524,32 +813,36 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div
-            className={`p-1 rounded-xl border flex items-center gap-1 text-xs font-bold ${
-              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
-            }`}
-          >
-            {(['EMPLOYEE', 'MANAGER', 'SYS_ADMIN'] as UserRoleType[]).map((roleOption) => (
-              <button
-                key={roleOption}
-                type="button"
-                onClick={() => setSelectedRoleView(roleOption)}
-                className={`px-2.5 py-1.5 rounded-lg transition-all text-[11px] font-extrabold ${
-                  selectedRoleView === roleOption
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : isDark
-                    ? 'text-slate-400 hover:text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {roleOption === 'EMPLOYEE'
-                  ? 'Nhân viên'
-                  : roleOption === 'MANAGER'
-                  ? 'Quản lý'
-                  : 'Admin'}
-              </button>
-            ))}
-          </div>
+          {/* Bảo mật RBAC: Chỉ duy nhất SYS_ADMIN mới được phép chuyển đổi xem trước cả 3 góc nhìn Role */}
+          {sessionInfo.role === 'SYS_ADMIN' && (
+            <div
+              className={`p-1 rounded-xl border flex items-center gap-1 text-xs font-bold ${
+                isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+              }`}
+              title="Quyền SYS_ADMIN: Chuyển đổi xem trước giao diện của 3 Role"
+            >
+              {(['EMPLOYEE', 'MANAGER', 'SYS_ADMIN'] as UserRoleType[]).map((roleOption) => (
+                <button
+                  key={roleOption}
+                  type="button"
+                  onClick={() => setSelectedRoleView(roleOption)}
+                  className={`px-2.5 py-1.5 rounded-lg transition-all text-[11px] font-extrabold ${
+                    selectedRoleView === roleOption
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : isDark
+                      ? 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {roleOption === 'EMPLOYEE'
+                    ? 'Nhân viên'
+                    : roleOption === 'MANAGER'
+                    ? 'Quản lý'
+                    : 'Admin'}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             type="button"
@@ -1178,9 +1471,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       </div>
 
-      {/* KHUNG DRAWER CHAT AI BÊN PHẢI + TỔNG HỢP DỮ LIỆU & ĐỌC GIỌNG NÓI TIẾNG VIỆT (VOICE TTS) */}
+      {/* KHUNG DRAWER CHAT AI BÊN PHẢI + THIẾT LẬP VAI TRÒ NỀN (SYSTEM PERSONA) + ĐỌC GIỌNG NÓI TTS */}
       {isAiChatOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[430px] shadow-2xl flex flex-col border-l transition-all bg-white dark:bg-slate-900 border-indigo-100 dark:border-slate-800">
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] shadow-2xl flex flex-col border-l transition-all bg-white dark:bg-slate-900 border-indigo-100 dark:border-slate-800">
+          {/* Header Khung Chat AI */}
           <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-indigo-600 text-white">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
@@ -1188,9 +1482,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-extrabold">Trợ lý AI SpotMatrix Co-Pilot</h3>
-                <p className="text-[11px] text-indigo-100">
-                  Hỏi đáp trực tiếp • Tổng hợp & Đọc báo cáo giọng nói
-                </p>
+                <p className="text-[11px] text-indigo-100">{activePersona.badgeText}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1199,12 +1491,19 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                   type="button"
                   onClick={handleStopSpeaking}
                   className="px-2.5 py-1 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold flex items-center gap-1 animate-pulse"
-                  title="Dừng đọc giọng nói"
                 >
                   <VolumeX className="w-3.5 h-3.5" />
                   Dừng đọc
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => setIsPersonaConfigExpanded((prev) => !prev)}
+                className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition"
+                title="Thiết lập Vai trò Nền (System Persona) cho AI"
+              >
+                <Settings2 className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1218,9 +1517,71 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </div>
           </div>
 
+          {/* BẢNG THIẾT LẬP VAI TRÒ NỀN TRƯỚC CHO AI (SYSTEM PERSONA PRESETS & CUSTOM INSTRUCTION) */}
+          <div
+            className={`px-3.5 py-2.5 border-b space-y-2 ${
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">
+                Thiết lập Vai trò Nền cho AI (System Persona):
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPersonaConfigExpanded((prev) => !prev)}
+                className="text-[10px] font-bold underline text-slate-400 hover:text-indigo-500"
+              >
+                {isPersonaConfigExpanded ? 'Thu gọn chỉ thị nền' : 'Sửa chỉ thị nền (Prompt)'}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {(Object.keys(AI_PERSONA_PRESETS) as AiPersonaRoleKey[]).map((pKey) => {
+                const item = AI_PERSONA_PRESETS[pKey];
+                const isSelected = selectedPersonaKey === pKey;
+                return (
+                  <button
+                    key={pKey}
+                    type="button"
+                    onClick={() => handleSelectPersonaPreset(pKey)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border text-left truncate transition ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : isDark
+                        ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300'
+                    }`}
+                  >
+                    {item.shortLabel}
+                  </button>
+                );
+              })}
+            </div>
+
+            {isPersonaConfigExpanded && (
+              <div className="pt-1">
+                <label className="block text-[10px] font-bold text-slate-400 mb-1">
+                  Chỉ thị Vai trò Nền tùy chỉnh (System Instruction gửi kèm mỗi câu hỏi):
+                </label>
+                <textarea
+                  rows={2}
+                  value={customSystemPrompt}
+                  onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                  className={`w-full px-2.5 py-1.5 rounded-xl border text-[11px] font-medium outline-none ${
+                    isDark
+                      ? 'bg-slate-900 border-slate-700 text-slate-200'
+                      : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Thanh Công cụ Tổng hợp & Đọc Tóm tắt 1-Click */}
           <div
             className={`p-3 border-b flex flex-wrap items-center justify-between gap-2 ${
-              isDark ? 'bg-slate-950 border-slate-800' : 'bg-indigo-50/60 border-indigo-100'
+              isDark ? 'bg-slate-900 border-slate-800' : 'bg-indigo-50/50 border-indigo-100'
             }`}
           >
             <button
@@ -1236,26 +1597,28 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               onClick={() => handleSynthesizeAndSpeakSummary(false)}
               className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center gap-1 transition ${
                 isDark
-                  ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'
+                  ? 'bg-slate-950 border-slate-700 text-slate-200 hover:bg-slate-800'
                   : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'
               }`}
-              title="Chỉ tổng hợp văn bản vào khung chat"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Tóm tắt chữ
             </button>
           </div>
 
+          {/* Gợi ý câu hỏi linh hoạt */}
           <div
             className={`px-3 py-2 border-b flex items-center gap-1.5 overflow-x-auto ${
-              isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200/70'
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/70'
             }`}
           >
             {[
-              'Phòng nào đang trống tốt nhất?',
-              'Tình trạng thiết bị 5 tầng?',
-              'Có đơn nào chờ duyệt không?',
-              'Điểm tín nhiệm & kỷ luật 15p?',
+              'Tìm phòng họp cho 8 người',
+              'Tầng 2 còn phòng nào trống?',
+              'Phòng M1-03 thiết bị sao rồi?',
+              'Họp 20 người thì đặt ở đâu?',
+              'Lịch đặt của tôi thế nào?',
+              'Quy định Check-in & Thu hồi 15p?',
             ].map((chip) => (
               <button
                 key={chip}
@@ -1263,7 +1626,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 onClick={() => handleSendQuestionToAi(chip)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 border transition ${
                   isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-indigo-500'
+                    ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500'
                     : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400'
                 }`}
               >
@@ -1272,6 +1635,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             ))}
           </div>
 
+          {/* Danh sách tin nhắn Chat AI */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
             {chatMessages.map((msg) => {
               const isAi = msg.sender === 'AI';
@@ -1297,13 +1661,13 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                     {isAi && msg.title && (
                       <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-slate-200/60 dark:border-slate-800">
                         <span className="font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          {msg.title}
+                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{msg.title}</span>
                         </span>
                         <button
                           type="button"
                           onClick={() => handleSpeakTextAloud(msg.contentText, msg.messageId)}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 transition ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 shrink-0 transition ${
                             isThisSpeaking
                               ? 'bg-rose-500 text-white'
                               : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/25'
@@ -1325,19 +1689,28 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                     )}
                     <p>{msg.contentText}</p>
                     <div
-                      className={`text-[10px] mt-1.5 ${
-                        isAi ? 'text-slate-400' : 'text-indigo-200 text-right'
+                      className={`text-[10px] mt-1.5 flex items-center justify-between ${
+                        isAi ? 'text-slate-400' : 'text-indigo-200 justify-end'
                       }`}
                     >
-                      {msg.timestampText}
+                      {isAi && msg.personaBadge && (
+                        <span className="italic opacity-80">{msg.personaBadge}</span>
+                      )}
+                      <span>{msg.timestampText}</span>
                     </div>
                   </div>
                 </div>
               );
             })}
+            {isAiThinking && (
+              <div className="text-xs text-indigo-500 font-semibold animate-pulse px-2">
+                AI ({activePersona.shortLabel}) đang phân tích dữ liệu 5 tầng...
+              </div>
+            )}
             <div ref={chatEndRef} />
           </div>
 
+          {/* Ô nhập câu hỏi trực tiếp cho AI */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1351,7 +1724,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               type="text"
               value={chatInputText}
               onChange={(e) => setChatInputText(e.target.value)}
-              placeholder="Hỏi AI về phòng trống, thiết bị, tín nhiệm..."
+              placeholder="Hỏi theo số người (VD: họp 8 người), tầng, mã phòng..."
               className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-medium outline-none ${
                 isDark
                   ? 'bg-slate-900 border-slate-800 text-white'
@@ -1360,6 +1733,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             />
             <button
               type="submit"
+              disabled={isAiThinking}
               className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
               title="Gửi câu hỏi cho AI"
             >

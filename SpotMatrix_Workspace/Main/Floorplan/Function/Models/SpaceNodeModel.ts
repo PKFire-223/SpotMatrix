@@ -3,42 +3,37 @@ import { WorkspaceNodeItem } from '../../../../Shared/Types/GlobalSystemTypes';
 
 const spaceNodeSchema = new Schema<WorkspaceNodeItem>(
   {
-    nodeId: { type: String, required: true, unique: true, index: true },
-    nodeCode: { type: String, required: true, trim: true },
-    nodeLabel: { type: String, required: true, trim: true },
+    nodeId: { type: String, required: true, unique: true },
+    nodeCode: { type: String, required: true },
+    nodeLabel: { type: String, required: true },
     zoneType: {
       type: String,
       enum: ['DESK_POD', 'MEETING_ROOM', 'FOCUS_BOOTH', 'COLLAB_HUB'],
       required: true,
-      index: true,
     },
-    floorLevel: { type: Number, default: 1, index: true },
+    floorLevel: { type: Number, default: 1 },
     position2D: {
       posX: { type: Number, required: true },
       posY: { type: Number, required: true },
     },
     position3D: {
-      coordX: { type: Number, default: 0 },
-      coordY: { type: Number, default: 0.4 },
-      coordZ: { type: Number, default: 0 },
+      coordX: { type: Number, required: true },
+      coordY: { type: Number, required: true },
+      coordZ: { type: Number, required: true },
     },
     capacityCount: { type: Number, default: 1 },
     status: {
       type: String,
-      enum: ['AVAILABLE', 'HOLDING', 'OCCUPIED', 'RESERVED', 'MAINTENANCE'],
+      enum: ['AVAILABLE', 'OCCUPIED', 'RESERVED', 'HOLDING', 'MAINTENANCE'],
       default: 'AVAILABLE',
-      index: true,
     },
     amenitiesList: [{ type: String }],
     aiScore: { type: Number, default: 90 },
     lockVersion: { type: Number, default: 1 },
   },
-  {
-    timestamps: true,
-    collection: 'spotmatrix_space_nodes',
-  }
+  { timestamps: true }
 );
 
 export const SpaceNodeModel =
-  mongoose.models.SpotMatrixSpaceNode ||
-  mongoose.model<WorkspaceNodeItem>('SpotMatrixSpaceNode', spaceNodeSchema);
+  mongoose.models.SpaceNode ||
+  mongoose.model<WorkspaceNodeItem>('SpaceNode', spaceNodeSchema);

@@ -58,14 +58,21 @@ export async function handleSynthesizeDashboardAiReport(
   }
 }
 
-// Kết nối trực tiếp tới Google Gemini API (kèm dữ liệu thực tế SpotMatrix) + Tự động Fallback sang AI Nội bộ
+// Kết nối Google Gemini API kèm Thiết lập Vai trò Nền (System Persona) & Lịch sử Hội thoại
 export async function handleAskGeminiCoPilot(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const { promptText, workspaceContextText } = req.body || {};
+    const {
+      promptText,
+      systemPersonaPrompt,
+      personaLabel,
+      workspaceContextText,
+      conversationHistory,
+    } = req.body || {};
+
     const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim();
     const geminiModel = (process.env.GEMINI_MODEL_NAME || 'gemini-2.5-flash').trim();
     const geminiBaseUrl = (
@@ -76,9 +83,9 @@ export async function handleAskGeminiCoPilot(
     if (!geminiApiKey || geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
       res.json({
         success: true,
-        provider: 'INTERNAL_HEURISTIC_AI',
+        provider: 'INTERNAL_PERSONA_AI',
         replyText: null,
-        message: 'Chưa cấu hình GEMINI_API_KEY, sử dụng AI Nội bộ SpotMatrix.',
+        message: 'Sử dụng Động cơ Suy luận Đa Vai trò Nội bộ SpotMatrix.',
       });
       return;
     }
@@ -87,10 +94,33 @@ export async function handleAskGeminiCoPilot(
       geminiApiKey
     )}`;
 
-    const systemInstruction = `Bạn là Trợ lý AI Co-Pilot chuyên gia của hệ thống Quản lý Không gian & Đặt lịch Phòng họp 3D/2D SpotMatrix (5 tầng: Tầng 1-4 là các phòng họp chính thức, Tầng 5 là Hội trường Đấu trường La Mã H-01).
-Hãy trả lời ngắn gọn, súc tích, chuyên nghiệp bằng tiếng Việt (khoảng 2-4 câu để thuận tiện đọc bằng giọng nói Text-to-Speech).
-Dưới đây là dữ liệu thời gian thực của hệ thống:
-${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}`;
+    const historyText = Array.isArray(conversationHistory)
+      ? conversationHistory
+          .slice(-5)
+          .map(
+            (m: { sender?: string; contentText?: string }) =>
+              `${m.sender === 'USER' ? 'Người dùng' : 'AI'}: ${m.contentText || ''}`
+          )
+          .join('\n')
+      : '';
+
+    const fullSystemInstruction = `[VAI TRÒ NỀN ĐƯỢC THIẾT LẬP: ${
+      personaLabel || 'Kiến trúc sư & Chuyên gia Điều phối SpotMatrix'
+    }]
+${
+  systemPersonaPrompt ||
+  'Bạn là Trợ lý AI Co-Pilot thông minh của hệ thống Quản lý Không gian & Đặt lịch Phòng họp 3D/2D SpotMatrix.'
+}
+
+[QUY TẮC TRẢ LỜI]
+- Trả lời linh hoạt, tự nhiên, đúng trọng tâm câu hỏi của người dùng bằng tiếng Việt chuẩn xác.
+- Dựa trực tiếp vào số liệu thực tế của tòa nhà 5 tầng bên dưới (nếu người dùng hỏi về phòng họp, số người, tầng, thiết bị, điểm tín nhiệm hoặc quy định).
+- Giữ độ dài vừa phải (2-5 câu) để vừa dễ đọc vừa thuận tiện phát giọng nói Text-to-Speech.
+
+[DỮ LIỆU THỜI GIAN THỰC CỦA TÒA NHÀ 5 TẦNG SPOTMATRIX]
+${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}
+
+${historyText ? `[LỊCH SỬ HỘI THOẠI GẦN ĐÂY]\n${historyText}` : ''}`;
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -101,16 +131,16 @@ ${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}`;
             role: 'user',
             parts: [
               {
-                text: `${systemInstruction}\n\nCâu hỏi của người dùng: ${
-                  promptText || 'Hãy tóm tắt tình hình hệ thống hiện tại.'
+                text: `${fullSystemInstruction}\n\n[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]: ${
+                  promptText || 'Hãy tổng hợp tình hình hệ thống hiện tại.'
                 }`,
               },
             ],
           },
         ],
         generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 350,
+          temperature: 0.55,
+          maxOutputTokens: 450,
         },
       }),
     });
@@ -118,7 +148,7 @@ ${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}`;
     if (!response.ok) {
       res.json({
         success: true,
-        provider: 'INTERNAL_HEURISTIC_FALLBACK',
+        provider: 'INTERNAL_PERSONA_FALLBACK',
         replyText: null,
       });
       return;
@@ -135,7 +165,9 @@ ${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}`;
 
     res.json({
       success: true,
-      provider: replyText ? `GOOGLE_${geminiModel.toUpperCase()}` : 'INTERNAL_HEURISTIC_FALLBACK',
+      provider: replyText
+        ? `GOOGLE_${geminiModel.toUpperCase()}`
+        : 'INTERNAL_PERSONA_FALLBACK',
       replyText,
     });
   } catch (err) {

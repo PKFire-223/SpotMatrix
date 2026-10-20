@@ -16,6 +16,14 @@ export function createValidationException(detailMessage: string): AppExceptionMo
   return new AppExceptionModel(detailMessage, 400, 'VALIDATION_FAILED');
 }
 
+export function createUnauthorizedException(detailMessage: string): AppExceptionModel {
+  return new AppExceptionModel(detailMessage, 401, 'AUTH_UNAUTHORIZED');
+}
+
+export function createForbiddenException(detailMessage: string): AppExceptionModel {
+  return new AppExceptionModel(detailMessage, 403, 'AUTH_FORBIDDEN_ROLE');
+}
+
 export function createConflictException(detailMessage: string): AppExceptionModel {
   return new AppExceptionModel(detailMessage, 409, 'BOOKING_CONFLICT');
 }
