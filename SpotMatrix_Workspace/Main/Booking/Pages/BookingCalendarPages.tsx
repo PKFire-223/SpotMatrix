@@ -17,6 +17,7 @@ import {
   Zap,
   RotateCcw,
   ShieldAlert,
+  Award,
 } from 'lucide-react';
 import {
   AuditEventCategoryType,
@@ -88,20 +89,8 @@ interface RaceSimulationBannerState {
 }
 
 const AMPHITHEATER_SEATS = [
-  'H01-A1',
-  'H01-A2',
-  'H01-A3',
-  'H01-A4',
-  'H01-A5',
-  'H01-A6',
-  'H01-B1',
-  'H01-B2',
-  'H01-B3',
-  'H01-B4',
-  'H01-B5',
-  'H01-B6',
-  'H01-B7',
-  'H01-B8',
+  'H01-A1', 'H01-A2', 'H01-A3', 'H01-A4', 'H01-A5', 'H01-A6',
+  'H01-B1', 'H01-B2', 'H01-B3', 'H01-B4', 'H01-B5', 'H01-B6', 'H01-B7', 'H01-B8',
 ];
 
 export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
@@ -123,11 +112,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     selectedNode?.nodeCode || workspaceNodes[0]?.nodeCode || 'M1-01'
   );
   const [selectedAmphitheaterSeat, setSelectedAmphitheaterSeat] = useState<string>('H01-A1');
-  const [selectedDate, setSelectedDate] = useState<string>(() =>
-    formatIsoDateString(new Date())
-  );
-  const [startTime, setStartTime] = useState<string>(preselectedSlot?.start || '08:00');
-  const [endTime, setEndTime] = useState<string>(preselectedSlot?.end || '10:00');
+  const [selectedDate, setSelectedDate] = useState<string>(() => formatIsoDateString(new Date()));
+  const [startTime, setStartTime] = useState<string>(preselectedSlot?.start || '09:00');
+  const [endTime, setEndTime] = useState<string>(preselectedSlot?.end || '11:00');
   const [purposeTitle, setPurposeTitle] = useState<string>(
     'Họp triển khai dự án & Review Kiến trúc Hệ thống'
   );
@@ -193,6 +180,31 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const currentTargetLockVersion = roomLockVersions[targetBookableCode] || 1;
   const activeHoldForTarget = activeHoldMap[targetBookableCode] || null;
 
+  // Kiểm tra va chạm lịch: Trùng phòng người khác + Trùng phòng chính mình + Trùng giờ ở phòng khác + Hạn mức tuần theo Role
+  const liveCollisionValidation = useMemo(() => {
+    return validateSingleAndRecurringCollision(
+      targetBookableCode,
+      selectedDate,
+      startTime,
+      endTime,
+      recurringOption,
+      bookingsList,
+      userEmail,
+      userRole
+    );
+  }, [
+    targetBookableCode,
+    selectedDate,
+    startTime,
+    endTime,
+    recurringOption,
+    bookingsList,
+    userEmail,
+    userRole,
+  ]);
+
+  const weeklyQuotaInfo = liveCollisionValidation.weeklyQuotaCheck;
+
   const handleReleaseHoldInternal = useCallback(
     (codeToRelease: string, reasonText: string) => {
       const holdItem = activeHoldMap[codeToRelease];
@@ -232,32 +244,35 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const timer = setInterval(() => {
       const currentMs = Date.now();
       setNowTickMs(currentMs);
-
       Object.values(activeHoldMap).forEach((holdItem) => {
         if (holdItem.expiresAtMs <= currentMs) {
           handleReleaseHoldInternal(holdItem.nodeCode, 'TIMEOUT_5_MINUTES_EXPIRED');
         }
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, [activeHoldMap, handleReleaseHoldInternal]);
 
-  // 1. Bắt đầu Giữ chỗ 5 phút (Hold 5p) kèm Optimistic Locking
   const handleStartFiveMinuteHold = async () => {
     if (!currentRoomNode) return;
     setBookingFormError(null);
     setBookingSuccessBanner(null);
 
+    if (liveCollisionValidation.hasCollision) {
+      setBookingFormError(
+        `Không thể giữ chỗ 5 phút: ${
+          liveCollisionValidation.firstConflictMessage ||
+          'Khung giờ bạn chọn đang bị trùng lịch hoặc vượt hạn mức tuần.'
+        }`
+      );
+      return;
+    }
+
     const expectedVersion = currentTargetLockVersion;
     const nextVersion = expectedVersion + 1;
     const expiresAtMs = Date.now() + 5 * 60 * 1000;
 
-    setRoomLockVersions((prev) => ({
-      ...prev,
-      [targetBookableCode]: nextVersion,
-    }));
-
+    setRoomLockVersions((prev) => ({ ...prev, [targetBookableCode]: nextVersion }));
     setActiveHoldMap((prev) => ({
       ...prev,
       [targetBookableCode]: {
@@ -299,7 +314,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }
   };
 
-  // 2. Mô phỏng 2 người bấm đặt cùng 1 vị trí tại cùng 1 thời điểm (Test Optimistic Locking)
   const handleSimulateOptimisticLockRace = async () => {
     if (!currentRoomNode) return;
     setBookingFormError(null);
@@ -309,11 +323,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const challengerEmail = 'challenger.concurrent@spotmatrix.vn';
     const expiresAtMs = Date.now() + 5 * 60 * 1000;
 
-    setRoomLockVersions((prev) => ({
-      ...prev,
-      [targetBookableCode]: winnerVer,
-    }));
-
+    setRoomLockVersions((prev) => ({ ...prev, [targetBookableCode]: winnerVer }));
     setActiveHoldMap((prev) => ({
       ...prev,
       [targetBookableCode]: {
@@ -326,7 +336,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }));
 
     onUpdateNodeStatus?.(currentRoomNode.nodeId, 'HOLDING');
-
     onRecordConcurrencyAudit?.(
       'OPTIMISTIC_LOCK_WIN',
       userEmail,
@@ -365,99 +374,66 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
         }),
       });
     } catch {
-      // Giữ kết quả mô phỏng trên giao diện
+      // Giữ kết quả mô phỏng
     }
   };
 
-  // 3. Kiểm tra va chạm lịch Đơn lẻ (Single) & Định kỳ (Recurring)
-  const liveCollisionValidation = useMemo(() => {
-    return validateSingleAndRecurringCollision(
-      targetBookableCode,
-      selectedDate,
-      startTime,
-      endTime,
-      recurringOption,
-      bookingsList
-    );
-  }, [
-    targetBookableCode,
-    selectedDate,
-    startTime,
-    endTime,
-    recurringOption,
-    bookingsList,
-  ]);
+  const validateCheckinTimeWindow = useCallback(
+    (booking: BookingPayloadItem) => {
+      const now = new Date(nowTickMs);
+      const bookingDateStr = booking.bookingDateIso || formatIsoDateString(now);
+      const { startDateObj, endDateObj, earliestCheckinTime, noShowDeadlineTime } =
+        buildNormalizedMeetingDateRange(bookingDateStr, booking.startTimeIso, booking.endTimeIso);
 
-  const validateCheckinTimeWindow = (
-    booking: BookingPayloadItem
-  ): {
-    allowed: boolean;
-    reason: string;
-    windowLabel: string;
-    noShowDeadlineLabel: string;
-    secondsUntilNoShowRevoke: number;
-  } => {
-    const now = new Date(nowTickMs);
-    const bookingDateStr = booking.bookingDateIso || formatIsoDateString(now);
-    const {
-      startDateObj,
-      endDateObj,
-      earliestCheckinTime,
-      noShowDeadlineTime,
-    } = buildNormalizedMeetingDateRange(
-      bookingDateStr,
-      booking.startTimeIso,
-      booking.endTimeIso
-    );
+      const earliestStr = `${String(earliestCheckinTime.getHours()).padStart(2, '0')}:${String(
+        earliestCheckinTime.getMinutes()
+      ).padStart(2, '0')}`;
+      const startStr = `${String(startDateObj.getHours()).padStart(2, '0')}:${String(
+        startDateObj.getMinutes()
+      ).padStart(2, '0')}`;
+      const endStr = `${String(endDateObj.getHours()).padStart(2, '0')}:${String(
+        endDateObj.getMinutes()
+      ).padStart(2, '0')}`;
+      const deadlineStr = `${String(noShowDeadlineTime.getHours()).padStart(2, '0')}:${String(
+        noShowDeadlineTime.getMinutes()
+      ).padStart(2, '0')}`;
 
-    const earliestStr = `${String(earliestCheckinTime.getHours()).padStart(2, '0')}:${String(
-      earliestCheckinTime.getMinutes()
-    ).padStart(2, '0')}`;
-    const startStr = `${String(startDateObj.getHours()).padStart(2, '0')}:${String(
-      startDateObj.getMinutes()
-    ).padStart(2, '0')}`;
-    const endStr = `${String(endDateObj.getHours()).padStart(2, '0')}:${String(
-      endDateObj.getMinutes()
-    ).padStart(2, '0')}`;
-    const deadlineStr = `${String(noShowDeadlineTime.getHours()).padStart(2, '0')}:${String(
-      noShowDeadlineTime.getMinutes()
-    ).padStart(2, '0')}`;
+      const windowLabel = `${earliestStr} – ${endStr}`;
+      const secondsUntilNoShowRevoke = Math.floor(
+        (noShowDeadlineTime.getTime() - now.getTime()) / 1000
+      );
 
-    const windowLabel = `${earliestStr} – ${endStr}`;
-    const secondsUntilNoShowRevoke = Math.floor(
-      (noShowDeadlineTime.getTime() - now.getTime()) / 1000
-    );
+      if (now < earliestCheckinTime) {
+        return {
+          allowed: false,
+          reason: `Chưa đến giờ mở Check-in! Quy định chỉ nhận Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (Mở cổng từ ${earliestStr} đến ${startStr}).`,
+          windowLabel,
+          noShowDeadlineLabel: deadlineStr,
+          secondsUntilNoShowRevoke,
+        };
+      }
 
-    if (now < earliestCheckinTime) {
+      if (now > endDateObj) {
+        return {
+          allowed: false,
+          reason: `Ca họp (${booking.startTimeIso} - ${booking.endTimeIso}) đã kết thúc, không thể Check-in.`,
+          windowLabel,
+          noShowDeadlineLabel: deadlineStr,
+          secondsUntilNoShowRevoke,
+        };
+      }
+
       return {
-        allowed: false,
-        reason: `Chưa đến giờ mở Check-in! Quy định chỉ nhận Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (Mở cổng từ ${earliestStr} đến ${startStr}).`,
+        allowed: true,
+        reason: `Đang trong khung giờ Check-in hợp lệ (${earliestStr} – ${endStr}).`,
         windowLabel,
         noShowDeadlineLabel: deadlineStr,
         secondsUntilNoShowRevoke,
       };
-    }
+    },
+    [nowTickMs]
+  );
 
-    if (now > endDateObj) {
-      return {
-        allowed: false,
-        reason: `Ca họp (${booking.startTimeIso} - ${booking.endTimeIso}) đã kết thúc, không thể Check-in.`,
-        windowLabel,
-        noShowDeadlineLabel: deadlineStr,
-        secondsUntilNoShowRevoke,
-      };
-    }
-
-    return {
-      allowed: true,
-      reason: `Đang trong khung giờ Check-in hợp lệ (${earliestStr} – ${endStr}).`,
-      windowLabel,
-      noShowDeadlineLabel: deadlineStr,
-      secondsUntilNoShowRevoke,
-    };
-  };
-
-  // 4. Thực thi Cronjob 15 phút tự thu hồi chỗ đối với vé quá hạn không Check-in
   const handleRunFifteenMinuteCronSweep = async (forceBookingId?: string) => {
     const targetBooking = forceBookingId
       ? bookingsList.find((b) => b.bookingId === forceBookingId)
@@ -485,10 +461,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }
 
     const nextVer = (roomLockVersions[targetBooking.nodeId] || 1) + 1;
-    setRoomLockVersions((prev) => ({
-      ...prev,
-      [targetBooking.nodeId]: nextVer,
-    }));
+    setRoomLockVersions((prev) => ({ ...prev, [targetBooking.nodeId]: nextVer }));
 
     if (onPenalizeNoShowBooking) {
       onPenalizeNoShowBooking(
@@ -594,7 +567,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       existingHold.expiresAtMs > Date.now()
     ) {
       setBookingFormError(
-        `[Optimistic Lock Blocked] Vị trí ${finalCode} đang được giữ chỗ 5 phút bởi ${existingHold.heldByEmail} (Lock v${existingHold.lockVersion}).`
+        `Không thể đặt phòng: Vị trí ${finalCode} đang được giữ chỗ 5 phút bởi ${existingHold.heldByEmail} (Lock v${existingHold.lockVersion}).`
       );
       return;
     }
@@ -602,16 +575,13 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     if (liveCollisionValidation.hasCollision) {
       setBookingFormError(
         liveCollisionValidation.firstConflictMessage ||
-          `Phát hiện va chạm lịch tại vị trí ${finalCode}. Vui lòng chọn khung giờ khác.`
+          `Phát hiện va chạm lịch hoặc vượt hạn mức tại vị trí ${finalCode}. Vui lòng chọn khung giờ/phòng khác.`
       );
       return;
     }
 
     const nextLockVer = currentTargetLockVersion + 1;
-    setRoomLockVersions((prev) => ({
-      ...prev,
-      [finalCode]: nextLockVer,
-    }));
+    setRoomLockVersions((prev) => ({ ...prev, [finalCode]: nextLockVer }));
 
     if (activeHoldMap[finalCode]) {
       setActiveHoldMap((prev) => {
@@ -647,15 +617,71 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   };
 
   const activeQrBooking = useMemo(() => {
-    return (
-      bookingsList.find((item) => item.bookingId === selectedBookingForQr) || bookingsList[0]
-    );
+    return bookingsList.find((item) => item.bookingId === selectedBookingForQr) || bookingsList[0];
   }, [bookingsList, selectedBookingForQr]);
 
   const activeBookingTimeValidation = useMemo(() => {
     if (!activeQrBooking) return null;
     return validateCheckinTimeWindow(activeQrBooking);
-  }, [activeQrBooking, nowTickMs]);
+  }, [activeQrBooking, validateCheckinTimeWindow]);
+
+  // Chặn quét mã QR nếu vé bị trùng phòng người khác hoặc người dùng đã Check-in ở một phòng khác cùng giờ
+  const validateQrCheckinConflict = useCallback(
+    (targetTicket: BookingPayloadItem): { hasQrConflict: boolean; conflictReason: string | null } => {
+      const ticketDate = targetTicket.bookingDateIso || formatIsoDateString(new Date());
+      const ticketRange = buildNormalizedMeetingDateRange(
+        ticketDate,
+        targetTicket.startTimeIso,
+        targetTicket.endTimeIso
+      );
+
+      for (const other of bookingsList) {
+        if (other.bookingId === targetTicket.bookingId) continue;
+        if (other.bookingStatus === 'CANCELLED' || other.approvalStatus === 'REJECTED') continue;
+
+        const otherDate = other.bookingDateIso || formatIsoDateString(new Date());
+        if (otherDate !== ticketDate) continue;
+
+        const otherRange = buildNormalizedMeetingDateRange(
+          otherDate,
+          other.startTimeIso,
+          other.endTimeIso
+        );
+        const isOverlap =
+          ticketRange.startDateObj < otherRange.endDateObj &&
+          ticketRange.endDateObj > otherRange.startDateObj;
+
+        if (!isOverlap) continue;
+
+        if (other.nodeId === targetTicket.nodeId) {
+          return {
+            hasQrConflict: true,
+            conflictReason: `Không thể quét mã QR Check-in: Vị trí ${targetTicket.nodeId} đang bị trùng lịch với vé ${other.bookingId} của @${
+              other.requesterUsername || other.userEmail
+            } (${other.startTimeIso} – ${other.endTimeIso}).`,
+          };
+        }
+
+        if (
+          other.userEmail.toLowerCase() === targetTicket.userEmail.toLowerCase() &&
+          other.nodeId !== targetTicket.nodeId
+        ) {
+          return {
+            hasQrConflict: true,
+            conflictReason: `Không thể quét mã QR Check-in: Tài khoản ${targetTicket.userEmail} đã đăng ký/Check-in tại một phòng khác (${other.nodeId} - Vé ${other.bookingId}, khung giờ ${other.startTimeIso} – ${other.endTimeIso}). Không thể Check-in 2 phòng cùng lúc!`,
+          };
+        }
+      }
+
+      return { hasQrConflict: false, conflictReason: null };
+    },
+    [bookingsList]
+  );
+
+  const activeQrConflictStatus = useMemo(() => {
+    if (!activeQrBooking) return { hasQrConflict: false, conflictReason: null };
+    return validateQrCheckinConflict(activeQrBooking);
+  }, [activeQrBooking, validateQrCheckinConflict]);
 
   const qrTargetCheckinUrl = useMemo(() => {
     if (!activeQrBooking) return `${window.location.origin}/qr-checkin`;
@@ -690,6 +716,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       return;
     }
 
+    const qrConflict = validateQrCheckinConflict(activeQrBooking);
+    if (qrConflict.hasQrConflict) {
+      setCheckinErrorAlert(
+        qrConflict.conflictReason || 'Vé đặt phòng này đang bị trùng lịch nên không thể quét mã QR!'
+      );
+      return;
+    }
+
     const timeCheck = validateCheckinTimeWindow(activeQrBooking);
     if (!timeCheck.allowed) {
       setCheckinErrorAlert(timeCheck.reason);
@@ -711,7 +745,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Header Banner */}
       <div
         className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -729,11 +762,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           </div>
           <div>
             <h1 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Giai đoạn 3 — Đặt chỗ Thời gian thực, Giữ chỗ 5 phút & Chống trùng lịch
+              Đặt chỗ Thời gian thực, Giữ chỗ 5 phút & Chống trùng lịch Đa chiều
             </h1>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Optimistic Locking (v{currentTargetLockVersion}) • Đếm ngược 5 phút giữ chỗ • Kiểm tra
-              va chạm Đơn lẻ & Định kỳ • Cronjob 15 phút tự thu hồi No-Show
+              Optimistic Locking (v{currentTargetLockVersion}) • Chống trùng phòng & chống đặt 2 phòng cùng giờ • Hạn mức tuần theo Role
             </p>
           </div>
         </div>
@@ -765,7 +797,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
         </div>
       </div>
 
-      {/* THANH CÔNG CỤ GIAI ĐOẠN 3: GIỮ CHỖ 5 PHÚT, OPTIMISTIC LOCKING & CRONJOB 15 PHÚT */}
       <div
         className={`p-5 rounded-3xl border space-y-4 ${
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -777,9 +808,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               <Lock className="w-3 h-3" />
               Optimistic Lock: v{currentTargetLockVersion}
             </span>
-            <span
-              className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}
-            >
+            <span className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               Điều khiển Giữ chỗ 5 phút (Hold 5p), Chống đặt trùng đồng thời & Cronjob 15 phút
             </span>
           </div>
@@ -788,8 +817,13 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             {!activeHoldForTarget ? (
               <button
                 type="button"
+                disabled={liveCollisionValidation.hasCollision}
                 onClick={handleStartFiveMinuteHold}
-                className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm flex items-center gap-1.5 transition"
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold text-white shadow-sm flex items-center gap-1.5 transition ${
+                  liveCollisionValidation.hasCollision
+                    ? 'bg-slate-400 cursor-not-allowed opacity-65'
+                    : 'bg-amber-500 hover:bg-amber-600'
+                }`}
               >
                 <Timer className="w-3.5 h-3.5" />
                 Giữ chỗ tạm 5 phút ({targetBookableCode})
@@ -808,9 +842,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleReleaseHoldInternal(targetBookableCode, 'USER_MANUAL_RELEASE')
-                  }
+                  onClick={() => handleReleaseHoldInternal(targetBookableCode, 'USER_MANUAL_RELEASE')}
                   className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 hover:bg-rose-500/25 transition"
                 >
                   Nhả giữ chỗ
@@ -858,10 +890,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               <div className="flex items-center gap-2 text-xs font-bold">
                 <Timer className="w-4 h-4 text-amber-600 animate-pulse" />
                 <span>
-                  Đang giữ chỗ tạm thời 5 phút cho vị trí{' '}
-                  <strong>{activeHoldForTarget.nodeCode}</strong> • Người giữ:{' '}
-                  <strong>{activeHoldForTarget.heldByEmail}</strong> (Lock v
-                  {activeHoldForTarget.lockVersion})
+                  Đang giữ chỗ tạm thời 5 phút cho vị trí <strong>{activeHoldForTarget.nodeCode}</strong> • Người giữ: <strong>{activeHoldForTarget.heldByEmail}</strong> (Lock v{activeHoldForTarget.lockVersion})
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-extrabold tracking-wider">
@@ -888,19 +917,16 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             <div className="space-y-1 text-xs">
               <div className="font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                 <Zap className="w-4 h-4" />
-                Kết quả Kiểm thử Optimistic Locking tại {raceSimResult.nodeCode} (Lúc{' '}
-                {raceSimResult.timestampText}):
+                Kết quả Kiểm thử Optimistic Locking tại {raceSimResult.nodeCode} (Lúc {raceSimResult.timestampText}):
               </div>
               <p>
-                • <strong>Request #1 ({raceSimResult.winnerEmail})</strong> gửi{' '}
-                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                • <strong>Request #1 ({raceSimResult.winnerEmail})</strong> gửi <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
                 <span className="text-teal-600 dark:text-teal-400 font-bold">
                   THÀNH CÔNG (Nâng khóa lên v{raceSimResult.finalVersion} & giữ chỗ 5 phút)
                 </span>
               </p>
               <p>
-                • <strong>Request #2 ({raceSimResult.challengerEmail})</strong> gửi cùng{' '}
-                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                • <strong>Request #2 ({raceSimResult.challengerEmail})</strong> gửi cùng <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
                 <span className="text-rose-600 dark:text-rose-400 font-bold">
                   BỊ CHẶN (HTTP 409 Conflict do DB đã ở v{raceSimResult.finalVersion})
                 </span>
@@ -909,7 +935,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             <button
               type="button"
               onClick={() => setRaceSimResult(null)}
-              className="text-xs font-bold underline opacity-75 hover:opacity-100 self-end sm:self-center shrink-0"
+              className="text-xs font-bold underline opacity-75 hover:opacity-100 shrink-0"
             >
               Đóng
             </button>
@@ -939,7 +965,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
         )}
       </div>
 
-      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-7 p-6 rounded-3xl border flex flex-col justify-between ${
@@ -947,6 +972,37 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           }`}
         >
           <form onSubmit={handleCreateBookingSubmit} className="space-y-5">
+            {weeklyQuotaInfo && (
+              <div
+                className={`p-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-3 text-xs ${
+                  weeklyQuotaInfo.isQuotaExceeded
+                    ? isDark
+                      ? 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                    : isDark
+                    ? 'bg-slate-950 border-slate-800 text-slate-200'
+                    : 'bg-indigo-50/60 border-indigo-100 text-slate-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <span>
+                    Hạn mức tuần của vai trò <strong>{userRole}</strong> ({weeklyQuotaInfo.weekRangeLabel}): Tối đa <strong>{weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần/tuần</strong>
+                    <span className="opacity-75"> (Nhân viên: 3 • Quản lý: 8 • Admin: 25)</span>
+                  </span>
+                </div>
+                <span
+                  className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] ${
+                    weeklyQuotaInfo.isQuotaExceeded
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-indigo-600 text-white'
+                  }`}
+                >
+                  Đã đặt: {weeklyQuotaInfo.usedBookingsInWeekCount}/{weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần (Còn {weeklyQuotaInfo.remainingBookingsInWeekCount} lượt)
+                </span>
+              </div>
+            )}
+
             {bookingFormError && (
               <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs font-semibold flex items-center gap-2.5">
                 <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
@@ -972,11 +1028,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   1. Chọn Phòng họp (Tầng 1–4) hoặc Hội trường (Tầng 5)
                 </label>
                 <select
@@ -986,9 +1038,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
                   {[1, 2, 3, 4, 5].map((floorNum) => (
@@ -1004,8 +1054,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         .filter((n) => n.floorLevel === floorNum)
                         .map((room) => (
                           <option key={room.nodeId} value={room.nodeCode}>
-                            [Tầng {room.floorLevel}] {room.nodeCode} — {room.nodeLabel} (
-                            {room.capacityCount} chỗ)
+                            [Tầng {room.floorLevel}] {room.nodeCode} — {room.nodeLabel} ({room.capacityCount} chỗ)
                           </option>
                         ))}
                     </optgroup>
@@ -1014,11 +1063,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               </div>
 
               <div>
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   2. Ngày bắt đầu họp
                 </label>
                 <input
@@ -1029,9 +1074,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
@@ -1039,11 +1082,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   Giờ bắt đầu (24h)
                 </label>
                 <input
@@ -1054,18 +1093,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
               <div>
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   Giờ kết thúc (24h)
                 </label>
                 <input
@@ -1076,29 +1109,19 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
               <div>
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   Chu kỳ đặt lịch (Đơn lẻ / Định kỳ)
                 </label>
                 <select
                   value={recurringOption}
-                  onChange={(e) =>
-                    setRecurringOption(e.target.value as RecurringOptionType)
-                  }
+                  onChange={(e) => setRecurringOption(e.target.value as RecurringOptionType)}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
                   <option value="NONE">Đặt đơn lẻ (1 lần duy nhất)</option>
@@ -1109,9 +1132,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               </div>
             </div>
 
-            {/* MA TRẬN KIỂM TRA VA CHẠM LỊCH ĐƠN LẺ & ĐỊNH KỲ */}
+            {/* MA TRẬN KIỂM TRA VA CHẠM LỊCH & GIẢI THÍCH LÝ DO TRÙNG */}
             <div
-              className={`p-4 rounded-2xl border ${
+              className={`p-4 rounded-2xl border space-y-3 ${
                 liveCollisionValidation.hasCollision
                   ? isDark
                     ? 'bg-rose-950/20 border-rose-500/40'
@@ -1121,16 +1144,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   : 'bg-teal-50/40 border-teal-200/80'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Repeat
                     className={`w-4 h-4 ${
                       liveCollisionValidation.hasCollision ? 'text-rose-500' : 'text-teal-600'
                     }`}
                   />
-                  <span
-                    className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}
-                  >
+                  <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     Kiểm tra Va chạm Lịch ({liveCollisionValidation.occurrenceChecks.length} buổi):
                   </span>
                 </div>
@@ -1142,8 +1163,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   }`}
                 >
                   {liveCollisionValidation.hasCollision
-                    ? 'PHÁT HIỆN TRÙNG LỊCH'
-                    : 'TẤT CẢ CÁC KỲ ĐỀU TRỐNG'}
+                    ? 'KHÔNG THỂ ĐẶT • PHÁT HIỆN TRÙNG LỊCH / VƯỢT HẠN MỨC'
+                    : 'HỢP LỆ • TẤT CẢ CÁC KỲ ĐỀU TRỐNG'}
                 </span>
               </div>
 
@@ -1166,7 +1187,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     </span>
                     {occ.hasConflict ? (
                       <span className="text-[10px] font-extrabold text-rose-500">
-                        (Trùng {occ.conflictBooking?.bookingId})
+                        {occ.conflictCategory === 'USER_BUSY_IN_OTHER_ROOM'
+                          ? `(Trùng phòng khác ${occ.conflictBooking?.nodeId} của bạn - ${occ.conflictBooking?.bookingId})`
+                          : occ.conflictCategory === 'ROOM_ALREADY_BOOKED_BY_SELF'
+                          ? `(Chính bạn đã đặt vé ${occ.conflictBooking?.bookingId})`
+                          : `(Người khác đang dùng - ${occ.conflictBooking?.bookingId})`}
                       </span>
                     ) : (
                       <Check className="w-3.5 h-3.5 text-teal-600" />
@@ -1174,36 +1199,50 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   </div>
                 ))}
               </div>
+
+              {liveCollisionValidation.hasCollision &&
+                liveCollisionValidation.allConflictMessages.length > 0 && (
+                  <div
+                    className={`p-3 rounded-xl border text-xs space-y-1.5 ${
+                      isDark
+                        ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                        : 'bg-white border-rose-200 text-rose-700'
+                    }`}
+                  >
+                    <div className="font-extrabold flex items-center gap-1.5 text-rose-600 dark:text-rose-300">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>Lý do không thể đặt lịch cho khung giờ này:</span>
+                    </div>
+                    {liveCollisionValidation.allConflictMessages.map((msg, idx) => (
+                      <p key={idx} className="pl-5 leading-relaxed font-medium">
+                        • {msg}
+                      </p>
+                    ))}
+                  </div>
+                )}
             </div>
 
-            {/* BẢN XEM TRƯỚC BỐ CỤC PHÒNG */}
             <div
               className={`p-5 rounded-2xl border ${
-                isDark
-                  ? 'bg-slate-950/90 border-slate-800'
-                  : 'bg-[#F8FAFC] border-indigo-100'
+                isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-[#F8FAFC] border-indigo-100'
               }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-indigo-600" />
-                  <span
-                    className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}
-                  >
+                  <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
                     Xem trước Bố cục Phòng: {currentRoomNode?.nodeLabel}
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-slate-500">
-                  Tầng {currentRoomNode?.floorLevel} • Sức chứa: {currentRoomNode?.capacityCount}{' '}
-                  người
+                  Tầng {currentRoomNode?.floorLevel} • Sức chứa: {currentRoomNode?.capacityCount} người
                 </span>
               </div>
 
               {isAmphitheaterSelected ? (
                 <div className="space-y-3">
                   <p className="text-[11px] text-amber-600 font-semibold">
-                    Hội trường Đấu trường La Mã (Tầng 5): Chọn trước ghế ngồi quanh Bục Diễn Giả
-                    trung tâm:
+                    Hội trường Đấu trường La Mã (Tầng 5): Chọn trước ghế ngồi quanh Bục Diễn Giả trung tâm:
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {AMPHITHEATER_SEATS.map((seatCode) => {
@@ -1230,9 +1269,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                           }`}
                         >
                           <span>{seatCode}</span>
-                          {isTaken && (
-                            <span className="text-[9px] uppercase opacity-80">(Đã đặt)</span>
-                          )}
+                          {isTaken && <span className="text-[9px] uppercase opacity-80">(Đã đặt)</span>}
                         </button>
                       );
                     })}
@@ -1247,54 +1284,27 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         : 'bg-white border-indigo-200 shadow-inner'
                     }`}
                   >
-                    {currentRoomNode?.zoneType === 'COLLAB_HUB' ? (
-                      <div className="relative w-24 h-24 rounded-full border-2 border-teal-500 bg-teal-500/10 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-teal-600">
-                          BÀN TRÒN {currentRoomNode.capacityCount} NGƯỜI
+                    <div className="space-y-2.5 flex flex-col items-center">
+                      <div className="flex gap-3">
+                        {Array.from({
+                          length: Math.ceil((currentRoomNode?.capacityCount || 4) / 2),
+                        }).map((_, idx) => (
+                          <span key={idx} className="w-5 h-2.5 rounded-t-md bg-indigo-600 inline-block" />
+                        ))}
+                      </div>
+                      <div className="w-48 h-12 rounded-xl bg-amber-600/20 border-2 border-amber-600 flex items-center justify-center">
+                        <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-400">
+                          BÀN HỌP {currentRoomNode?.nodeCode} ({currentRoomNode?.capacityCount} GHẾ)
                         </span>
-                        {Array.from({ length: currentRoomNode.capacityCount }).map((_, idx) => {
-                          const angle = (idx / currentRoomNode.capacityCount) * Math.PI * 2;
-                          const cx = Math.cos(angle) * 38;
-                          const cy = Math.sin(angle) * 38;
-                          return (
-                            <span
-                              key={idx}
-                              style={{ transform: `translate(${cx}px, ${cy}px)` }}
-                              className="absolute w-3.5 h-3.5 rounded-full bg-teal-600 border-2 border-white"
-                            />
-                          );
-                        })}
                       </div>
-                    ) : (
-                      <div className="space-y-2.5 flex flex-col items-center">
-                        <div className="flex gap-3">
-                          {Array.from({
-                            length: Math.ceil((currentRoomNode?.capacityCount || 4) / 2),
-                          }).map((_, idx) => (
-                            <span
-                              key={idx}
-                              className="w-5 h-2.5 rounded-t-md bg-indigo-600 inline-block"
-                            />
-                          ))}
-                        </div>
-                        <div className="w-48 h-12 rounded-xl bg-amber-600/20 border-2 border-amber-600 flex items-center justify-center">
-                          <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-400">
-                            BÀN HỌP {currentRoomNode?.nodeCode} ({currentRoomNode?.capacityCount}{' '}
-                            GHẾ)
-                          </span>
-                        </div>
-                        <div className="flex gap-3">
-                          {Array.from({
-                            length: Math.floor((currentRoomNode?.capacityCount || 4) / 2),
-                          }).map((_, idx) => (
-                            <span
-                              key={idx}
-                              className="w-5 h-2.5 rounded-b-md bg-indigo-600 inline-block"
-                            />
-                          ))}
-                        </div>
+                      <div className="flex gap-3">
+                        {Array.from({
+                          length: Math.floor((currentRoomNode?.capacityCount || 4) / 2),
+                        }).map((_, idx) => (
+                          <span key={idx} className="w-5 h-2.5 rounded-b-md bg-indigo-600 inline-block" />
+                        ))}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1302,11 +1312,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
               <div className="flex-1">
-                <label
-                  className={`block text-xs font-bold mb-1.5 ${
-                    isDark ? 'text-slate-300' : 'text-slate-700'
-                  }`}
-                >
+                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                   3. Nội dung cuộc họp
                 </label>
                 <input
@@ -1315,9 +1321,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   value={purposeTitle}
                   onChange={(e) => setPurposeTitle(e.target.value)}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium outline-none ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
@@ -1332,7 +1336,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                {userRole === 'EMPLOYEE'
+                {liveCollisionValidation.hasCollision
+                  ? 'Không thể Đặt (Đang Trùng lịch)'
+                  : userRole === 'EMPLOYEE'
                   ? `Gửi Yêu cầu Đặt ${targetBookableCode}`
                   : `Xác nhận Đặt Phòng ${targetBookableCode}`}
               </button>
@@ -1349,16 +1355,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           <div>
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200/70 dark:border-slate-800">
               <div>
-                <h2
-                  className={`text-sm font-bold flex items-center gap-2 ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}
-                >
+                <h2 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
                   <QrCode className="w-4 h-4 text-teal-600" />
                   Mã QR Check-in Thực tế & Giám sát Cronjob 15p
                 </h2>
                 <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Mở Check-in trước 2 tiếng • Quá 15 phút sau giờ bắt đầu tự động thu hồi chỗ
+                  Mở Check-in trước 2 tiếng • Chặn quét QR nếu trùng phòng hoặc đặt 2 phòng cùng giờ
                 </p>
               </div>
             </div>
@@ -1377,8 +1379,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 }`}
               >
                 <div className="text-xs font-extrabold text-indigo-600 mb-1">
-                  Vé: {activeQrBooking.bookingId} • Phòng: {activeQrBooking.nodeId} •{' '}
-                  {activeQrBooking.startTimeIso} – {activeQrBooking.endTimeIso}
+                  Vé: {activeQrBooking.bookingId} • Phòng: {activeQrBooking.nodeId} • {activeQrBooking.startTimeIso} – {activeQrBooking.endTimeIso}
                 </div>
 
                 {activeBookingTimeValidation && (
@@ -1387,6 +1388,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                         activeQrBooking.bookingStatus === 'CHECKED_IN'
                           ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                          : activeQrConflictStatus.hasQrConflict
+                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                           : activeBookingTimeValidation.allowed
                           ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300'
                           : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
@@ -1396,6 +1399,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         <>
                           <Check className="w-3 h-3" />
                           Đã Check-in lúc: {activeQrBooking.checkedInAtIso || 'Đúng hạn'}
+                        </>
+                      ) : activeQrConflictStatus.hasQrConflict ? (
+                        <>
+                          <AlertCircle className="w-3 h-3" />
+                          Bị khóa Quét QR do Trùng lịch
                         </>
                       ) : activeBookingTimeValidation.allowed ? (
                         <>
@@ -1419,13 +1427,20 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   </div>
                 )}
 
+                {activeQrConflictStatus.hasQrConflict && (
+                  <div className="mb-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] font-semibold text-rose-600 dark:text-rose-300 text-left">
+                    {activeQrConflictStatus.conflictReason}
+                  </div>
+                )}
+
                 <div className="relative inline-block p-3 bg-white rounded-2xl border-2 border-indigo-100 shadow-md">
                   <img
                     src={realQrImageSrc}
                     alt="SpotMatrix Check-in QR Code"
                     className={`w-44 h-44 object-contain rounded-lg ${
                       activeQrBooking.approvalStatus === 'PENDING_APPROVAL' ||
-                      activeQrBooking.approvalStatus === 'REJECTED'
+                      activeQrBooking.approvalStatus === 'REJECTED' ||
+                      activeQrConflictStatus.hasQrConflict
                         ? 'opacity-25 blur-[2px]'
                         : ''
                     }`}
@@ -1440,11 +1455,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <div className="mt-3 space-y-2">
                   <button
                     type="button"
+                    disabled={activeQrConflictStatus.hasQrConflict}
                     onClick={handleAttemptDemoQrScan}
-                    className="w-full py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 transition-all"
+                    className={`w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all ${
+                      activeQrConflictStatus.hasQrConflict
+                        ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                        : 'bg-teal-600 hover:bg-teal-500 shadow-teal-600/20'
+                    }`}
                   >
                     <QrCode className="w-4 h-4" />
-                    Demo Quét QR (Kiểm tra Giờ & Mở Tab Xác Nhận)
+                    {activeQrConflictStatus.hasQrConflict
+                      ? 'Không thể Quét QR (Đang Trùng Lịch)'
+                      : 'Demo Quét QR (Kiểm tra Giờ & Mở Tab Xác Nhận)'}
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1455,7 +1477,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               </div>
             )}
 
-            {/* DANH SÁCH VÉ ĐÃ ĐẶT */}
             <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
               {bookingsList.map((item) => {
                 const isSelected = activeQrBooking?.bookingId === item.bookingId;
@@ -1521,8 +1542,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       >
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-indigo-500" />
-                          {item.bookingDateIso || formatIsoDateString(new Date())} •{' '}
-                          {item.startTimeIso} – {item.endTimeIso}
+                          {item.bookingDateIso || formatIsoDateString(new Date())} • {item.startTimeIso} – {item.endTimeIso}
                         </span>
                         {item.lockVersion && <span>• Lock v{item.lockVersion}</span>}
                       </div>
@@ -1554,8 +1574,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           >
             <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              Mọi thao tác Giữ chỗ 5p, Optimistic Lock và Thu hồi No-Show 15p đều tự động ghi vết vào
-              Nhật ký Quản trị & MongoDB Atlas.
+              Mọi thao tác Giữ chỗ 5p, Optimistic Lock và Thu hồi No-Show 15p đều tự động ghi vết vào Nhật ký Quản trị & MongoDB Atlas.
             </span>
           </div>
         </div>

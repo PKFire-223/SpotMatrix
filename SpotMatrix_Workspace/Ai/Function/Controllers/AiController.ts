@@ -58,7 +58,6 @@ export async function handleSynthesizeDashboardAiReport(
   }
 }
 
-// Kết nối Google Gemini API kèm Thiết lập Vai trò Nền (System Persona) & Lịch sử Hội thoại
 export async function handleAskGeminiCoPilot(
   req: Request,
   res: Response,
@@ -83,9 +82,8 @@ export async function handleAskGeminiCoPilot(
     if (!geminiApiKey || geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
       res.json({
         success: true,
-        provider: 'INTERNAL_PERSONA_AI',
+        provider: 'SPOTMATRIX_AI',
         replyText: null,
-        message: 'Sử dụng Động cơ Suy luận Đa Vai trò Nội bộ SpotMatrix.',
       });
       return;
     }
@@ -99,76 +97,85 @@ export async function handleAskGeminiCoPilot(
           .slice(-5)
           .map(
             (m: { sender?: string; contentText?: string }) =>
-              `${m.sender === 'USER' ? 'Người dùng' : 'AI'}: ${m.contentText || ''}`
+              `${m.sender === 'USER' ? 'Người dùng' : 'Trợ lý'}: ${m.contentText || ''}`
           )
           .join('\n')
       : '';
 
-    const fullSystemInstruction = `[VAI TRÒ NỀN ĐƯỢC THIẾT LẬP: ${
-      personaLabel || 'Kiến trúc sư & Chuyên gia Điều phối SpotMatrix'
+    const fullSystemInstruction = `[VAI TRÒ NỀN: ${
+      personaLabel || 'Kiến trúc sư Không gian 3D'
     }]
 ${
   systemPersonaPrompt ||
-  'Bạn là Trợ lý AI Co-Pilot thông minh của hệ thống Quản lý Không gian & Đặt lịch Phòng họp 3D/2D SpotMatrix.'
+  'Bạn là Trợ lý thông minh của hệ thống Quản lý Không gian & Đặt lịch Phòng họp 3D/2D SpotMatrix.'
 }
+- Trả lời đầy đủ, trọn vẹn câu, tự nhiên, linh hoạt bằng tiếng Việt.
+- Nếu người dùng hỏi toán học, đố vui hoặc chào hỏi (ví dụ "1+1 bằng 3 ư?"), hãy trả lời chính xác, dí dỏm rồi liên hệ hỗ trợ phòng họp.
+- Dựa trực tiếp vào số liệu thực tế của tòa nhà 5 tầng bên dưới.
 
-[QUY TẮC TRẢ LỜI]
-- Trả lời linh hoạt, tự nhiên, đúng trọng tâm câu hỏi của người dùng bằng tiếng Việt chuẩn xác.
-- Dựa trực tiếp vào số liệu thực tế của tòa nhà 5 tầng bên dưới (nếu người dùng hỏi về phòng họp, số người, tầng, thiết bị, điểm tín nhiệm hoặc quy định).
-- Giữ độ dài vừa phải (2-5 câu) để vừa dễ đọc vừa thuận tiện phát giọng nói Text-to-Speech.
-
-[DỮ LIỆU THỜI GIAN THỰC CỦA TÒA NHÀ 5 TẦNG SPOTMATRIX]
+[DỮ LIỆU TÒA NHÀ 5 TẦNG SPOTMATRIX]
 ${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}
+${historyText ? `\n[LỊCH SỬ HỘI THOẠI]\n${historyText}` : ''}`;
 
-${historyText ? `[LỊCH SỬ HỘI THOẠI GẦN ĐÂY]\n${historyText}` : ''}`;
+    const baseContents = [
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `${fullSystemInstruction}\n\n[CÂU HỎI]: ${
+              promptText || 'Hãy tổng hợp tình hình hệ thống hiện tại.'
+            }`,
+          },
+        ],
+      },
+    ];
 
-    const response = await fetch(endpoint, {
+    let response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: `${fullSystemInstruction}\n\n[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]: ${
-                  promptText || 'Hãy tổng hợp tình hình hệ thống hiện tại.'
-                }`,
-              },
-            ],
-          },
-        ],
+        contents: baseContents,
         generationConfig: {
-          temperature: 0.55,
-          maxOutputTokens: 450,
+          temperature: 0.65,
+          maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
 
     if (!response.ok) {
-      res.json({
-        success: true,
-        provider: 'INTERNAL_PERSONA_FALLBACK',
-        replyText: null,
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: baseContents,
+          generationConfig: { temperature: 0.65, maxOutputTokens: 2048 },
+        }),
       });
+    }
+
+    if (!response.ok) {
+      res.json({ success: true, provider: 'SPOTMATRIX_AI', replyText: null });
       return;
     }
 
     const data = (await response.json()) as {
       candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> };
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
       }>;
     };
 
-    const replyText =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const joinedText = parts
+      .filter((p) => !p.thought && typeof p.text === 'string')
+      .map((p) => p.text)
+      .join(' ')
+      .trim();
 
     res.json({
       success: true,
-      provider: replyText
-        ? `GOOGLE_${geminiModel.toUpperCase()}`
-        : 'INTERNAL_PERSONA_FALLBACK',
-      replyText,
+      provider: 'SPOTMATRIX_AI',
+      replyText: joinedText.length > 0 ? joinedText : null,
     });
   } catch (err) {
     next(err);

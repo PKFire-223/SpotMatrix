@@ -51,10 +51,7 @@ export interface DashboardMainPagesProps {
       | 'PROFILE'
       | 'SETTINGS'
   ) => void;
-  onHandleApprovalDecision?: (
-    bookingId: string,
-    decision: 'APPROVED' | 'REJECTED'
-  ) => void;
+  onHandleApprovalDecision?: (bookingId: string, decision: 'APPROVED' | 'REJECTED') => void;
 }
 
 type AiPersonaRoleKey =
@@ -87,7 +84,7 @@ const AI_PERSONA_PRESETS: Record<AiPersonaRoleKey, AiPersonaPresetItem> = {
   SPATIAL_ARCHITECT: {
     key: 'SPATIAL_ARCHITECT',
     shortLabel: 'Kiến trúc sư 3D',
-    badgeText: 'Vai trò: Kiến trúc sư Không gian 3D',
+    badgeText: 'Kiến trúc sư Không gian 3D',
     openingPrefix: 'Dưới góc độ Kiến trúc Không gian 5 Tầng:',
     systemPrompt:
       'Bạn là Kiến trúc sư Trưởng điều phối không gian 3D/2D của tòa nhà SpotMatrix 5 tầng. Luôn tư vấn dựa trên sức chứa, bố cục bàn tròn/bàn dài/đấu trường La Mã, độ cách âm 40dB và thiết bị đi kèm.',
@@ -95,15 +92,15 @@ const AI_PERSONA_PRESETS: Record<AiPersonaRoleKey, AiPersonaPresetItem> = {
   EXECUTIVE_ANALYST: {
     key: 'EXECUTIVE_ANALYST',
     shortLabel: 'Chuyên gia Số liệu',
-    badgeText: 'Vai trò: Chuyên gia Phân tích Dữ liệu (BI)',
+    badgeText: 'Chuyên gia Phân tích Dữ liệu',
     openingPrefix: 'Theo số liệu thống kê thực tế & đối chuẩn 30 ngày:',
     systemPrompt:
-      'Bạn là Chuyên gia Phân tích Dữ liệu Quản trị (BI Analyst). Luôn trả lời kèm con số định lượng chính xác (tỷ lệ lấp đầy %, chênh lệch so với trung bình 52%, điểm tín nhiệm và tần suất giờ hoạt động thiết bị).',
+      'Bạn là Chuyên gia Phân tích Dữ liệu Quản trị. Luôn trả lời kèm con số định lượng chính xác (tỷ lệ lấp đầy %, chênh lệch so với trung bình 52%, điểm tín nhiệm và tần suất giờ hoạt động thiết bị).',
   },
   SECURITY_AUDITOR: {
     key: 'SECURITY_AUDITOR',
     shortLabel: 'Thanh tra Bảo mật',
-    badgeText: 'Vai trò: Thanh tra Bảo mật & Kỷ luật',
+    badgeText: 'Thanh tra Bảo mật & Kỷ luật',
     openingPrefix: 'Theo quy chuẩn Bảo mật RBAC & Kỷ luật Đặt lịch:',
     systemPrompt:
       'Bạn là Thanh tra Bảo mật & Quản trị Rủi ro. Tập trung phân tích khóa phiên bản Optimistic Locking (lockVersion), giữ chỗ 5 phút, quy định Check-in QR trước 2 tiếng, Cronjob 15 phút tự thu hồi No-Show (-10 điểm) và phân quyền 3 Role.',
@@ -111,7 +108,7 @@ const AI_PERSONA_PRESETS: Record<AiPersonaRoleKey, AiPersonaPresetItem> = {
   FRIENDLY_CONCIERGE: {
     key: 'FRIENDLY_CONCIERGE',
     shortLabel: 'Trợ lý Lễ tân',
-    badgeText: 'Vai trò: Trợ lý Lễ tân Thông minh',
+    badgeText: 'Trợ lý Lễ tân Thông minh',
     openingPrefix: 'Mình xin hỗ trợ nhanh cho bạn như sau:',
     systemPrompt:
       'Bạn là Trợ lý Lễ tân thân thiện, nhiệt tình và linh hoạt. Hãy hướng dẫn từng bước dễ hiểu, gợi ý ngay phòng trống tốt nhất và hỗ trợ người dùng giải quyết mọi thắc mắc nhanh chóng.',
@@ -137,9 +134,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         const parsed = JSON.parse(raw);
         return {
           role: (propUserRole || parsed?.userProfile?.role || 'SYS_ADMIN') as UserRoleType,
-          email: (propUserEmail ||
-            parsed?.userProfile?.userEmail ||
-            'sysadmin@spotmatrix.vn') as string,
+          email: (propUserEmail || parsed?.userProfile?.userEmail || 'sysadmin@spotmatrix.vn') as string,
           fullName: (parsed?.userProfile?.fullName || 'System Administrator') as string,
           username: (parsed?.userProfile?.username || 'Systemadmin123') as string,
         };
@@ -155,7 +150,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     };
   }, [propUserRole, propUserEmail]);
 
-  // Bảo mật RBAC: Tài khoản nào chỉ được xem góc nhìn của đúng role đó (riêng SYS_ADMIN có thể chuyển xem thử 3 role)
   const [selectedRoleView, setSelectedRoleView] = useState<UserRoleType>(sessionInfo.role);
   useEffect(() => {
     setSelectedRoleView(sessionInfo.role);
@@ -163,10 +157,8 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   const [demandSimulationPercent, setDemandSimulationPercent] = useState<number>(100);
 
-  // State cho Khung Chat AI Bên Phải + Thiết lập Vai trò Nền (System Persona)
   const [isAiChatOpen, setIsAiChatOpen] = useState<boolean>(false);
-  const [selectedPersonaKey, setSelectedPersonaKey] =
-    useState<AiPersonaRoleKey>('SPATIAL_ARCHITECT');
+  const [selectedPersonaKey, setSelectedPersonaKey] = useState<AiPersonaRoleKey>('SPATIAL_ARCHITECT');
   const [isPersonaConfigExpanded, setIsPersonaConfigExpanded] = useState<boolean>(false);
   const [customSystemPrompt, setCustomSystemPrompt] = useState<string>(
     AI_PERSONA_PRESETS.SPATIAL_ARCHITECT.systemPrompt
@@ -192,9 +184,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       (n) => n.status === 'OCCUPIED' || n.status === 'RESERVED'
     );
 
-    const occupancyRate = Math.round(
-      ((totalNodes - availableNodes.length) / totalNodes) * 100
-    );
+    const occupancyRate = Math.round(((totalNodes - availableNodes.length) / totalNodes) * 100);
     const simulatedPeakOccupancy = Math.min(
       100,
       Math.round((occupancyRate * demandSimulationPercent) / 100)
@@ -209,15 +199,13 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     const avgTrustScore =
       trustProfiles.length > 0
         ? Math.round(
-            trustProfiles.reduce((acc, item) => acc + item.trustScore, 0) /
-              trustProfiles.length
+            trustProfiles.reduce((acc, item) => acc + item.trustScore, 0) / trustProfiles.length
           )
         : 95;
 
     const myTrustProfile =
-      trustProfiles.find(
-        (tp) => tp.userEmail.toLowerCase() === sessionInfo.email.toLowerCase()
-      ) || trustProfiles[0];
+      trustProfiles.find((tp) => tp.userEmail.toLowerCase() === sessionInfo.email.toLowerCase()) ||
+      trustProfiles[0];
 
     const myBookings = bookingsList.filter(
       (b) =>
@@ -271,13 +259,13 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       dashboardMetrics.brokenEquipments
         .map((e) => `${e.equipmentCode} tại ${e.assignedNodeId}`)
         .join(', ') || 'Không có';
-    return `Người hỏi: ${sessionInfo.fullName} (@${sessionInfo.username}, Vai trò: ${sessionInfo.role}, Tín nhiệm: ${
-      dashboardMetrics.myTrustProfile?.trustScore || 100
-    }/100). Tổng số phòng: ${dashboardMetrics.totalNodes} (5 tầng). Đang trống: ${
-      dashboardMetrics.availableCount
-    } phòng (${freeList}). Lấp đầy: ${dashboardMetrics.occupancyRate}%. Lịch đặt hoạt động: ${
-      dashboardMetrics.activeBookingsCount
-    }. Đơn chờ duyệt: ${
+    return `Người hỏi: ${sessionInfo.fullName} (@${sessionInfo.username}, Vai trò: ${
+      sessionInfo.role
+    }, Tín nhiệm: ${dashboardMetrics.myTrustProfile?.trustScore || 100}/100). Tổng số phòng: ${
+      dashboardMetrics.totalNodes
+    } (5 tầng). Đang trống: ${dashboardMetrics.availableCount} phòng (${freeList}). Lấp đầy: ${
+      dashboardMetrics.occupancyRate
+    }%. Lịch đặt hoạt động: ${dashboardMetrics.activeBookingsCount}. Đơn chờ duyệt: ${
       dashboardMetrics.pendingApprovals.length
     }. Điểm tín nhiệm TB: ${dashboardMetrics.avgTrustScore}/100. Thiết bị tốt: ${
       dashboardMetrics.workingEquipmentsCount
@@ -311,7 +299,9 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         : 'Không có yêu cầu đặt phòng nào tồn đọng.';
 
     const recommendText = topRecommendedNode
-      ? `Phòng tối ưu nhất hiện tại là ${topRecommendedNode.nodeCode} (${topRecommendedNode.nodeLabel}) với điểm tương thích ${topRecommendedNode.aiScore || 96} trên 100.`
+      ? `Phòng tối ưu nhất hiện tại là ${topRecommendedNode.nodeCode} (${
+          topRecommendedNode.nodeLabel
+        }) với điểm tương thích ${topRecommendedNode.aiScore || 96} trên 100.`
       : 'Hiện tất cả các phòng đang kín lịch.';
 
     return `${activePersona.openingPrefix} Toàn tòa nhà 5 tầng đang có tỷ lệ lấp đầy ${occupancyRate}%, còn trống ${availableCount} trên tổng số ${totalNodes} không gian họp và hội trường. Đang có ${activeBookingsCount} lịch đặt chỗ hoạt động. ${approvalText} Điểm tín nhiệm trung bình toàn hệ thống đạt ${avgTrustScore} trên 100 điểm. Về thiết bị dùng chung, có ${workingEquipmentsCount} trên ${totalEquipmentsCount} thiết bị sẵn sàng phục vụ. ${brokenText} ${recommendText}`;
@@ -321,10 +311,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     {
       messageId: 'MSG-WELCOME-01',
       sender: 'AI',
-      title: 'Trợ lý AI SpotMatrix Co-Pilot (Đa Vai trò)',
+      title: 'Trợ lý SpotMatrix',
       personaBadge: AI_PERSONA_PRESETS.SPATIAL_ARCHITECT.badgeText,
       contentText:
-        'Xin chào! Tôi đã được thiết lập vai trò nền để hỗ trợ bạn chuyên sâu hơn. Bạn có thể đổi Vai trò Nền của tôi ở thanh phía trên (Kiến trúc sư 3D, Chuyên gia Số liệu, Thanh tra Bảo mật, hoặc Trợ lý Lễ tân), bấm "Tổng hợp & Đọc Tóm tắt", hoặc hỏi bất kỳ câu hỏi nào (VD: "Tìm phòng trống cho 8 người", "Tầng 2 còn phòng nào?", "Phòng M1-03 thiết bị sao rồi?").',
+        'Xin chào! Tôi đã sẵn sàng hỗ trợ bạn điều phối không gian phòng họp 5 tầng. Bạn có thể chọn phong cách tư vấn ở thanh phía trên, bấm "Tổng hợp & Đọc Tóm tắt", hoặc hỏi bất kỳ câu hỏi nào (VD: "Tìm phòng trống cho 8 người", "Tầng 2 còn phòng nào?", "Phòng M1-03 thiết bị sao rồi?").',
       timestampText: new Date().toLocaleTimeString('vi-VN', {
         hour: '2-digit',
         minute: '2-digit',
@@ -347,9 +337,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
   }, []);
 
   const handleSpeakTextAloud = (textToSpeak: string, messageId: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      return;
-    }
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
     if (isSpeakingTts && speakingMessageId === messageId) {
       window.speechSynthesis.cancel();
@@ -372,9 +360,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         v.name.toLowerCase().includes('hoaimy') ||
         v.name.toLowerCase().includes('an')
     );
-    if (viVoice) {
-      utterance.voice = viVoice;
-    }
+    if (viVoice) utterance.voice = viVoice;
 
     utterance.onstart = () => {
       setIsSpeakingTts(true);
@@ -407,7 +393,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     const newMsg: AiChatMessageItem = {
       messageId: newMsgId,
       sender: 'AI',
-      title: 'Bản Tổng hợp Dữ liệu Thời gian thực (5 Tầng & MongoDB)',
+      title: 'Bản Tổng hợp Dữ liệu Thời gian thực',
       personaBadge: activePersona.badgeText,
       contentText: summaryText,
       timestampText: new Date().toLocaleTimeString('vi-VN', {
@@ -425,10 +411,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     }
   };
 
-  // Bộ Suy luận Đa Ý định Linh hoạt (Flexible Multi-Intent NLP Engine) kết hợp Vai trò Nền (Persona)
-  const generateFlexibleLocalAiAnswer = (
-    questionRaw: string
-  ): { title: string; reply: string } => {
+  const generateFlexibleLocalAiAnswer = (questionRaw: string): { title: string; reply: string } => {
     const q = questionRaw.trim();
     const qLower = q.toLowerCase();
     const prefix = activePersona.openingPrefix;
@@ -445,22 +428,79 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       myBookings,
     } = dashboardMetrics;
 
-    // 1. Nhận diện câu hỏi về một Mã phòng cụ thể (VD: "M1-02", "M2-05", "H-01", "m1-03")
+    // 0. Giải toán & Đố vui tự nhiên (VD: "Chào, mà 1+1 bằng 3 ư?", "2+2 bằng mấy")
+    const mathCompareMatch = qLower.match(/(\d+)\s*([+\-*/x:])\s*(\d+)\s*(?:=|bằng)\s*(\d+)/i);
+    if (mathCompareMatch) {
+      const a = Number(mathCompareMatch[1]);
+      const op = mathCompareMatch[2];
+      const b = Number(mathCompareMatch[3]);
+      const claimed = Number(mathCompareMatch[4]);
+      const actual =
+        op === '+'
+          ? a + b
+          : op === '-'
+          ? a - b
+          : op === '*' || op === 'x'
+          ? a * b
+          : b !== 0
+          ? Number((a / b).toFixed(2))
+          : 0;
+
+      if (actual === claimed) {
+        return {
+          title: activePersona.shortLabel,
+          reply: `Chào bạn! Chính xác rồi nhé, ${a} ${op} ${b} = ${actual}. Nhân tiện nếu bạn đang tìm phòng họp cho ${actual} người thì hiện phòng ${
+            topRecommendedNode?.nodeCode || 'M1-01'
+          } (Tầng ${topRecommendedNode?.floorLevel || 1}) đang trống và sẵn sàng phục vụ ngay!`,
+        };
+      }
+      return {
+        title: activePersona.shortLabel,
+        reply: `Chào bạn! Về câu hỏi của bạn, ${a} ${op} ${b} bằng ${actual} chứ không phải bằng ${claimed} đâu nhé! Nhưng nếu nhóm của bạn đang có ${claimed} người cần tìm phòng họp thì tôi gợi ý ngay phòng ${
+          topRecommendedNode?.nodeCode || 'M1-01'
+        } (Tầng ${topRecommendedNode?.floorLevel || 1}, sức chứa ${
+          topRecommendedNode?.capacityCount || 2
+        } người) đang trống nhé!`,
+      };
+    }
+
+    const simpleMathMatch = qLower.match(/(\d+)\s*([+\-*/x:])\s*(\d+)/i);
+    if (
+      simpleMathMatch &&
+      !qLower.includes('m1-') &&
+      !qLower.includes('m2-') &&
+      !qLower.includes('m3-') &&
+      !qLower.includes('m4-')
+    ) {
+      const a = Number(simpleMathMatch[1]);
+      const op = simpleMathMatch[2];
+      const b = Number(simpleMathMatch[3]);
+      const actual =
+        op === '+'
+          ? a + b
+          : op === '-'
+          ? a - b
+          : op === '*' || op === 'x'
+          ? a * b
+          : b !== 0
+          ? Number((a / b).toFixed(2))
+          : 0;
+      return {
+        title: activePersona.shortLabel,
+        reply: `Chào bạn! Kết quả của phép tính ${a} ${op} ${b} là ${actual} nhé. Cần tôi tra cứu thêm phòng họp trống hay kiểm tra thiết bị ở tầng nào không?`,
+      };
+    }
+
     const roomCodeMatch = q.match(/\b(M[1-4]-0[1-6]|H-01|H01)\b/i);
     if (roomCodeMatch) {
       const normalizedCode =
-        roomCodeMatch[1].toUpperCase() === 'H01'
-          ? 'H-01'
-          : roomCodeMatch[1].toUpperCase();
+        roomCodeMatch[1].toUpperCase() === 'H01' ? 'H-01' : roomCodeMatch[1].toUpperCase();
       const targetNode = workspaceNodes.find((n) => n.nodeCode === normalizedCode);
       if (targetNode) {
-        const roomEqs = equipmentsList.filter(
-          (eq) => eq.assignedNodeId === normalizedCode
-        );
+        const roomEqs = equipmentsList.filter((eq) => eq.assignedNodeId === normalizedCode);
         const roomBks = bookingsList.filter(
           (b) =>
-            b.nodeId.startsWith(normalizedCode.replace('-', '')) ||
-            b.nodeId === normalizedCode
+            b.nodeId.startsWith(normalizedCode.replace('-', '')) || b.nodeId === normalizedCode
         );
         const statusVn =
           targetNode.status === 'AVAILABLE'
@@ -473,21 +513,18 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             ? roomEqs
                 .map(
                   (e) =>
-                    `${e.equipmentName} (${
-                      e.status === 'BROKEN' ? 'Đang báo hỏng' : 'Hoạt động tốt'
-                    })`
+                    `${e.equipmentName} (${e.status === 'BROKEN' ? 'Đang báo hỏng' : 'Hoạt động tốt'})`
                 )
                 .join(', ')
             : 'Trang bị tiêu chuẩn (Màn hình 4K, Camera AI 360, Cách âm 40dB)';
 
         return {
-          title: `Chi tiết Không gian Phòng ${normalizedCode}`,
+          title: activePersona.shortLabel,
           reply: `${prefix} Phòng ${targetNode.nodeCode} (${targetNode.nodeLabel}) nằm tại Tầng ${targetNode.floorLevel}, sức chứa ${targetNode.capacityCount} người, hiện tại [${statusVn}]. Thiết bị đi kèm: ${eqSummary}. Hiện có ${roomBks.length} lịch đặt liên quan tới không gian này.`,
         };
       }
     }
 
-    // 2. Nhận diện câu hỏi theo Tầng cụ thể (VD: "tầng 1", "tầng 2", "tầng 3", "tầng 4", "tầng 5", "hội trường")
     const floorMatch = qLower.match(/tầng\s*([1-5])/i);
     if (floorMatch || qLower.includes('hội trường') || qLower.includes('la mã')) {
       const floorNum = floorMatch ? Number(floorMatch[1]) : 5;
@@ -496,30 +533,27 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
       if (floorNum === 5) {
         return {
-          title: 'Thông tin Tầng 5 — Hội trường Đấu trường La Mã (H-01)',
+          title: activePersona.shortLabel,
           reply: `${prefix} Tầng 5 là Hội trường Lớn Đấu trường La Mã (Mã H-01, sức chứa 30 người) với Bục Diễn Giả tròn ở trung tâm và các dãy ghế bậc thềm vòng cung H01-A1 đến H01-B8. Người dùng có thể chọn đặt trước từng vị trí ghế ngồi riêng biệt và xoay mô hình 3D 360° trực tiếp.`,
         };
       }
 
       return {
-        title: `Trạng thái Mặt bằng Tầng ${floorNum}`,
+        title: activePersona.shortLabel,
         reply: `${prefix} Tầng ${floorNum} có tổng cộng ${floorNodes.length} phòng họp chính thức, hiện đang trống ${freeOnFloor.length} phòng: ${
           freeOnFloor.length > 0
-            ? freeOnFloor
-                .map((n) => `${n.nodeCode} (${n.capacityCount} người)`)
-                .join(', ')
+            ? freeOnFloor.map((n) => `${n.nodeCode} (${n.capacityCount} người)`).join(', ')
             : 'Tất cả các phòng trên tầng này đang bận'
         }. Bạn có thể mở trang Sơ đồ Phòng họp để xem mô hình 3D chi tiết của Tầng ${floorNum}.`,
       };
     }
 
-    // 3. Nhận diện câu hỏi tìm phòng theo Số lượng người (VD: "họp 6 người", "nhóm 10 người", "cho 4 người", "15 người")
     const peopleMatch = qLower.match(/(\d+)\s*(người|chỗ|ghế|thành viên|nhân sự)/i);
     if (peopleMatch) {
       const requiredCap = Number(peopleMatch[1]);
       if (requiredCap > 12) {
         return {
-          title: `Tư vấn Không gian cho ${requiredCap} người`,
+          title: activePersona.shortLabel,
           reply: `${prefix} Với quy mô ${requiredCap} người (vượt quá sức chứa 12 người của phòng họp thường), lựa chọn tối ưu nhất là chuyển lên Hội trường Lớn Đấu trường La Mã H-01 tại Tầng 5 (sức chứa 30 người, màn hình LED Panorama 360°).`,
         };
       }
@@ -535,23 +569,21 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           .map((n) => `${n.nodeCode} (Tầng ${n.floorLevel}, ${n.capacityCount} chỗ)`)
           .join(', ');
         return {
-          title: `Đề xuất Phòng họp Tối ưu cho ${requiredCap} người`,
-          reply: `${prefix} Để họp ${requiredCap} người tiết kiệm diện tích và hiệu quả nhất, tôi đề xuất phòng ${bestFit.nodeCode} (${bestFit.nodeLabel}, sức chứa chuẩn ${bestFit.capacityCount} người, điểm AI ${bestFit.aiScore || 95}/100). ${
+          title: activePersona.shortLabel,
+          reply: `${prefix} Để họp ${requiredCap} người tiết kiệm diện tích và hiệu quả nhất, tôi đề xuất phòng ${bestFit.nodeCode} (${bestFit.nodeLabel}, sức chứa chuẩn ${bestFit.capacityCount} người, điểm tối ưu ${bestFit.aiScore || 95}/100). ${
             others ? `Các phương án dự phòng đang trống khác: ${others}.` : ''
           }`,
         };
       }
     }
 
-    // 4. Câu hỏi về Tóm tắt / Báo cáo tổng quát
     if (qLower.includes('tóm tắt') || qLower.includes('tổng hợp') || qLower.includes('báo cáo')) {
       return {
-        title: 'Báo cáo Tổng hợp Dữ liệu Hệ thống',
+        title: activePersona.shortLabel,
         reply: buildSynthesizedExecutiveSummary(),
       };
     }
 
-    // 5. Câu hỏi về Phòng trống / Gợi ý chung
     if (
       qLower.includes('trống') ||
       qLower.includes('gợi ý') ||
@@ -560,22 +592,16 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     ) {
       const freeRooms = availableNodes
         .slice(0, 5)
-        .map(
-          (n) =>
-            `${n.nodeCode} (Tầng ${n.floorLevel}, ${n.capacityCount} chỗ, AI ${n.aiScore || 95}đ)`
-        )
+        .map((n) => `${n.nodeCode} (Tầng ${n.floorLevel}, ${n.capacityCount} chỗ)`)
         .join('; ');
       return {
-        title: 'Gợi ý Phòng họp Đang Trống Tối ưu',
+        title: activePersona.shortLabel,
         reply: `${prefix} Hiện có ${availableCount}/${totalNodes} không gian đang trống. Đề xuất số 1 là ${
           topRecommendedNode?.nodeCode || 'M1-01'
-        } (${
-          topRecommendedNode?.nodeLabel || 'Phòng họp Tầng 1'
-        }). Các lựa chọn hàng đầu khác: ${freeRooms}.`,
+        } (${topRecommendedNode?.nodeLabel || 'Phòng họp Tầng 1'}). Các lựa chọn hàng đầu khác: ${freeRooms}.`,
       };
     }
 
-    // 6. Câu hỏi về Thiết bị / Bảo trì
     if (
       qLower.includes('thiết bị') ||
       qLower.includes('hỏng') ||
@@ -585,15 +611,13 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     ) {
       if (brokenEquipments.length === 0) {
         return {
-          title: 'Tình trạng Thiết bị Dùng chung',
+          title: activePersona.shortLabel,
           reply: `${prefix} Toàn bộ ${equipmentsList.length} thiết bị trên 5 tầng đều đang hoạt động tốt (0 thiết bị hỏng).`,
         };
       }
       return {
-        title: 'Cảnh báo Thiết bị & Bảo trì',
-        reply: `${prefix} Đang có ${
-          brokenEquipments.length
-        } thiết bị gặp sự cố cần bảo trì: ${brokenEquipments
+        title: activePersona.shortLabel,
+        reply: `${prefix} Đang có ${brokenEquipments.length} thiết bị gặp sự cố cần bảo trì: ${brokenEquipments
           .map(
             (eq) =>
               `${eq.equipmentCode} (${eq.equipmentName}) tại phòng ${eq.assignedNodeId} - Độ bền ${
@@ -604,19 +628,16 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       };
     }
 
-    // 7. Câu hỏi về Phê duyệt / Đơn chờ duyệt
     if (qLower.includes('duyệt') || qLower.includes('chờ') || qLower.includes('phê duyệt')) {
       if (pendingApprovals.length === 0) {
         return {
-          title: 'Trạng thái Phê duyệt Đặt phòng',
+          title: activePersona.shortLabel,
           reply: `${prefix} Hiện tại toàn bộ đơn đặt phòng của nhân viên đã được xử lý, không có đơn nào tồn đọng.`,
         };
       }
       return {
-        title: `Danh sách ${pendingApprovals.length} Đơn Chờ Phê duyệt`,
-        reply: `${prefix} Có ${
-          pendingApprovals.length
-        } yêu cầu đang chờ Quản lý hoặc Admin duyệt: ${pendingApprovals
+        title: activePersona.shortLabel,
+        reply: `${prefix} Có ${pendingApprovals.length} yêu cầu đang chờ Quản lý hoặc Admin duyệt: ${pendingApprovals
           .map(
             (b) =>
               `Vé ${b.bookingId} tại ${b.nodeId} (${b.startTimeIso}-${b.endTimeIso}) của @${
@@ -627,7 +648,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       };
     }
 
-    // 8. Câu hỏi về Quy định Check-in QR / Giữ chỗ 5p / Optimistic Lock / Cronjob 15p / Điểm tín nhiệm
     if (
       qLower.includes('quy định') ||
       qLower.includes('quy tắc') ||
@@ -641,31 +661,28 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       qLower.includes('điểm')
     ) {
       return {
-        title: 'Quy chuẩn Vận hành, Check-in QR & Điểm Tín nhiệm',
-        reply: `${prefix} Hệ thống áp dụng 4 quy tắc cốt lõi: (1) Giữ chỗ tạm thời 5 phút bảo vệ bằng khóa phiên bản Optimistic Locking chống 2 người đặt đè cùng lúc; (2) Chỉ mở cổng quét QR Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (+2 điểm tín nhiệm khi quét đúng hạn); (3) Cronjob tự động thu hồi phòng và trừ -10 điểm nếu quá 15 phút sau giờ bắt đầu mà chưa Check-in; (4) Điểm cá nhân của bạn đang là ${
+        title: activePersona.shortLabel,
+        reply: `${prefix} Hệ thống áp dụng 4 quy tắc cốt lõi: (1) Giữ chỗ tạm thời 5 phút bảo vệ bằng khóa phiên bản Optimistic Locking chống 2 người đặt đè cùng lúc; (2) Chỉ mở cổng quét QR Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (+2 điểm tín nhiệm khi quét đúng hạn); (3) Cronjob tự động thu hồi phòng và trừ -10 điểm nếu quá 15 phút sau giờ bắt đầu mà chưa Check-in; (4) Hạn mức đặt phòng mỗi tuần: Nhân viên 3 lần, Quản lý 8 lần, Admin 25 lần. Điểm cá nhân của bạn đang là ${
           myTrustProfile?.trustScore || 100
-        }/100 (trung bình hệ thống: ${avgTrustScore}/100).`,
+        }/100.`,
       };
     }
 
-    // 9. Câu hỏi về Lịch cá nhân của người đang hỏi ("lịch của tôi", "tôi đặt phòng nào")
-    if (
-      qLower.includes('của tôi') ||
-      qLower.includes('tôi đã đặt') ||
-      qLower.includes('vé của mình')
-    ) {
+    if (qLower.includes('của tôi') || qLower.includes('tôi đã đặt') || qLower.includes('vé của mình')) {
       if (myBookings.length === 0) {
         return {
-          title: 'Lịch Đặt phòng Cá nhân',
+          title: activePersona.shortLabel,
           reply: `${prefix} Hiện tại tài khoản @${sessionInfo.username} chưa có lịch đặt phòng nào. Bạn có thể chuyển sang mục "Đặt lịch Phòng họp" để chọn phòng nhé!`,
         };
       }
       return {
-        title: `Lịch Đặt phòng của @${sessionInfo.username} (${myBookings.length} vé)`,
+        title: activePersona.shortLabel,
         reply: `${prefix} Bạn đang có ${myBookings.length} lịch đặt: ${myBookings
           .map(
             (b) =>
-              `Vé ${b.bookingId} tại vị trí ${b.nodeId} (${b.bookingDateIso || 'Hôm nay'}, ${ b.startTimeIso }-${b.endTimeIso}, Trạng thái: ${
+              `Vé ${b.bookingId} tại vị trí ${b.nodeId} (${b.bookingDateIso || 'Hôm nay'}, ${
+                b.startTimeIso
+              }-${b.endTimeIso}, Trạng thái: ${
                 b.bookingStatus === 'CHECKED_IN'
                   ? 'Đã quét QR'
                   : b.approvalStatus === 'PENDING_APPROVAL'
@@ -677,21 +694,21 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       };
     }
 
-    // 10. Chào hỏi / Hỏi vai trò của AI
     if (
       qLower.includes('xin chào') ||
+      qLower.includes('chào') ||
       qLower.includes('hello') ||
       qLower.includes('bạn là ai') ||
       qLower.includes('vai trò')
     ) {
       return {
-        title: `Chào ${sessionInfo.fullName}!`,
-        reply: `${prefix} Tôi đang hoạt động với chỉ thị nền: "${customSystemPrompt}". Tôi nắm rõ trạng thái thời gian thực của toàn bộ 25 không gian họp trên 5 tầng, lịch đặt, thiết bị và điểm tín nhiệm. Bạn cứ hỏi tự nhiên về bất kỳ tầng nào, số người họp, hoặc mã phòng cụ thể nhé!`,
+        title: activePersona.shortLabel,
+        reply: `Chào ${sessionInfo.fullName}! ${prefix} Tôi nắm rõ trạng thái thời gian thực của toàn bộ 25 không gian họp trên 5 tầng, lịch đặt, thiết bị và điểm tín nhiệm. Bạn cứ hỏi tự nhiên về bất kỳ tầng nào, số người họp, mã phòng cụ thể hoặc câu hỏi bất kỳ nhé!`,
       };
     }
 
     return {
-      title: `Phân tích Linh hoạt theo Vai trò (${activePersona.shortLabel})`,
+      title: activePersona.shortLabel,
       reply: `${prefix} Về câu hỏi "${q}" của bạn: Hiện tòa nhà 5 tầng đang đạt mật độ ${occupancyRate}% (còn trống ${availableCount}/${totalNodes} không gian, điểm tín nhiệm TB đạt ${avgTrustScore}/100). Phòng có điểm tối ưu cao nhất đang sẵn sàng là ${
         topRecommendedNode?.nodeCode || 'M1-01'
       } (Tầng ${topRecommendedNode?.floorLevel || 1}, sức chứa ${
@@ -715,12 +732,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
-    if (!customPrompt) {
-      setChatInputText('');
-    }
+    if (!customPrompt) setChatInputText('');
 
     setIsAiThinking(true);
-    let finalTitle = `Phản hồi từ ${activePersona.shortLabel}`;
+    let finalTitle = activePersona.shortLabel;
     let finalReplyText = '';
 
     try {
@@ -738,13 +753,14 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
       if (response.ok) {
         const json = await response.json();
-        if (json?.replyText) {
-          finalTitle = `${activePersona.shortLabel} (${json.provider || 'Gemini AI'})`;
-          finalReplyText = json.replyText;
+        const candidateReply = typeof json?.replyText === 'string' ? json.replyText.trim() : '';
+        if (candidateReply.length >= 30) {
+          finalTitle = activePersona.shortLabel;
+          finalReplyText = candidateReply;
         }
       }
     } catch {
-      // Tự động dùng bộ suy luận đa ý định nội bộ
+      // Dùng bộ suy luận nội bộ
     }
 
     if (!finalReplyText) {
@@ -780,7 +796,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   return (
     <div className="space-y-6 relative">
-      {/* THANH TIÊU ĐỀ ĐA TẦNG THEO ROLE + NÚT BẬT CHAT AI & ĐỌC TÓM TẮT DỮ LIỆU */}
       <div
         className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -799,21 +814,19 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Bảng Điều khiển Đa tầng (Dashboard) & Phân tích AI
+                Bảng Điều khiển Đa tầng (Dashboard) & Phân tích Thông minh
               </h1>
               <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-indigo-600 text-white">
                 Quyền: {selectedRoleView}
               </span>
             </div>
             <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Đồng bộ thời gian thực với Sơ đồ 5 Tầng 3D/2D, Điểm tín nhiệm, Thiết bị dùng chung &
-              MongoDB Atlas
+              Đồng bộ thời gian thực với Sơ đồ 5 Tầng 3D/2D, Điểm tín nhiệm, Thiết bị dùng chung & MongoDB Atlas
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Bảo mật RBAC: Chỉ duy nhất SYS_ADMIN mới được phép chuyển đổi xem trước cả 3 góc nhìn Role */}
           {sessionInfo.role === 'SYS_ADMIN' && (
             <div
               className={`p-1 rounded-xl border flex items-center gap-1 text-xs font-bold ${
@@ -834,11 +847,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  {roleOption === 'EMPLOYEE'
-                    ? 'Nhân viên'
-                    : roleOption === 'MANAGER'
-                    ? 'Quản lý'
-                    : 'Admin'}
+                  {roleOption === 'EMPLOYEE' ? 'Nhân viên' : roleOption === 'MANAGER' ? 'Quản lý' : 'Admin'}
                 </button>
               ))}
             </div>
@@ -850,7 +859,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-sm flex items-center gap-1.5 transition"
           >
             <Volume2 className="w-4 h-4" />
-            <span>Tổng hợp & Nghe AI Tóm tắt</span>
+            <span>Tổng hợp & Nghe Tóm tắt</span>
           </button>
 
           <button
@@ -859,12 +868,11 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 flex items-center gap-2 transition"
           >
             <MessageSquare className="w-4 h-4" />
-            <span>{isAiChatOpen ? 'Đóng Chat AI' : 'Mở Chat AI Bên Phải'}</span>
+            <span>{isAiChatOpen ? 'Đóng Trợ lý Chat' : 'Mở Trợ lý Chat Bên Phải'}</span>
           </button>
         </div>
       </div>
 
-      {/* 4 THẺ KPI CHÍNH */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           className={`p-5 rounded-3xl border ${
@@ -889,8 +897,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2">
-            Đang trống {dashboardMetrics.availableCount}/{dashboardMetrics.totalNodes} vị trí trên
-            Sơ đồ 5 Tầng
+            Đang trống {dashboardMetrics.availableCount}/{dashboardMetrics.totalNodes} vị trí trên Sơ đồ 5 Tầng
           </p>
         </div>
 
@@ -914,8 +921,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-2">
-            Chờ duyệt: {dashboardMetrics.pendingApprovals.length} đơn • Đã Check-in:{' '}
-            {dashboardMetrics.checkedInCount}
+            Chờ duyệt: {dashboardMetrics.pendingApprovals.length} đơn • Đã Check-in: {dashboardMetrics.checkedInCount}
           </p>
         </div>
 
@@ -926,9 +932,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400">
-              {selectedRoleView === 'EMPLOYEE'
-                ? 'Điểm Tín nhiệm Cá nhân'
-                : 'Điểm Tín nhiệm Trung bình'}
+              {selectedRoleView === 'EMPLOYEE' ? 'Điểm Tín nhiệm Cá nhân' : 'Điểm Tín nhiệm Trung bình'}
             </span>
             <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-600 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
@@ -982,7 +986,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       </div>
 
-      {/* KHU VỰC ĐẶC THÙ RIÊNG BIỆT CHO TỪNG ROLE */}
       {selectedRoleView === 'EMPLOYEE' && (
         <div
           className={`p-6 rounded-3xl border space-y-4 ${
@@ -994,12 +997,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <Award className="w-5 h-5 text-teal-600" />
               <div>
                 <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Không gian Nhân viên ({sessionInfo.fullName}) — Lịch họp Cá nhân & Quyền lợi Tín
-                  nhiệm
+                  Không gian Nhân viên ({sessionInfo.fullName}) — Lịch họp Cá nhân & Quyền lợi Tín nhiệm
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  Hạn mức khả dụng: Tối đa 10 giờ/tuần • Đủ điều kiện đặt lịch định kỳ (Điểm tín
-                  nhiệm ≥ 60)
+                  Hạn mức theo vai trò EMPLOYEE: Tối đa 3 lần đặt phòng/tuần • Đủ điều kiện đặt lịch định kỳ (Điểm tín nhiệm ≥ 60)
                 </p>
               </div>
             </div>
@@ -1026,10 +1027,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 {dashboardMetrics.myTrustProfile?.trustScore || 96} / 100 điểm
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Số lần Check-in đúng giờ:{' '}
-                <strong>{dashboardMetrics.myTrustProfile?.onTimeCheckInCount || 18} lần</strong> •
-                Vi phạm No-Show:{' '}
-                <strong>{dashboardMetrics.myTrustProfile?.noShowPenaltyCount || 0} lần</strong>
+                Số lần Check-in đúng giờ: <strong>{dashboardMetrics.myTrustProfile?.onTimeCheckInCount || 18} lần</strong> • Vi phạm No-Show: <strong>{dashboardMetrics.myTrustProfile?.noShowPenaltyCount || 0} lần</strong>
               </p>
             </div>
 
@@ -1042,12 +1040,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 Gợi ý Phòng họp Cá nhân & Nhóm
               </span>
               <div className={`text-sm font-extrabold mt-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {dashboardMetrics.topRecommendedNode?.nodeCode} —{' '}
-                {dashboardMetrics.topRecommendedNode?.nodeLabel}
+                {dashboardMetrics.topRecommendedNode?.nodeCode} — {dashboardMetrics.topRecommendedNode?.nodeLabel}
               </div>
               <p className="text-xs text-slate-500 mt-1">
-                Sức chứa {dashboardMetrics.topRecommendedNode?.capacityCount} người • Điểm AI:{' '}
-                <strong>{dashboardMetrics.topRecommendedNode?.aiScore || 96}/100</strong>
+                Sức chứa {dashboardMetrics.topRecommendedNode?.capacityCount} người • Điểm tối ưu: <strong>{dashboardMetrics.topRecommendedNode?.aiScore || 96}/100</strong>
               </p>
             </div>
 
@@ -1094,8 +1090,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                   Bảng Điều phối Quản lý (MANAGER) — Duyệt Nhanh Yêu cầu Nhân viên & Giám sát Nhóm
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  Phê duyệt trực tiếp các yêu cầu đặt phòng của Nhân viên trong bộ phận Product &
-                  Engineering
+                  Hạn mức theo vai trò MANAGER: Tối đa 8 lần đặt phòng/tuần • Phê duyệt trực tiếp yêu cầu của Nhân viên
                 </p>
               </div>
             </div>
@@ -1107,14 +1102,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           {dashboardMetrics.pendingApprovals.length === 0 ? (
             <div
               className={`p-4 rounded-2xl border text-xs font-semibold flex items-center justify-between ${
-                isDark
-                  ? 'bg-slate-950 border-slate-800 text-slate-300'
-                  : 'bg-teal-50/40 border-teal-200 text-teal-800'
+                isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-teal-50/40 border-teal-200 text-teal-800'
               }`}
             >
-              <span>
-                Tất cả yêu cầu đặt phòng của nhân viên trong nhóm đã được phê duyệt hoàn tất!
-              </span>
+              <span>Tất cả yêu cầu đặt phòng của nhân viên trong nhóm đã được phê duyệt hoàn tất!</span>
               <button
                 type="button"
                 onClick={() => onNavigateSection('BOOKING')}
@@ -1142,8 +1133,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Người đặt: @{reqItem.requesterUsername || reqItem.userEmail} •{' '}
-                      {reqItem.bookingDateIso} ({reqItem.startTimeIso} – {reqItem.endTimeIso})
+                      Người đặt: @{reqItem.requesterUsername || reqItem.userEmail} • {reqItem.bookingDateIso} ({reqItem.startTimeIso} – {reqItem.endTimeIso})
                     </p>
                   </div>
 
@@ -1185,12 +1175,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <Sliders className="w-5 h-5 text-indigo-600" />
               <div>
                 <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Trung tâm Chỉ huy Hệ thống (SYS_ADMIN) — Chính sách Động, Thiết bị & Truy vết
-                  Optimistic Lock
+                  Trung tâm Chỉ huy Hệ thống (SYS_ADMIN) — Chính sách Động, Thiết bị & Truy vết Optimistic Lock
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  Giám sát toàn bộ 5 tầng, kiểm soát nhật ký xung đột khóa phiên bản và điều chỉnh
-                  chính sách hệ thống
+                  Giám sát toàn bộ 5 tầng, kiểm soát nhật ký xung đột khóa phiên bản và điều chỉnh chính sách hệ thống
                 </p>
               </div>
             </div>
@@ -1230,7 +1218,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 • Cronjob thu hồi No-Show: <strong>15 phút</strong> (-10 điểm)
               </p>
               <p className={`text-xs font-bold mt-1 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                • Sàn điểm đặt định kỳ: <strong>60/100 điểm</strong>
+                • Hạn mức tuần: <strong>NV 3 • QL 8 • Admin 25 lần</strong>
               </p>
             </div>
 
@@ -1250,8 +1238,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               ) : (
                 dashboardMetrics.brokenEquipments.map((eq) => (
                   <div key={eq.equipmentId} className="mt-1.5 text-xs">
-                    <strong className="text-rose-600">{eq.equipmentCode}</strong> — Phòng{' '}
-                    <strong>{eq.assignedNodeId}</strong> ({eq.equipmentName})
+                    <strong className="text-rose-600">{eq.equipmentCode}</strong> — Phòng <strong>{eq.assignedNodeId}</strong> ({eq.equipmentName})
                   </div>
                 ))
               )}
@@ -1265,11 +1252,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <span className="text-[11px] font-extrabold uppercase text-teal-600">
                 Sự kiện Đồng bộ & Truy vết Mới nhất
               </span>
-              <p
-                className={`text-xs font-semibold mt-1.5 line-clamp-2 ${
-                  isDark ? 'text-slate-300' : 'text-slate-700'
-                }`}
-              >
+              <p className={`text-xs font-semibold mt-1.5 line-clamp-2 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                 {auditLogs[0]?.detailMessage || 'Hệ thống đang hoạt động ổn định.'}
               </p>
             </div>
@@ -1277,7 +1260,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       )}
 
-      {/* PHÂN TÍCH AI SO SÁNH TRUNG BÌNH 30 NGÀY & MÔ PHỎNG NHU CẦU */}
       <div
         className={`p-6 rounded-3xl border space-y-4 ${
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
@@ -1290,7 +1272,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </div>
             <div>
               <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Phân tích AI So sánh Trung bình & Mô phỏng Nhu cầu (What-If Simulator)
+                Phân tích So sánh Trung bình & Mô phỏng Nhu cầu (What-If Simulator)
               </h2>
               <p className="text-xs text-slate-400">
                 Đối chiếu dữ liệu thời gian thực từ Sơ đồ 5 Tầng với mức chuẩn 30 ngày qua
@@ -1328,9 +1310,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               1. Mật độ Hiện tại vs. Trung bình
             </h3>
             <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              Mật độ hiện tại đạt <strong>{dashboardMetrics.occupancyRate}%</strong> (trung bình 30
-              ngày: <strong>52%</strong>). Với hệ số tải <strong>{demandSimulationPercent}%</strong>,
-              công suất đỉnh dự kiến đạt <strong>{dashboardMetrics.simulatedPeakOccupancy}%</strong>.
+              Mật độ hiện tại đạt <strong>{dashboardMetrics.occupancyRate}%</strong> (trung bình 30 ngày: <strong>52%</strong>). Với hệ số tải <strong>{demandSimulationPercent}%</strong>, công suất đỉnh dự kiến đạt <strong>{dashboardMetrics.simulatedPeakOccupancy}%</strong>.
             </p>
           </div>
 
@@ -1343,9 +1323,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               2. Độ ổn định Check-in & Tín nhiệm
             </h3>
             <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              Điểm tín nhiệm trung bình đạt <strong>{dashboardMetrics.avgTrustScore}/100đ</strong>,
-              giúp giảm tỷ lệ bỏ trống phòng sau khi đặt xuống thấp hơn <strong>38%</strong> so với
-              trung bình tháng trước.
+              Điểm tín nhiệm trung bình đạt <strong>{dashboardMetrics.avgTrustScore}/100đ</strong>, giúp giảm tỷ lệ bỏ trống phòng sau khi đặt xuống thấp hơn <strong>38%</strong> so với trung bình tháng trước.
             </p>
           </div>
 
@@ -1355,19 +1333,15 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             }`}
           >
             <h3 className="text-xs font-extrabold text-amber-600 mb-1">
-              3. Đề xuất Điều phối Không gian AI
+              3. Đề xuất Điều phối Không gian
             </h3>
             <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
-              Phòng tối ưu nhất đang trống là{' '}
-              <strong>{dashboardMetrics.topRecommendedNode?.nodeCode || 'M1-01'}</strong>. Các sự
-              kiện trên 12 người được khuyến nghị chuyển sang{' '}
-              <strong>Hội trường Đấu trường La Mã (H-01 - Tầng 5)</strong>.
+              Phòng tối ưu nhất đang trống là <strong>{dashboardMetrics.topRecommendedNode?.nodeCode || 'M1-01'}</strong>. Các sự kiện trên 12 người được khuyến nghị chuyển sang <strong>Hội trường Đấu trường La Mã (H-01 - Tầng 5)</strong>.
             </p>
           </div>
         </div>
       </div>
 
-      {/* BIỂU ĐỒ CỘT THEO KHUNG GIỜ & BIỂU ĐỒ TRÒN TRẠNG THÁI MẶT BẰNG */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-8 p-6 rounded-3xl border ${
@@ -1471,17 +1445,16 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       </div>
 
-      {/* KHUNG DRAWER CHAT AI BÊN PHẢI + THIẾT LẬP VAI TRÒ NỀN (SYSTEM PERSONA) + ĐỌC GIỌNG NÓI TTS */}
+      {/* KHUNG DRAWER TRỢ LÝ BÊN PHẢI (KHÔNG CÒN CHỮ TRONG NGOẶC ĐA VAI TRÒ / GEMINI) */}
       {isAiChatOpen && (
         <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] shadow-2xl flex flex-col border-l transition-all bg-white dark:bg-slate-900 border-indigo-100 dark:border-slate-800">
-          {/* Header Khung Chat AI */}
           <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-indigo-600 text-white">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-extrabold">Trợ lý AI SpotMatrix Co-Pilot</h3>
+                <h3 className="text-sm font-extrabold">Trợ lý SpotMatrix</h3>
                 <p className="text-[11px] text-indigo-100">{activePersona.badgeText}</p>
               </div>
             </div>
@@ -1500,7 +1473,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 type="button"
                 onClick={() => setIsPersonaConfigExpanded((prev) => !prev)}
                 className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition"
-                title="Thiết lập Vai trò Nền (System Persona) cho AI"
+                title="Thiết lập vai trò tư vấn"
               >
                 <Settings2 className="w-4 h-4" />
               </button>
@@ -1517,7 +1490,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </div>
           </div>
 
-          {/* BẢNG THIẾT LẬP VAI TRÒ NỀN TRƯỚC CHO AI (SYSTEM PERSONA PRESETS & CUSTOM INSTRUCTION) */}
           <div
             className={`px-3.5 py-2.5 border-b space-y-2 ${
               isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
@@ -1525,14 +1497,14 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           >
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400">
-                Thiết lập Vai trò Nền cho AI (System Persona):
+                Chọn góc nhìn tư vấn:
               </span>
               <button
                 type="button"
                 onClick={() => setIsPersonaConfigExpanded((prev) => !prev)}
                 className="text-[10px] font-bold underline text-slate-400 hover:text-indigo-500"
               >
-                {isPersonaConfigExpanded ? 'Thu gọn chỉ thị nền' : 'Sửa chỉ thị nền (Prompt)'}
+                {isPersonaConfigExpanded ? 'Thu gọn chỉ thị nền' : 'Tùy chỉnh chỉ thị nền'}
               </button>
             </div>
 
@@ -1562,7 +1534,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             {isPersonaConfigExpanded && (
               <div className="pt-1">
                 <label className="block text-[10px] font-bold text-slate-400 mb-1">
-                  Chỉ thị Vai trò Nền tùy chỉnh (System Instruction gửi kèm mỗi câu hỏi):
+                  Chỉ thị vai trò nền tùy chỉnh:
                 </label>
                 <textarea
                   rows={2}
@@ -1578,7 +1550,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             )}
           </div>
 
-          {/* Thanh Công cụ Tổng hợp & Đọc Tóm tắt 1-Click */}
           <div
             className={`p-3 border-b flex flex-wrap items-center justify-between gap-2 ${
               isDark ? 'bg-slate-900 border-slate-800' : 'bg-indigo-50/50 border-indigo-100'
@@ -1606,7 +1577,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             </button>
           </div>
 
-          {/* Gợi ý câu hỏi linh hoạt */}
           <div
             className={`px-3 py-2 border-b flex items-center gap-1.5 overflow-x-auto ${
               isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/70'
@@ -1635,7 +1605,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             ))}
           </div>
 
-          {/* Danh sách tin nhắn Chat AI */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
             {chatMessages.map((msg) => {
               const isAi = msg.sender === 'AI';
@@ -1704,13 +1673,12 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             })}
             {isAiThinking && (
               <div className="text-xs text-indigo-500 font-semibold animate-pulse px-2">
-                AI ({activePersona.shortLabel}) đang phân tích dữ liệu 5 tầng...
+                {activePersona.shortLabel} đang phân tích câu trả lời...
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Ô nhập câu hỏi trực tiếp cho AI */}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1724,7 +1692,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               type="text"
               value={chatInputText}
               onChange={(e) => setChatInputText(e.target.value)}
-              placeholder="Hỏi theo số người (VD: họp 8 người), tầng, mã phòng..."
+              placeholder="Hỏi số người họp, tầng, mã phòng hoặc câu hỏi bất kỳ..."
               className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-medium outline-none ${
                 isDark
                   ? 'bg-slate-900 border-slate-800 text-white'
@@ -1735,7 +1703,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               type="submit"
               disabled={isAiThinking}
               className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition"
-              title="Gửi câu hỏi cho AI"
+              title="Gửi câu hỏi"
             >
               <Send className="w-4 h-4" />
             </button>
