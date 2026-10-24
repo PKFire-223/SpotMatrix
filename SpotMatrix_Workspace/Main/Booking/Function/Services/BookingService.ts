@@ -66,12 +66,16 @@ const memoryBookingsFallback: BookingPayloadItem[] = [
   },
 ];
 
+// 1. Lấy hoặc khởi tạo trạng thái Optimistic Lock + Hold 5 phút của 1 phòng/ghế
 export function getOrInitRoomLockState(nodeId: string): RoomHoldLockState {
   const existing = roomOptimisticLockMap.get(nodeId);
   const nowMs = Date.now();
 
   if (existing) {
-    if (existing.holdExpiresAtIso && new Date(existing.holdExpiresAtIso).getTime() <= nowMs) {
+    if (
+      existing.holdExpiresAtIso &&
+      new Date(existing.holdExpiresAtIso).getTime() <= nowMs
+    ) {
       const released: RoomHoldLockState = {
         ...existing,
         lockVersion: existing.lockVersion + 1,
@@ -106,7 +110,7 @@ export function listAllRoomLockStates(): Record<string, RoomHoldLockState> {
   return result;
 }
 
-// 1. Giữ chỗ tạm thời 5 phút (Hold 5p) kèm kiểm tra Optimistic Locking (lockVersion)
+// 2. Giữ chỗ tạm thời 5 phút (Optimistic Locking: Kiểm tra lockVersion trước khi cấp quyền giữ chỗ)
 export async function acquireFiveMinuteRoomHold(
   nodeId: string,
   userEmail: string,
@@ -170,7 +174,9 @@ export async function acquireFiveMinuteRoomHold(
     targetNodeId: nodeId,
     lockVersionAttempted: nextVersion,
     outcomeStatus: 'SUCCESS',
-    detailMessage: `[Hold 5 Phút Thành Công] @${username} chiếm quyền giữ chỗ 5 phút tại ${nodeId} (lockVersion tăng từ v${currentLock.lockVersion} -> v${nextVersion}, hết hạn lúc ${expiresAt.toLocaleTimeString('vi-VN')}).`,
+    detailMessage: `[Hold 5 Phút Thành Công] @${username} chiếm quyền giữ chỗ 5 phút tại ${nodeId} (lockVersion tăng từ v${currentLock.lockVersion} -> v${nextVersion}, hết hạn lúc ${expiresAt.toLocaleTimeString(
+      'vi-VN'
+    )}).`,
   });
 
   return updatedLock;
@@ -206,7 +212,7 @@ export async function releaseFiveMinuteRoomHold(
   return released;
 }
 
-// 2. Mô phỏng 2 người bấm đặt cùng 1 phòng tại cùng 1 mili-giây (Test Optimistic Locking)
+// 3. Mô phỏng trực tiếp 2 người bấm đặt cùng 1 phòng tại cùng 1 mili-giây (Optimistic Locking Race)
 export async function simulateConcurrentOptimisticRace(
   nodeId: string,
   winnerEmail: string,
@@ -245,13 +251,15 @@ export async function simulateConcurrentOptimisticRace(
     finalLockVersion: winnerLock.lockVersion,
     winnerEmail,
     challengerEmail,
-    holdExpiresAtIso: winnerLock.holdExpiresAtIso || new Date(Date.now() + 300000).toISOString(),
+    holdExpiresAtIso:
+      winnerLock.holdExpiresAtIso || new Date(Date.now() + 300000).toISOString(),
     summaryMessage: `Optimistic Locking tại ${nodeId}: ${winnerEmail} thắng khóa (v${baseVersion} -> v${winnerLock.lockVersion}, giữ chỗ 5 phút). ${challengerEmail} gửi cùng v${baseVersion} bị từ chối (HTTP 409 Conflict)!`,
   };
 }
 
-// 3. Lấy danh sách toàn bộ đơn đặt phòng từ MongoDB (Ép kiểu qua unknown để tránh lỗi FlattenMaps<any> ts(2352))
-export async function listAllWorkspaceBookings(): Promise<BookingPayloadItem[]> {
+export async function listAllWorkspaceBookings(): Promise<
+  BookingPayloadItem[]
+> {
   if (getMongoConnectionState()) {
     const count = await BookingRecordModel.countDocuments();
     if (count === 0) {
@@ -263,7 +271,7 @@ export async function listAllWorkspaceBookings(): Promise<BookingPayloadItem[]> 
   return memoryBookingsFallback;
 }
 
-// 4. Tạo đơn đặt phòng mới (Hỗ trợ Đơn lẻ & Định kỳ + Kiểm tra Optimistic Lock + Va chạm lịch)
+// 4. Tạo đơn đặt phòng mới (Hỗ trợ Đơn lẻ & Định kỳ + Kiểm tra Optimistic Lock + Va chạm lịch & Hạn mức tuần theo Role)
 export async function createWorkspaceBooking(
   nodeId: string,
   userEmail: string,
@@ -302,8 +310,10 @@ export async function createWorkspaceBooking(
   }
 
   const allExisting = await listAllWorkspaceBookings();
-  const baseDateIso = extraOptions?.bookingDateIso || formatIsoDateString(new Date());
-  const recurringOption: RecurringOptionType = extraOptions?.recurringOption || 'NONE';
+  const baseDateIso =
+    extraOptions?.bookingDateIso || formatIsoDateString(new Date());
+  const recurringOption: RecurringOptionType =
+    extraOptions?.recurringOption || 'NONE';
 
   const collisionResult = validateSingleAndRecurringCollision(
     nodeId,
@@ -311,13 +321,15 @@ export async function createWorkspaceBooking(
     startTimeIso,
     endTimeIso,
     recurringOption,
-    allExisting
+    allExisting,
+    userEmail,
+    extraOptions?.requesterRole || 'EMPLOYEE'
   );
 
   if (collisionResult.hasCollision) {
     throw createConflictException(
       collisionResult.firstConflictMessage ||
-        `Vị trí ${nodeId} bị trùng lịch đặt trong khung giờ ${startTimeIso} - ${endTimeIso}.`
+        `Vị trí ${nodeId} bị trùng lịch đặt hoặc vượt hạn mức tuần trong khung giờ ${startTimeIso} - ${endTimeIso}.`
     );
   }
 
@@ -336,13 +348,18 @@ export async function createWorkspaceBooking(
     startTimeIso,
     endTimeIso
   );
-  const occurrenceDates = generateRecurringOccurrenceDates(baseDateIso, recurringOption);
+  const occurrenceDates = generateRecurringOccurrenceDates(
+    baseDateIso,
+    recurringOption
+  );
 
   const createdRecord: BookingPayloadItem = {
-    bookingId: extraOptions?.bookingId || `BK-${Date.now().toString().slice(-4)}`,
+    bookingId:
+      extraOptions?.bookingId || `BK-${Date.now().toString().slice(-4)}`,
     nodeId,
     userEmail,
-    requesterUsername: extraOptions?.requesterUsername || userEmail.split('@')[0],
+    requesterUsername:
+      extraOptions?.requesterUsername || userEmail.split('@')[0],
     requesterRole: extraOptions?.requesterRole || 'EMPLOYEE',
     departmentName: extraOptions?.departmentName || 'Product & Engineering',
     bookingDateIso: baseDateIso,
@@ -351,7 +368,9 @@ export async function createWorkspaceBooking(
     purposeNote,
     recurringOption,
     recurringSeriesId:
-      recurringOption !== 'NONE' ? `SERIES-${Date.now().toString().slice(-5)}` : null,
+      recurringOption !== 'NONE'
+        ? `SERIES-${Date.now().toString().slice(-5)}`
+        : null,
     occurrenceDates,
     lockVersion: nextVersion,
     holdExpiresAtIso: null,
@@ -384,7 +403,7 @@ export async function createWorkspaceBooking(
   return createdRecord;
 }
 
-// 5. Cronjob 15 phút tự động thu hồi chỗ (Auto-Release No-Show) & Trừ 10 điểm tín nhiệm
+// 5. Cronjob quét tự động thu hồi phòng quá 15 phút không Check-in QR (No-Show Auto-Release)
 export async function runFifteenMinuteNoShowCronSweep(options?: {
   forceTargetBookingId?: string;
 }): Promise<{
@@ -428,7 +447,9 @@ export async function runFifteenMinuteNoShowCronSweep(options?: {
         );
       }
 
-      const memItem = memoryBookingsFallback.find((b) => b.bookingId === booking.bookingId);
+      const memItem = memoryBookingsFallback.find(
+        (b) => b.bookingId === booking.bookingId
+      );
       if (memItem) {
         memItem.bookingStatus = 'CANCELLED';
         memItem.autoReleasedReason = releaseReason;
@@ -445,7 +466,11 @@ export async function runFifteenMinuteNoShowCronSweep(options?: {
       });
 
       try {
-        await adjustUserTrustScore(booking.userEmail, 'NO_SHOW_EXPIRED', booking.nodeId);
+        await adjustUserTrustScore(
+          booking.userEmail,
+          'NO_SHOW_EXPIRED',
+          booking.nodeId
+        );
       } catch {
         // Bỏ qua nếu email chưa có trong bảng trust profile
       }

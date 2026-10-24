@@ -1,274 +1,536 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Sun,
   Moon,
+  Volume2,
+  VolumeX,
+  Music,
   Bell,
-  Lock,
   ShieldCheck,
-  Sliders,
+  Sparkles,
   CheckCircle2,
-  Box,
-  Clock,
+  Sliders,
+  Play,
 } from 'lucide-react';
 import { UserRoleType } from '../../../Shared/Types/GlobalSystemTypes';
 
-interface SettingsPagesProps {
+export type LofiTrackStyleType = 'CHILL_RHODES' | 'AMBIENT_SPACE' | 'RAINY_CAFE';
+
+export interface SpotMatrixAudioSettings {
+  lofiEnabled: boolean;
+  sfxEnabled: boolean;
+  lofiVolume: number;
+  lofiTrackStyle: LofiTrackStyleType;
+}
+
+export const AUDIO_SETTINGS_STORAGE_KEY = 'spotmatrix_audio_settings_v1';
+
+export interface SettingsPagesProps {
   isDark: boolean;
   userRole: UserRoleType;
   onToggleTheme: () => void;
+  lofiEnabled?: boolean;
+  sfxEnabled?: boolean;
+  lofiVolume?: number;
+  lofiTrackStyle?: LofiTrackStyleType;
+  onToggleLofi?: (nextValue: boolean) => void;
+  onToggleSfx?: (nextValue: boolean) => void;
+  onChangeLofiVolume?: (nextVolume: number) => void;
+  onChangeLofiTrackStyle?: (nextStyle: LofiTrackStyleType) => void;
+  onPlayPreviewSfx?: (
+    type: 'CLICK' | 'SUCCESS' | 'ERROR' | 'NOTIFICATION'
+  ) => void;
 }
 
 export const SettingsPages: React.FC<SettingsPagesProps> = ({
   isDark,
   userRole,
   onToggleTheme,
+  lofiEnabled: propLofiEnabled,
+  sfxEnabled: propSfxEnabled,
+  lofiVolume: propLofiVolume,
+  lofiTrackStyle: propLofiTrackStyle,
+  onToggleLofi,
+  onToggleSfx,
+  onChangeLofiVolume,
+  onChangeLofiTrackStyle,
+  onPlayPreviewSfx,
 }) => {
-  const [defaultFloor, setDefaultFloor] = useState<number>(1);
-  const [graphicsQuality, setGraphicsQuality] = useState<'HIGH' | 'BALANCED'>('HIGH');
-  const [enableRealtimePopup, setEnableRealtimePopup] = useState<boolean>(true);
-  const [reminderMinutes, setReminderMinutes] = useState<number>(30);
+  const [localAudio, setLocalAudio] = useState<SpotMatrixAudioSettings>(() => {
+    try {
+      const raw = localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          lofiEnabled: Boolean(parsed.lofiEnabled),
+          sfxEnabled: parsed.sfxEnabled !== false,
+          lofiVolume: typeof parsed.lofiVolume === 'number' ? parsed.lofiVolume : 0.35,
+          lofiTrackStyle: parsed.lofiTrackStyle || 'CHILL_RHODES',
+        };
+      }
+    } catch {
+      // Bỏ qua
+    }
+    return {
+      lofiEnabled: false,
+      sfxEnabled: true,
+      lofiVolume: 0.35,
+      lofiTrackStyle: 'CHILL_RHODES',
+    };
+  });
 
-  // Chính sách đặt phòng (Admin có thể chỉnh sửa)
-  const [earlyCheckinHours, setEarlyCheckinHours] = useState<number>(2);
-  const [holdMinutes, setHoldMinutes] = useState<number>(5);
-  const [gracePeriodMinutes, setGracePeriodMinutes] = useState<number>(15);
+  const [emailAlertEnabled, setEmailAlertEnabled] = useState<boolean>(true);
+  const [qrEarlyReminderEnabled, setQrEarlyReminderEnabled] = useState<boolean>(true);
+  const [autoReleaseAlertEnabled, setAutoReleaseAlertEnabled] = useState<boolean>(true);
+  const [savedBannerText, setSavedBannerText] = useState<string | null>(null);
 
-  // Đổi mật khẩu
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [settingsSavedMsg, setSettingsSavedMsg] = useState<string | null>(null);
+  const effectiveLofiEnabled =
+    propLofiEnabled !== undefined ? propLofiEnabled : localAudio.lofiEnabled;
+  const effectiveSfxEnabled =
+    propSfxEnabled !== undefined ? propSfxEnabled : localAudio.sfxEnabled;
+  const effectiveLofiVolume =
+    propLofiVolume !== undefined ? propLofiVolume : localAudio.lofiVolume;
+  const effectiveLofiTrackStyle =
+    propLofiTrackStyle !== undefined ? propLofiTrackStyle : localAudio.lofiTrackStyle;
 
-  const isSysAdmin = userRole === 'SYS_ADMIN';
+  useEffect(() => {
+    setLocalAudio((prev) => ({
+      lofiEnabled: propLofiEnabled !== undefined ? propLofiEnabled : prev.lofiEnabled,
+      sfxEnabled: propSfxEnabled !== undefined ? propSfxEnabled : prev.sfxEnabled,
+      lofiVolume: propLofiVolume !== undefined ? propLofiVolume : prev.lofiVolume,
+      lofiTrackStyle:
+        propLofiTrackStyle !== undefined ? propLofiTrackStyle : prev.lofiTrackStyle,
+    }));
+  }, [propLofiEnabled, propSfxEnabled, propLofiVolume, propLofiTrackStyle]);
 
-  const handleSaveSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSettingsSavedMsg('Đã lưu cấu hình cài đặt hệ thống thành công!');
-    setCurrentPassword('');
-    setNewPassword('');
-    setTimeout(() => setSettingsSavedMsg(null), 3500);
+  const syncAudioSettings = (next: SpotMatrixAudioSettings, message?: string) => {
+    setLocalAudio(next);
+    try {
+      localStorage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify(next));
+      window.dispatchEvent(
+        new CustomEvent('spotmatrix-audio-settings-changed', { detail: next })
+      );
+    } catch {
+      // Bỏ qua
+    }
+    if (message) {
+      setSavedBannerText(message);
+      setTimeout(() => setSavedBannerText(null), 3000);
+    }
   };
 
-  const cardSurface = isDark
-    ? 'bg-slate-900 border-slate-800 text-slate-100'
-    : 'bg-white border-slate-200/90 text-slate-800 shadow-sm';
+  const handleToggleLofiClick = () => {
+    const nextVal = !effectiveLofiEnabled;
+    onToggleLofi?.(nextVal);
+    syncAudioSettings(
+      { ...localAudio, lofiEnabled: nextVal },
+      nextVal
+        ? 'Đã bật Nhạc nền Lofi Chill (100% Không Bản Quyền).'
+        : 'Đã tắt Nhạc nền Lofi.'
+    );
+  };
 
-  const inputSurface = isDark
-    ? 'bg-slate-950 border-slate-800 text-slate-100'
-    : 'bg-slate-50 border-slate-200 text-slate-800';
+  const handleToggleSfxClick = () => {
+    const nextVal = !effectiveSfxEnabled;
+    onToggleSfx?.(nextVal);
+    syncAudioSettings(
+      { ...localAudio, sfxEnabled: nextVal },
+      nextVal
+        ? 'Đã bật Hiệu ứng Âm thanh Thao tác (SFX).'
+        : 'Đã tắt Hiệu ứng Âm thanh Thao tác (SFX).'
+    );
+  };
+
+  const handleVolumeChange = (nextVol: number) => {
+    onChangeLofiVolume?.(nextVol);
+    syncAudioSettings({ ...localAudio, lofiVolume: nextVol });
+  };
+
+  const handleTrackStyleSelect = (nextStyle: LofiTrackStyleType) => {
+    onChangeLofiTrackStyle?.(nextStyle);
+    syncAudioSettings(
+      { ...localAudio, lofiTrackStyle: nextStyle, lofiEnabled: true },
+      `Đã chuyển sang giai điệu Lofi: ${
+        nextStyle === 'CHILL_RHODES'
+          ? 'Lofi Chill Rhodes 76 BPM'
+          : nextStyle === 'AMBIENT_SPACE'
+          ? 'Ambient Focus Space'
+          : 'Acoustic Rain & Jazz Chords'
+      }`
+    );
+    if (onToggleLofi && !effectiveLofiEnabled) {
+      onToggleLofi(true);
+    }
+  };
 
   return (
-    <form onSubmit={handleSaveSettings} className="space-y-6">
+    <div className="space-y-6">
       <div
-        className={`p-5 rounded-2xl border flex flex-wrap items-center justify-between gap-4 ${cardSurface}`}
+        className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
+          isDark
+            ? 'bg-slate-900/90 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
+        }`}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            <Settings className="w-5 h-5" />
+        <div className="flex items-center gap-3.5">
+          <div
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+              isDark
+                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                : 'bg-indigo-50 border-indigo-100 text-indigo-600'
+            }`}
+          >
+            <Settings className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold">
-              Cài đặt Hệ thống, Đồ họa 3D & Bảo mật Tài khoản
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Tùy chỉnh trải nghiệm giao diện, thông báo nhắc lịch QR và quy định vận hành phòng họp
+            <h1 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Cài đặt Hệ thống, Nhạc nền Lofi & Hiệu ứng Âm thanh
+            </h1>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              Tùy chỉnh nhạc nền Lofi không bản quyền, hiệu ứng âm thanh (SFX) và giao diện ({userRole})
             </p>
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm transition"
-        >
-          Lưu Toàn bộ Cài đặt
-        </button>
+        {savedBannerText && (
+          <div className="px-4 py-2 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:text-teal-300 text-xs font-bold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{savedBannerText}</span>
+          </div>
+        )}
       </div>
 
-      {settingsSavedMsg && (
-        <div className="p-3.5 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{settingsSavedMsg}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 1. CAI DAT GIAO DIEN & ENGINE DO HOA 3D */}
-        <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-          <h3 className="text-sm font-extrabold flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-            <Box className="w-4 h-4 text-indigo-600" />
-            1. Giao diện & Hiển thị Mô hình 3D
-          </h3>
-
-          <div className="flex items-center justify-between text-xs">
+      <div
+        className={`p-6 rounded-3xl border space-y-5 ${
+          isDark
+            ? 'bg-slate-900/90 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
+        }`}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-2.5">
+            <Music className="w-5 h-5 text-indigo-600" />
             <div>
-              <p className="font-bold">Chế độ Màu sắc Giao diện</p>
-              <p className="text-[11px] text-slate-400">
-                Chuyển đổi giữa nền Sáng (#F4F7FB) và nền Tối (#0B1120)
+              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                Nhạc nền Lofi Chill (100% Không Bản Quyền) & Hiệu ứng Âm thanh (SFX)
+              </h2>
+              <p className="text-xs text-slate-400">
+                Tổng hợp trực tiếp bằng Web Audio Synthesizer — Không lo bản quyền, hoạt động cả khi offline
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onToggleTheme}
-              className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-bold flex items-center gap-2"
-            >
-              {isDark ? (
-                <>
-                  <Sun className="w-4 h-4 text-amber-400" /> Đang bật Tối
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4 text-indigo-600" /> Đang bật Sáng
-                </>
-              )}
-            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="block font-bold mb-1">Tầng mặc định khi mở Sơ đồ 3D</label>
-              <select
-                value={defaultFloor}
-                onChange={(e) => setDefaultFloor(Number(e.target.value))}
-                className={`w-full px-3 py-2 rounded-xl border font-semibold ${inputSurface}`}
-              >
-                <option value={1}>Tầng 1 (6 Phòng họp chuẩn)</option>
-                <option value={2}>Tầng 2 (6 Phòng họp chuẩn)</option>
-                <option value={3}>Tầng 3 (6 Phòng họp chuẩn)</option>
-                <option value={4}>Tầng 4 (6 Phòng họp chuẩn)</option>
-                <option value={5}>Tầng 5 (Hội trường Đấu trường La Mã)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-bold mb-1">Chất lượng Khử răng cưa 3D (WebGL)</label>
-              <select
-                value={graphicsQuality}
-                onChange={(e) => setGraphicsQuality(e.target.value as 'HIGH' | 'BALANCED')}
-                className={`w-full px-3 py-2 rounded-xl border font-semibold ${inputSurface}`}
-              >
-                <option value="HIGH">Cao (Đổ bóng mềm PCFSoftShadow)</option>
-                <option value="BALANCED">Cân bằng (Tối ưu cho máy cấu hình nhẹ)</option>
-              </select>
-            </div>
-          </div>
+          <span
+            className={`px-3 py-1 rounded-xl text-xs font-extrabold ${
+              effectiveLofiEnabled
+                ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
+                : 'bg-slate-500/15 text-slate-500'
+            }`}
+          >
+            {effectiveLofiEnabled ? '♫ Đang phát Nhạc Lofi' : 'Nhạc Lofi đang tắt'}
+          </span>
         </div>
 
-        {/* 2. CAI DAT THONG BAO & NHAC LICH CHECK-IN QR */}
-        <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-          <h3 className="text-sm font-extrabold flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-            <Bell className="w-4 h-4 text-teal-600" />
-            2. Cài đặt Thông báo & Nhắc giờ Quét QR
-          </h3>
-
-          <div className="flex items-center justify-between text-xs">
-            <div>
-              <p className="font-bold">Hiển thị Pop-up Thông báo Realtime</p>
-              <p className="text-[11px] text-slate-400">
-                Tự động bật thông báo góc dưới bên phải khi có kết quả duyệt phòng
-              </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div
+            className={`p-5 rounded-2xl border space-y-4 ${
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-[#F8FAFC] border-indigo-100'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className={`text-xs font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  1. Nhạc nền Lofi Không Bản Quyền
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Phát giai điệu Lofi nhẹ nhàng khi điều phối sơ đồ 3D và đặt phòng
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleLofiClick}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm ${
+                  effectiveLofiEnabled
+                    ? 'bg-teal-600 hover:bg-teal-500 text-white'
+                    : isDark
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                }`}
+              >
+                {effectiveLofiEnabled ? (
+                  <>
+                    <Volume2 className="w-4 h-4" />
+                    Đang Bật Lofi
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="w-4 h-4" />
+                    Đang Tắt Lofi
+                  </>
+                )}
+              </button>
             </div>
-            <input
-              type="checkbox"
-              checked={enableRealtimePopup}
-              onChange={(e) => setEnableRealtimePopup(e.target.checked)}
-              className="w-4 h-4 accent-indigo-600"
-            />
-          </div>
 
-          <div className="text-xs">
-            <label className="block font-bold mb-1">
-              Thời gian gửi thông báo nhắc trước giờ mở Check-in QR
-            </label>
-            <select
-              value={reminderMinutes}
-              onChange={(e) => setReminderMinutes(Number(e.target.value))}
-              className={`w-full px-3 py-2 rounded-xl border font-semibold ${inputSurface}`}
-            >
-              <option value={15}>Nhắc trước 15 phút</option>
-              <option value={30}>Nhắc trước 30 phút</option>
-              <option value={60}>Nhắc trước 1 tiếng</option>
-              <option value={120}>Nhắc ngay khi mở cổng Check-in (Trước 2 tiếng)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* 3. BAO MAT & DOI MAT KHAU */}
-        <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-          <h3 className="text-sm font-extrabold flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-            <Lock className="w-4 h-4 text-indigo-600" />
-            3. Bảo mật & Cập nhật Mật khẩu
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="block font-bold mb-1">Mật khẩu hiện tại</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className={`w-full px-3 py-2 rounded-xl border ${inputSurface}`}
-              />
-            </div>
-            <div>
-              <label className="block font-bold mb-1">
-                Mật khẩu mới (≥ 8 ký tự, Hoa, thường, số)
+            <div className="space-y-2">
+              <label className="block text-[11px] font-bold text-slate-400">
+                Chọn Giai điệu Lofi Không Bản Quyền:
               </label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  {
+                    id: 'CHILL_RHODES' as LofiTrackStyleType,
+                    title: 'Lofi Chill Rhodes 76 BPM',
+                    desc: 'Hợp âm Piano Rhodes Fmaj7 - Em7 - Dm7 - Cmaj7 ấm áp & nhịp trống nhẹ',
+                  },
+                  {
+                    id: 'AMBIENT_SPACE' as LofiTrackStyleType,
+                    title: 'Ambient Focus Space',
+                    desc: 'Hợp âm Synth Pad không gian tĩnh lặng, tăng độ tập trung cao',
+                  },
+                  {
+                    id: 'RAINY_CAFE' as LofiTrackStyleType,
+                    title: 'Acoustic Rain & Jazz Chords',
+                    desc: 'Giai điệu Lofi Jazz thư giãn chiều tà',
+                  },
+                ].map((track) => {
+                  const isSelected = effectiveLofiTrackStyle === track.id;
+                  return (
+                    <button
+                      key={track.id}
+                      type="button"
+                      onClick={() => handleTrackStyleSelect(track.id)}
+                      className={`p-3 rounded-xl border text-left transition flex items-center justify-between gap-2 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                          : isDark
+                          ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50'
+                          : 'bg-white border-slate-200 text-slate-800 hover:border-indigo-300'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-extrabold">{track.title}</p>
+                        <p
+                          className={`text-[10px] mt-0.5 ${
+                            isSelected ? 'text-indigo-100' : 'text-slate-400'
+                          }`}
+                        >
+                          {track.desc}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-indigo-500/10 text-indigo-500'
+                        }`}
+                      >
+                        {isSelected ? 'Đang chọn' : 'Chọn'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+                <span className="text-slate-400 flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                  Âm lượng Nhạc nền Lofi:
+                </span>
+                <span className="text-indigo-600 dark:text-indigo-400">
+                  {Math.round(effectiveLofiVolume * 100)}%
+                </span>
+              </div>
               <input
-                type="password"
-                placeholder="Nhập mật khẩu mới..."
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className={`w-full px-3 py-2 rounded-xl border ${inputSurface}`}
+                type="range"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={effectiveLofiVolume}
+                onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                className="w-full accent-indigo-600 cursor-pointer"
               />
             </div>
           </div>
-        </div>
 
-        {/* 4. QUY TAC THOI GIAN CHECK-IN & CHINH SACH HE THONG */}
-        <div className={`p-5 rounded-2xl border space-y-4 ${cardSurface}`}>
-          <h3 className="text-sm font-extrabold flex items-center gap-2 border-b pb-3 border-slate-100 dark:border-slate-800">
-            <Sliders className="w-4 h-4 text-amber-500" />
-            4. Quy tắc Khung giờ Check-in & Hạn mức ({isSysAdmin ? 'Quyền ADMIN sửa' : 'Chỉ xem'})
-          </h3>
+          <div
+            className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-[#F8FAFC] border-indigo-100'
+            }`}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className={`text-xs font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    2. Hiệu ứng Âm thanh Thao tác (SFX)
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Phát âm thanh khi bấm nút, đặt phòng thành công, quét QR hoặc báo trùng lịch
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleSfxClick}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm ${
+                    effectiveSfxEnabled
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      : isDark
+                      ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                      : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                  }`}
+                >
+                  {effectiveSfxEnabled ? (
+                    <>
+                      <Volume2 className="w-4 h-4" />
+                      Đang Bật SFX
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-4 h-4" />
+                      Đang Tắt SFX
+                    </>
+                  )}
+                </button>
+              </div>
 
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="block font-bold mb-1">Mở Check-in sớm</label>
-              <input
-                type="number"
-                disabled={!isSysAdmin}
-                value={earlyCheckinHours}
-                onChange={(e) => setEarlyCheckinHours(Number(e.target.value))}
-                className={`w-full px-3 py-2 rounded-xl border font-bold ${inputSurface}`}
-              />
-              <span className="text-[10px] text-slate-400">Giờ trước khi họp</span>
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-400">
+                  Nghe thử từng loại Hiệu ứng Âm thanh (SFX Test):
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { type: 'CLICK' as const, label: 'Âm Click Chuyển Tab', color: 'text-indigo-600' },
+                    { type: 'SUCCESS' as const, label: 'Âm Đặt Phòng Thành Công', color: 'text-teal-600' },
+                    { type: 'ERROR' as const, label: 'Âm Cảnh Báo Trùng Lịch', color: 'text-rose-600' },
+                    { type: 'NOTIFICATION' as const, label: 'Âm Chuông Thông Báo', color: 'text-amber-600' },
+                  ].map((item) => (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => onPlayPreviewSfx?.(item.type)}
+                      className={`p-3 rounded-xl border text-left text-xs font-bold flex items-center justify-between gap-2 transition ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800 hover:border-indigo-500/50 text-slate-200'
+                          : 'bg-white border-slate-200 hover:border-indigo-300 text-slate-800'
+                      }`}
+                    >
+                      <span className="truncate">{item.label}</span>
+                      <Play className={`w-3.5 h-3.5 shrink-0 ${item.color}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="block font-bold mb-1">Giữ chỗ tạm (Hold)</label>
-              <input
-                type="number"
-                disabled={!isSysAdmin}
-                value={holdMinutes}
-                onChange={(e) => setHoldMinutes(Number(e.target.value))}
-                className={`w-full px-3 py-2 rounded-xl border font-bold ${inputSurface}`}
-              />
-              <span className="text-[10px] text-slate-400">Phút đếm ngược</span>
-            </div>
-            <div>
-              <label className="block font-bold mb-1">Ân hạn trễ QR</label>
-              <input
-                type="number"
-                disabled={!isSysAdmin}
-                value={gracePeriodMinutes}
-                onChange={(e) => setGracePeriodMinutes(Number(e.target.value))}
-                className={`w-full px-3 py-2 rounded-xl border font-bold ${inputSurface}`}
-              />
-              <span className="text-[10px] text-slate-400">Phút trước khi hủy</span>
+
+            <div
+              className={`p-3 rounded-xl border text-[11px] flex items-center gap-2 ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-slate-300'
+                  : 'bg-indigo-50/60 border-indigo-100 text-slate-700'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                Bạn cũng có thể bật/tắt nhanh Nhạc nền Lofi ngay trên thanh Header phía trên!
+              </span>
             </div>
           </div>
         </div>
       </div>
-    </form>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div
+          className={`p-6 rounded-3xl border space-y-4 ${
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {isDark ? (
+              <Moon className="w-5 h-5 text-indigo-400" />
+            ) : (
+              <Sun className="w-5 h-5 text-amber-500" />
+            )}
+            <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Chế độ Giao diện (Light / Dark Mode)
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400">
+            Chuyển đổi đồng bộ màu nền toàn bộ Sơ đồ 3D/2D, Bảng điều khiển và trang Đặt lịch.
+          </p>
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="w-full py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm transition"
+          >
+            {isDark ? (
+              <>
+                <Sun className="w-4 h-4 text-amber-300" />
+                Chuyển sang Chế độ Sáng (Light Mode)
+              </>
+            ) : (
+              <>
+                <Moon className="w-4 h-4" />
+                Chuyển sang Chế độ Tối (Dark Mode)
+              </>
+            )}
+          </button>
+        </div>
+
+        <div
+          className={`p-6 rounded-3xl border space-y-3.5 ${
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <Bell className="w-5 h-5 text-teal-600" />
+            <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              Tùy chọn Thông báo & Nhắc lịch Check-in QR
+            </h2>
+          </div>
+
+          {[
+            {
+              label: 'Nhận thông báo Popup thời gian thực khi đặt/duyệt phòng',
+              checked: emailAlertEnabled,
+              toggle: () => setEmailAlertEnabled((v) => !v),
+            },
+            {
+              label: 'Nhắc quét mã QR Check-in sớm trước 2 tiếng',
+              checked: qrEarlyReminderEnabled,
+              toggle: () => setQrEarlyReminderEnabled((v) => !v),
+            },
+            {
+              label: 'Cảnh báo trước khi Cronjob 15 phút tự động thu hồi phòng No-Show',
+              checked: autoReleaseAlertEnabled,
+              toggle: () => setAutoReleaseAlertEnabled((v) => !v),
+            },
+          ].map((opt, idx) => (
+            <label
+              key={idx}
+              className="flex items-center justify-between gap-3 text-xs font-semibold cursor-pointer"
+            >
+              <span>{opt.label}</span>
+              <input
+                type="checkbox"
+                checked={opt.checked}
+                onChange={opt.toggle}
+                className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+              />
+            </label>
+          ))}
+
+          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center gap-2 text-[11px] text-slate-400">
+            <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+            <span>Tất cả tùy chọn âm thanh Lofi, SFX và giao diện đều được lưu tự động.</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };

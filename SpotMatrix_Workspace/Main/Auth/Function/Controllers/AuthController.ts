@@ -1,5 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import * as AuthService from '../Services/AuthService';
+import {
+  confirmPasswordResetWithOtp,
+  ensureDefaultAccountsSeeded,
+  loginUserAccount,
+  registerUserAccount,
+  requestPasswordResetOtp,
+} from '../Services/AuthService';
 import { UserAccountDocument, UserAccountModel } from '../Models/UserAccountModel';
 import { getMongoConnectionState } from '../../../../Shared/Database/MongoConnection';
 
@@ -17,28 +23,15 @@ const memoryProfileCustomizationStore = new Map<
   }
 >();
 
-const authServiceMap = AuthService as unknown as Record<
-  string,
-  (...args: unknown[]) => Promise<unknown>
->;
-
 export async function handleLoginAccount(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
+    await ensureDefaultAccountsSeeded();
     const clientIp = req.ip || req.socket.remoteAddress || '127.0.0.1';
-    const loginFn =
-      authServiceMap.loginUserAccount ||
-      authServiceMap.authenticateUserAccount ||
-      authServiceMap.loginAccount;
-
-    if (!loginFn) {
-      throw new Error('Khong tim thay ham xu ly dang nhap trong AuthService.');
-    }
-
-    const result = await loginFn(req.body, clientIp);
+    const result = await loginUserAccount(req.body, clientIp);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -51,14 +44,7 @@ export async function handleRegisterAccount(
   next: NextFunction
 ): Promise<void> {
   try {
-    const registerFn =
-      authServiceMap.registerUserAccount || authServiceMap.registerAccount;
-
-    if (!registerFn) {
-      throw new Error('Khong tim thay ham xu ly dang ky trong AuthService.');
-    }
-
-    const result = await registerFn(req.body);
+    const result = await registerUserAccount(req.body);
     res.status(201).json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -72,17 +58,7 @@ export async function handleRequestPasswordOtp(
 ): Promise<void> {
   try {
     const { identifier } = req.body;
-    const requestOtpFn = authServiceMap.requestPasswordResetOtp;
-
-    if (!requestOtpFn) {
-      throw new Error('Khong tim thay ham requestPasswordResetOtp trong AuthService.');
-    }
-
-    const result =
-      requestOtpFn.length <= 1 && typeof identifier === 'undefined'
-        ? await requestOtpFn(req.body)
-        : await requestOtpFn(identifier ?? req.body);
-
+    const result = await requestPasswordResetOtp(identifier || req.body);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -96,25 +72,17 @@ export async function handleConfirmPasswordReset(
 ): Promise<void> {
   try {
     const { identifier, otpCode, newPassword } = req.body;
-    const confirmOtpFn = authServiceMap.confirmPasswordResetWithOtp;
-
-    if (!confirmOtpFn) {
-      throw new Error('Khong tim thay ham confirmPasswordResetWithOtp trong AuthService.');
-    }
-
-    // Tự động tương thích cả chữ ký 1 tham số object ({ identifier, otpCode, newPassword }) và 3 tham số rời
-    const result =
-      confirmOtpFn.length <= 1
-        ? await confirmOtpFn({ identifier, otpCode, newPassword })
-        : await confirmOtpFn(identifier, otpCode, newPassword);
-
+    const result = await confirmPasswordResetWithOtp({
+      identifier,
+      otpCode,
+      newPassword,
+    });
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
 }
 
-// Lấy thông tin Hồ sơ + Ảnh Avatar + Ảnh nền Background từ MongoDB theo username
 export async function handleGetUserProfileFromMongo(
   req: Request,
   res: Response,
@@ -174,7 +142,6 @@ export async function handleGetUserProfileFromMongo(
   }
 }
 
-// Cập nhật trực tiếp Hồ sơ + Ảnh Avatar + Ảnh nền Background vào MongoDB Atlas
 export async function handleUpdateUserProfileInMongo(
   req: Request,
   res: Response,
@@ -245,3 +212,5 @@ export async function handleUpdateUserProfileInMongo(
     next(err);
   }
 }
+
+export const handleUserLogin = handleLoginAccount;

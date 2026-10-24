@@ -22,6 +22,8 @@ import {
   Mail,
   Building2,
   Award,
+  Music,
+  VolumeX,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
@@ -45,12 +47,20 @@ import {
   BookingTimeWindowInput,
 } from '../../Main/Booking/Pages/BookingCalendarPages';
 import { QrCheckinConfirmPages } from '../../Main/Booking/Pages/QrCheckinConfirmPages';
-import { AuthenticatedUserSession, LoginPages } from '../../Main/Auth/Pages/LoginPages';
+import {
+  AuthenticatedUserSession,
+  LoginPages,
+} from '../../Main/Auth/Pages/LoginPages';
 import {
   ProfilePages,
   UserProfileCustomization,
 } from '../../Main/Auth/Pages/ProfilePages';
-import { SettingsPages } from '../../Main/Auth/Pages/SettingsPages';
+import {
+  AUDIO_SETTINGS_STORAGE_KEY,
+  LofiTrackStyleType,
+  SettingsPages,
+  SpotMatrixAudioSettings,
+} from '../../Main/Auth/Pages/SettingsPages';
 import { NotificationHeaderBell } from '../../Main/Notification/Function/Components/NotificationHeaderBell';
 import { RealtimePopupToast } from '../../Main/Notification/Function/Components/RealtimePopupToast';
 import { NotificationCenterPages } from '../../Main/Notification/Pages/NotificationCenterPages';
@@ -75,93 +85,45 @@ type ActiveSidebarPage =
 function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
   const rooms: WorkspaceNodeItem[] = [];
   const floorTemplates = [
-    {
-      codeSuffix: '01',
-      name: 'Phòng Họp Đối tác Nhỏ',
-      zone: 'MEETING_ROOM' as WorkspaceZoneType,
-      cap: 2,
-      posX: 150,
-      posY: 115,
-      status: 'AVAILABLE' as SeatStatusType,
-    },
-    {
-      codeSuffix: '02',
-      name: 'Phòng Họp Nhóm Sprint',
-      zone: 'MEETING_ROOM' as WorkspaceZoneType,
-      cap: 6,
-      posX: 400,
-      posY: 115,
-      status: 'OCCUPIED' as SeatStatusType,
-    },
-    {
-      codeSuffix: '03',
-      name: 'Phòng Họp Boardroom Lớn',
-      zone: 'MEETING_ROOM' as WorkspaceZoneType,
-      cap: 10,
-      posX: 650,
-      posY: 115,
-      status: 'AVAILABLE' as SeatStatusType,
-    },
-    {
-      codeSuffix: '04',
-      name: 'Phòng Thảo luận Chiến lược',
-      zone: 'MEETING_ROOM' as WorkspaceZoneType,
-      cap: 4,
-      posX: 150,
-      posY: 345,
-      status: 'HOLDING' as SeatStatusType,
-    },
-    {
-      codeSuffix: '05',
-      name: 'Phòng Sáng tạo Bàn tròn',
-      zone: 'COLLAB_HUB' as WorkspaceZoneType,
-      cap: 8,
-      posX: 400,
-      posY: 345,
-      status: 'AVAILABLE' as SeatStatusType,
-    },
-    {
-      codeSuffix: '06',
-      name: 'Phòng Họp Hội đồng VIP',
-      zone: 'MEETING_ROOM' as WorkspaceZoneType,
-      cap: 12,
-      posX: 650,
-      posY: 345,
-      status: 'RESERVED' as SeatStatusType,
-    },
+    { codeSuffix: '01', name: 'Phòng Họp Đối tác Nhỏ', zone: 'MEETING_ROOM' as WorkspaceZoneType, cap: 2, posX: 150, posY: 115, status: 'AVAILABLE' as SeatStatusType },
+    { codeSuffix: '02', name: 'Phòng Họp Nhóm Sprint', zone: 'MEETING_ROOM' as WorkspaceZoneType, cap: 6, posX: 400, posY: 115, status: 'OCCUPIED' as SeatStatusType },
+    { codeSuffix: '03', name: 'Phòng Họp Boardroom Lớn', zone: 'MEETING_ROOM' as WorkspaceZoneType, cap: 10, posX: 650, posY: 115, status: 'AVAILABLE' as SeatStatusType },
+    { codeSuffix: '04', name: 'Phòng Họp Bàn Tròn Sáng tạo', zone: 'COLLAB_HUB' as WorkspaceZoneType, cap: 4, posX: 150, posY: 345, status: 'AVAILABLE' as SeatStatusType },
+    { codeSuffix: '05', name: 'Phòng Họp Bàn Tròn Thảo luận', zone: 'COLLAB_HUB' as WorkspaceZoneType, cap: 8, posX: 400, posY: 345, status: 'RESERVED' as SeatStatusType },
+    { codeSuffix: '06', name: 'Phòng Họp Hội đồng VIP', zone: 'QUIET_POD' as WorkspaceZoneType, cap: 12, posX: 650, posY: 345, status: 'AVAILABLE' as SeatStatusType },
   ];
 
-  for (let fl = 1; fl <= 4; fl++) {
-    floorTemplates.forEach((tpl) => {
-      const code = `M${fl}-${tpl.codeSuffix}`;
+  for (let floor = 1; floor <= 4; floor++) {
+    floorTemplates.forEach((tpl, idx) => {
+      const roomCode = `M${floor}-${tpl.codeSuffix}`;
       rooms.push({
-        nodeId: `NODE-M${fl}${tpl.codeSuffix}`,
-        nodeCode: code,
-        nodeLabel: `${tpl.name} ${code} (Tầng ${fl})`,
+        nodeId: `NODE-M${floor}${tpl.codeSuffix}`,
+        nodeCode: roomCode,
+        nodeLabel: `${tpl.name} ${roomCode} (Tầng ${floor})`,
         zoneType: tpl.zone,
-        floorLevel: fl,
+        floorLevel: floor,
         position2D: { posX: tpl.posX, posY: tpl.posY },
-        position3D: { coordX: 0, coordY: 0.5, coordZ: 0 },
+        position3D: { coordX: (idx % 3) * 4 - 4, coordY: 0.5, coordZ: idx < 3 ? -3 : 3 },
         capacityCount: tpl.cap,
-        status: fl % 2 === 0 && tpl.codeSuffix === '02' ? 'AVAILABLE' : tpl.status,
-        amenitiesList: ['Màn hình 4K', 'Máy chiếu Laser', 'Camera AI 360', 'Cách âm 40dB'],
-        aiScore: 92 + (fl % 6),
+        status: floor === 1 ? tpl.status : idx === floor % 5 ? 'OCCUPIED' : 'AVAILABLE',
+        amenitiesList: ['Bàn họp lớn', `${tpl.cap} ghế tiêu chuẩn`, 'Màn hình 4K', 'Cách âm 40dB'],
+        aiScore: 98 - idx * 2,
         lockVersion: 1,
       });
     });
   }
 
   rooms.push({
-    nodeId: 'NODE-H01',
+    nodeId: 'NODE-H01-COLOSSEUM',
     nodeCode: 'H-01',
     nodeLabel: 'Hội trường Lớn Đấu Trường La Mã (Tầng 5)',
-    zoneType: 'COLLAB_HUB',
+    zoneType: 'MEETING_ROOM',
     floorLevel: 5,
     position2D: { posX: 400, posY: 230 },
-    position3D: { coordX: 0, coordY: 2.5, coordZ: 0 },
+    position3D: { coordX: 0, coordY: 0.5, coordZ: 0 },
     capacityCount: 30,
     status: 'AVAILABLE',
-    amenitiesList: ['Sân khấu tròn 360°', 'Màn hình Panorama', '28 Ghế Bậc thềm Vòng cung'],
+    amenitiesList: ['Bục Diễn Giả trung tâm', 'Ghế vòm La Mã H01-A1..B8', 'Màn hình LED Panorama 360°'],
     aiScore: 99,
     lockVersion: 1,
   });
@@ -170,162 +132,48 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
 }
 
 const INITIAL_ROOM_EQUIPMENTS: SharedEquipmentItem[] = [
-  {
-    equipmentId: 'EQ-01',
-    equipmentCode: 'EQ-M101-TV4K-01',
-    equipmentName: 'Màn hình Hội nghị Sony Bravia 4K 75"',
-    categoryName: 'MONITOR_4K',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M1-01',
-    position2D: { posX: 150, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 24,
-    monthlyUsageHours: 96,
-    healthPercent: 98,
-  },
-  {
-    equipmentId: 'EQ-02',
-    equipmentCode: 'EQ-M101-CAM360-02',
-    equipmentName: 'Camera AI Tracking 360° Poly Studio',
-    categoryName: 'AUDIO_POD',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M1-01',
-    position2D: { posX: 150, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 22,
-    monthlyUsageHours: 88,
-    healthPercent: 97,
-  },
-  {
-    equipmentId: 'EQ-03',
-    equipmentCode: 'EQ-M102-LASER-01',
-    equipmentName: 'Máy chiếu Laser Epson 4K Pro',
-    categoryName: 'PROJECTOR',
-    status: 'IN_USE',
-    assignedNodeId: 'M1-02',
-    position2D: { posX: 400, posY: 115 },
-    currentBookingId: 'BK-2026-001',
-    weeklyUsageHours: 31,
-    monthlyUsageHours: 124,
-    healthPercent: 86,
-  },
-  {
-    equipmentId: 'EQ-04',
-    equipmentCode: 'EQ-M103-HUB-01',
-    equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
-    categoryName: 'TYPE_C_HUB',
-    status: 'BROKEN',
-    assignedNodeId: 'M1-03',
-    position2D: { posX: 650, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 12,
-    monthlyUsageHours: 54,
-    healthPercent: 45,
-  },
-  {
-    equipmentId: 'EQ-05',
-    equipmentCode: 'EQ-M205-WACOM-01',
-    equipmentName: 'Bảng Tương tác Cảm ứng KTS Wacom 24"',
-    categoryName: 'WACOM_TABLET',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M2-05',
-    position2D: { posX: 400, posY: 345 },
-    currentBookingId: null,
-    weeklyUsageHours: 19,
-    monthlyUsageHours: 78,
-    healthPercent: 95,
-  },
-  {
-    equipmentId: 'EQ-06',
-    equipmentCode: 'EQ-H01-PANO-01',
-    equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường',
-    categoryName: 'PROJECTOR',
-    status: 'AVAILABLE',
-    assignedNodeId: 'H-01',
-    position2D: { posX: 400, posY: 230 },
-    currentBookingId: null,
-    weeklyUsageHours: 28,
-    monthlyUsageHours: 112,
-    healthPercent: 99,
-  },
+  { equipmentId: 'EQ-01', equipmentCode: 'EQ-M101-SCREEN-01', equipmentName: 'Màn hình Hội nghị 4K Samsung 75"', categoryName: 'PROJECTOR', status: 'AVAILABLE', assignedNodeId: 'M1-01', position2D: { posX: 150, posY: 115 }, currentBookingId: null, weeklyUsageHours: 24, monthlyUsageHours: 96, healthPercent: 98 },
+  { equipmentId: 'EQ-02', equipmentCode: 'EQ-M101-CAM-02', equipmentName: 'Camera AI 360° Poly Studio E70', categoryName: 'AUDIO_POD', status: 'AVAILABLE', assignedNodeId: 'M1-01', position2D: { posX: 150, posY: 115 }, currentBookingId: null, weeklyUsageHours: 18, monthlyUsageHours: 72, healthPercent: 94 },
+  { equipmentId: 'EQ-03', equipmentCode: 'EQ-M102-LASER-01', equipmentName: 'Máy chiếu Laser Epson 4K Pro', categoryName: 'PROJECTOR', status: 'IN_USE', assignedNodeId: 'M1-02', position2D: { posX: 400, posY: 115 }, currentBookingId: 'BK-2026-001', weeklyUsageHours: 31, monthlyUsageHours: 124, healthPercent: 86 },
+  { equipmentId: 'EQ-04', equipmentCode: 'EQ-M103-HUB-01', equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W', categoryName: 'TYPE_C_HUB', status: 'BROKEN', assignedNodeId: 'M1-03', position2D: { posX: 650, posY: 115 }, currentBookingId: null, weeklyUsageHours: 12, monthlyUsageHours: 54, healthPercent: 45 },
+  { equipmentId: 'EQ-05', equipmentCode: 'EQ-M205-WACOM-01', equipmentName: 'Bảng Tương tác Cảm ứng KTS Wacom 24"', categoryName: 'WACOM_TABLET', status: 'AVAILABLE', assignedNodeId: 'M2-05', position2D: { posX: 400, posY: 345 }, currentBookingId: null, weeklyUsageHours: 19, monthlyUsageHours: 78, healthPercent: 95 },
+  { equipmentId: 'EQ-06', equipmentCode: 'EQ-H01-PANO-01', equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường', categoryName: 'PROJECTOR', status: 'AVAILABLE', assignedNodeId: 'H-01', position2D: { posX: 400, posY: 230 }, currentBookingId: null, weeklyUsageHours: 28, monthlyUsageHours: 112, healthPercent: 99 },
 ];
 
 const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
-  {
-    userEmail: 'sysadmin@spotmatrix.vn',
-    fullName: 'System Administrator',
-    role: 'SYS_ADMIN',
-    departmentName: 'System Governance',
-    trustScore: 100,
-    onTimeCheckInCount: 32,
-    noShowPenaltyCount: 0,
-    isRestrictedMode: false,
-    updatedAtIso: new Date().toISOString(),
-  },
-  {
-    userEmail: 'manager.lead@spotmatrix.vn',
-    fullName: 'Lê Thu Hà (Quản lý)',
-    role: 'MANAGER',
-    departmentName: 'Product & Engineering',
-    trustScore: 100,
-    onTimeCheckInCount: 28,
-    noShowPenaltyCount: 0,
-    isRestrictedMode: false,
-    updatedAtIso: new Date().toISOString(),
-  },
-  {
-    userEmail: 'employee.dev@spotmatrix.vn',
-    fullName: 'Nguyễn Minh Quân (Nhân viên)',
-    role: 'EMPLOYEE',
-    departmentName: 'Product & Engineering',
-    trustScore: 96,
-    onTimeCheckInCount: 18,
-    noShowPenaltyCount: 1,
-    isRestrictedMode: false,
-    updatedAtIso: new Date().toISOString(),
-  },
+  { userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', role: 'SYS_ADMIN', departmentName: 'System Governance', trustScore: 100, onTimeCheckInCount: 32, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
+  { userEmail: 'manager.lead@spotmatrix.vn', fullName: 'Lê Thu Hà (Quản lý)', role: 'MANAGER', departmentName: 'Product & Engineering', trustScore: 100, onTimeCheckInCount: 28, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
+  { userEmail: 'employee.dev@spotmatrix.vn', fullName: 'Nguyễn Minh Quân (Nhân viên)', role: 'EMPLOYEE', departmentName: 'Product & Engineering', trustScore: 96, onTimeCheckInCount: 18, noShowPenaltyCount: 1, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
 ];
 
 const INITIAL_FIVE_FLOOR_ROOMS = buildStandardFiveFloorRooms();
 
 const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
-  {
-    accountCode: 'ACC-ADMIN-001',
-    username: 'Systemadmin123',
-    userEmail: 'sysadmin@spotmatrix.vn',
-    fullName: 'System Administrator',
-    departmentName: 'System Governance',
-    role: 'SYS_ADMIN',
-    trustScore: 100,
-    accountStatus: 'ACTIVE',
-    isOnline: true,
-    lastActiveText: 'Đang hoạt động',
-  },
-  {
-    accountCode: 'ACC-MGR-002',
-    username: 'Managerlead123',
-    userEmail: 'manager.lead@spotmatrix.vn',
-    fullName: 'Lê Thu Hà (Quản lý)',
-    departmentName: 'Product & Engineering',
-    role: 'MANAGER',
-    trustScore: 100,
-    accountStatus: 'ACTIVE',
-    isOnline: true,
-    lastActiveText: 'Đang hoạt động',
-  },
-  {
-    accountCode: 'ACC-EMP-003',
-    username: 'Employeedev123',
-    userEmail: 'employee.dev@spotmatrix.vn',
-    fullName: 'Nguyễn Minh Quân (Nhân viên)',
-    departmentName: 'Product & Engineering',
-    role: 'EMPLOYEE',
-    trustScore: 96,
-    accountStatus: 'ACTIVE',
-    isOnline: true,
-    lastActiveText: 'Vừa truy cập',
-  },
+  { accountCode: 'ACC-ADMIN-001', username: 'Systemadmin123', userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', departmentName: 'System Governance', role: 'SYS_ADMIN', trustScore: 100, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
+  { accountCode: 'ACC-MGR-002', username: 'Managerlead123', userEmail: 'manager.lead@spotmatrix.vn', fullName: 'Lê Thu Hà (Quản lý)', departmentName: 'Product & Engineering', role: 'MANAGER', trustScore: 100, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
+  { accountCode: 'ACC-EMP-003', username: 'Employeedev123', userEmail: 'employee.dev@spotmatrix.vn', fullName: 'Nguyễn Minh Quân (Nhân viên)', departmentName: 'Product & Engineering', role: 'EMPLOYEE', trustScore: 96, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
 ];
+
+const LOFI_CHORD_PROGRESSIONS: Record<LofiTrackStyleType, number[][]> = {
+  CHILL_RHODES: [
+    [174.61, 220.0, 261.63, 329.63],
+    [164.81, 196.0, 246.94, 293.66],
+    [146.83, 174.61, 220.0, 261.63],
+    [130.81, 164.81, 196.0, 246.94],
+  ],
+  AMBIENT_SPACE: [
+    [220.0, 261.63, 329.63, 392.0],
+    [174.61, 220.0, 261.63, 329.63],
+    [130.81, 196.0, 246.94, 329.63],
+    [196.0, 246.94, 293.66, 329.63],
+  ],
+  RAINY_CAFE: [
+    [146.83, 220.0, 261.63, 329.63],
+    [196.0, 246.94, 293.66, 349.23],
+    [130.81, 164.81, 246.94, 293.66],
+    [220.0, 277.18, 329.63, 392.0],
+  ],
+};
 
 const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
@@ -339,10 +187,220 @@ const MainWorkspaceRoutes: React.FC = () => {
   });
   const isDark = themeMode === 'dark';
 
+  const [audioSettings, setAudioSettings] = useState<SpotMatrixAudioSettings>(() => {
+    try {
+      const raw = localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          lofiEnabled: Boolean(parsed.lofiEnabled),
+          sfxEnabled: parsed.sfxEnabled !== false,
+          lofiVolume: typeof parsed.lofiVolume === 'number' ? parsed.lofiVolume : 0.35,
+          lofiTrackStyle: parsed.lofiTrackStyle || 'CHILL_RHODES',
+        };
+      }
+    } catch {
+      // Bỏ qua
+    }
+    return {
+      lofiEnabled: false,
+      sfxEnabled: true,
+      lofiVolume: 0.35,
+      lofiTrackStyle: 'CHILL_RHODES',
+    };
+  });
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const lofiIntervalRef = useRef<number | null>(null);
+  const chordStepRef = useRef<number>(0);
+
+  const getOrInitAudioContext = useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    const AudioCtxClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtxClass) return null;
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AudioCtxClass();
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  const playUiSoundEffect = useCallback(
+    (type: 'CLICK' | 'SUCCESS' | 'ERROR' | 'NOTIFICATION', forcePlay = false) => {
+      if (!audioSettings.sfxEnabled && !forcePlay) return;
+      const ctx = getOrInitAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      if (type === 'CLICK') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(680, now + 0.045);
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.055);
+        return;
+      }
+
+      if (type === 'SUCCESS') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.065);
+          gain.gain.setValueAtTime(0.11, now + idx * 0.065);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.065 + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.065);
+          osc.stop(now + idx * 0.065 + 0.24);
+        });
+        return;
+      }
+
+      if (type === 'ERROR') {
+        [240, 180].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.11);
+          gain.gain.setValueAtTime(0.09, now + idx * 0.11);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.11 + 0.16);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.11);
+          osc.stop(now + idx * 0.11 + 0.18);
+        });
+        return;
+      }
+
+      if (type === 'NOTIFICATION') {
+        [880, 1318.5].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          gain.gain.setValueAtTime(0.1, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.32);
+        });
+      }
+    },
+    [audioSettings.sfxEnabled, getOrInitAudioContext]
+  );
+
+  useEffect(() => {
+    if (lofiIntervalRef.current) {
+      window.clearInterval(lofiIntervalRef.current);
+      lofiIntervalRef.current = null;
+    }
+    if (!audioSettings.lofiEnabled) return;
+
+    const playSingleLofiBar = () => {
+      const ctx = getOrInitAudioContext();
+      if (!ctx) return;
+      const progression =
+        LOFI_CHORD_PROGRESSIONS[audioSettings.lofiTrackStyle] ||
+        LOFI_CHORD_PROGRESSIONS.CHILL_RHODES;
+      const chord = progression[chordStepRef.current % progression.length];
+      chordStepRef.current += 1;
+
+      const now = ctx.currentTime;
+      const masterVol = Math.max(0.02, Math.min(1, audioSettings.lofiVolume)) * 0.12;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(
+        audioSettings.lofiTrackStyle === 'AMBIENT_SPACE' ? 750 : 1050,
+        now
+      );
+      filter.connect(ctx.destination);
+
+      chord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = audioSettings.lofiTrackStyle === 'AMBIENT_SPACE' ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(freq + (idx % 2 === 0 ? 0.4 : -0.4), now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(masterVol / chord.length, now + 0.35);
+        gain.gain.exponentialRampToValueAtTime(0.0008, now + 2.9);
+        osc.connect(gain);
+        gain.connect(filter);
+        osc.start(now);
+        osc.stop(now + 2.95);
+      });
+
+      if (audioSettings.lofiTrackStyle === 'CHILL_RHODES') {
+        [0, 1.5].forEach((beatOffset) => {
+          const kickOsc = ctx.createOscillator();
+          const kickGain = ctx.createGain();
+          kickOsc.type = 'sine';
+          kickOsc.frequency.setValueAtTime(115, now + beatOffset);
+          kickOsc.frequency.exponentialRampToValueAtTime(42, now + beatOffset + 0.14);
+          kickGain.gain.setValueAtTime(masterVol * 0.85, now + beatOffset);
+          kickGain.gain.exponentialRampToValueAtTime(0.001, now + beatOffset + 0.18);
+          kickOsc.connect(kickGain);
+          kickGain.connect(ctx.destination);
+          kickOsc.start(now + beatOffset);
+          kickOsc.stop(now + beatOffset + 0.2);
+        });
+      }
+    };
+
+    playSingleLofiBar();
+    lofiIntervalRef.current = window.setInterval(playSingleLofiBar, 3000);
+
+    return () => {
+      if (lofiIntervalRef.current) {
+        window.clearInterval(lofiIntervalRef.current);
+        lofiIntervalRef.current = null;
+      }
+    };
+  }, [
+    audioSettings.lofiEnabled,
+    audioSettings.lofiVolume,
+    audioSettings.lofiTrackStyle,
+    getOrInitAudioContext,
+  ]);
+
+  useEffect(() => {
+    const handleAudioEvent = (ev: Event) => {
+      const customEv = ev as CustomEvent<SpotMatrixAudioSettings>;
+      if (customEv.detail) {
+        setAudioSettings(customEv.detail);
+      }
+    };
+    window.addEventListener('spotmatrix-audio-settings-changed', handleAudioEvent);
+    return () =>
+      window.removeEventListener('spotmatrix-audio-settings-changed', handleAudioEvent);
+  }, []);
+
+  const persistAudioSettings = (next: SpotMatrixAudioSettings) => {
+    setAudioSettings(next);
+    try {
+      localStorage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Bỏ qua
+    }
+  };
+
   const toggleThemeMode = () => {
     const next = isDark ? 'light' : 'dark';
     setThemeMode(next);
     localStorage.setItem('spotmatrix_theme_mode', next);
+    playUiSoundEffect('CLICK');
   };
 
   const [userSession, setUserSession] = useState<AuthenticatedUserSession | null>(() => {
@@ -448,6 +506,18 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
 
+  // Đồng bộ chính xác trạng thái Online thực tế: Chỉ duy nhất tài khoản đang đăng nhập mới hiện Đang Online
+  useEffect(() => {
+    const activeUsername = userSession?.userProfile.username?.toLowerCase();
+    setManagedUsers((prev) =>
+      prev.map((u) =>
+        activeUsername && u.username.toLowerCase() === activeUsername
+          ? { ...u, isOnline: true, lastActiveText: 'Đang trực tuyến (Phiên hiện tại)' }
+          : { ...u, isOnline: false, lastActiveText: 'Chưa đăng nhập' }
+      )
+    );
+  }, [userSession?.userProfile.username]);
+
   const fetchAccountProfileAndWorkspaceFromMongo = useCallback(async (username: string) => {
     try {
       const [profileRes, bookingsRes, trustRes, auditRes] = await Promise.allSettled([
@@ -478,7 +548,7 @@ const MainWorkspaceRoutes: React.FC = () => {
             try {
               localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
             } catch {
-              // Bỏ qua nếu bộ nhớ đệm đầy
+              // Bỏ qua
             }
             return nextMap;
           });
@@ -506,7 +576,7 @@ const MainWorkspaceRoutes: React.FC = () => {
         }
       }
     } catch {
-      // Giữ nguyên state dự phòng nếu Backend chưa bật
+      // Giữ nguyên state dự phòng
     }
   }, []);
 
@@ -561,11 +631,7 @@ const MainWorkspaceRoutes: React.FC = () => {
           setBookingsList((prev) =>
             prev.map((b) =>
               b.bookingId === parsed.bookingId
-                ? {
-                    ...b,
-                    bookingStatus: 'CHECKED_IN',
-                    checkedInAtIso: parsed.scannedAtText,
-                  }
+                ? { ...b, bookingStatus: 'CHECKED_IN', checkedInAtIso: parsed.scannedAtText }
                 : b
             )
           );
@@ -593,13 +659,14 @@ const MainWorkspaceRoutes: React.FC = () => {
       extraApproval?: {
         approvalBookingId: string;
         approvalHandledStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
-      }
+      },
+      customRecipientEmail?: string
     ) => {
       if (category === 'FLOORPLAN_UPDATE') return;
 
       const localItem: NotificationRecordItem = {
         notificationId: `NTF-${Date.now()}-${Math.floor(Math.random() * 99)}`,
-        recipientEmail: userSession?.userProfile.userEmail || 'all',
+        recipientEmail: customRecipientEmail || userSession?.userProfile.userEmail || 'all',
         titleText,
         contentText,
         category,
@@ -612,8 +679,9 @@ const MainWorkspaceRoutes: React.FC = () => {
 
       setNotificationsList((prev) => [localItem, ...prev]);
       setActivePopupNotification(localItem);
+      playUiSoundEffect('NOTIFICATION');
     },
-    [userSession]
+    [userSession, playUiSoundEffect]
   );
 
   useEffect(() => {
@@ -629,6 +697,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
     setActivePage('OVERVIEW');
     navigate('/dashboard', { replace: true });
+    playUiSoundEffect('SUCCESS');
 
     const incomingProfile = sessionData.userProfile as AuthenticatedUserSession['userProfile'] & {
       avatarUrl?: string | null;
@@ -641,20 +710,13 @@ const MainWorkspaceRoutes: React.FC = () => {
       setProfileCustomMap((prev) => ({
         ...prev,
         [incomingProfile.username]: {
-          avatarUrl:
-            incomingProfile.avatarUrl ?? prev[incomingProfile.username]?.avatarUrl ?? null,
+          avatarUrl: incomingProfile.avatarUrl ?? prev[incomingProfile.username]?.avatarUrl ?? null,
           backgroundUrl:
-            incomingProfile.backgroundUrl ??
-            prev[incomingProfile.username]?.backgroundUrl ??
-            null,
+            incomingProfile.backgroundUrl ?? prev[incomingProfile.username]?.backgroundUrl ?? null,
           phoneNumber:
-            incomingProfile.phoneNumber ||
-            prev[incomingProfile.username]?.phoneNumber ||
-            '0908 123 456',
+            incomingProfile.phoneNumber || prev[incomingProfile.username]?.phoneNumber || '0908 123 456',
           jobTitle:
-            incomingProfile.jobTitle ||
-            prev[incomingProfile.username]?.jobTitle ||
-            'Senior System Member',
+            incomingProfile.jobTitle || prev[incomingProfile.username]?.jobTitle || 'Senior System Member',
           bioText:
             incomingProfile.bioText ||
             prev[incomingProfile.username]?.bioText ||
@@ -665,35 +727,24 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
 
     setManagedUsers((prev) => {
-      const exists = prev.some(
-        (u) => u.username.toLowerCase() === sessionData.userProfile.username.toLowerCase()
+      const targetUser = sessionData.userProfile.username.toLowerCase();
+      return prev.map((u) =>
+        u.username.toLowerCase() === targetUser
+          ? { ...u, isOnline: true, lastActiveText: 'Đang trực tuyến (Phiên hiện tại)' }
+          : { ...u, isOnline: false, lastActiveText: 'Chưa đăng nhập' }
       );
-      if (exists) {
-        return prev.map((u) =>
-          u.username.toLowerCase() === sessionData.userProfile.username.toLowerCase()
-            ? { ...u, isOnline: true, lastActiveText: 'Vừa đăng nhập' }
-            : u
-        );
-      }
-      return [
-        {
-          accountCode: sessionData.userProfile.accountCode,
-          username: sessionData.userProfile.username,
-          userEmail: sessionData.userProfile.userEmail,
-          fullName: sessionData.userProfile.fullName,
-          departmentName: sessionData.userProfile.departmentName,
-          role: sessionData.userProfile.role,
-          trustScore: sessionData.userProfile.trustScore,
-          accountStatus: 'ACTIVE',
-          isOnline: true,
-          lastActiveText: 'Vừa đăng nhập',
-        },
-        ...prev,
-      ];
     });
   };
 
   const handleLogout = () => {
+    const loggingOutUsername = userSession?.userProfile.username?.toLowerCase();
+    setManagedUsers((prev) =>
+      prev.map((u) =>
+        loggingOutUsername && u.username.toLowerCase() === loggingOutUsername
+          ? { ...u, isOnline: false, lastActiveText: 'Vừa đăng xuất' }
+          : u
+      )
+    );
     setIsAvatarMenuOpen(false);
     setUserSession(null);
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
@@ -735,6 +786,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     setSelectedNode(nodeItem);
     setPreselectedSlot(slotTime);
     setActivePage('BOOKING');
+    playUiSoundEffect('CLICK');
   };
 
   const handleApprovalDecision = (
@@ -743,6 +795,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   ) => {
     const actorUsername = userSession?.userProfile.username || 'Systemadmin123';
     const approvedTimeStr = new Date().toLocaleTimeString('vi-VN');
+    playUiSoundEffect(decision === 'APPROVED' ? 'SUCCESS' : 'ERROR');
 
     setBookingsList((prev) =>
       prev.map((b) =>
@@ -791,6 +844,51 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
   };
 
+  // Quyền Tối cao SYS_ADMIN: Xóa lịch đặt phòng tại cửa sổ Xem chi tiết & Gửi thông báo đến người đặt
+  const handleAdminDeleteBookingWithNotification = (
+    bookingId: string,
+    reasonText: string
+  ) => {
+    const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+    const adminUsername = userSession?.userProfile.username || 'Systemadmin123';
+
+    setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+
+    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+
+    if (targetBk) {
+      const matchedNode = workspaceNodes.find((n) => n.nodeCode === targetBk.nodeId);
+      if (matchedNode) {
+        setWorkspaceNodes((prev) =>
+          prev.map((n) =>
+            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+          )
+        );
+      }
+
+      pushRealtimeNotification(
+        `[Thông báo từ Admin] Đã xóa lịch đặt phòng ${targetBk.nodeId} (${targetBk.bookingId})`,
+        `Quản trị viên (@${adminUsername}) đã xóa lịch đặt vị trí ${targetBk.nodeId} (${targetBk.startTimeIso} – ${targetBk.endTimeIso}, ngày ${
+          targetBk.bookingDateIso || 'Hôm nay'
+        }) của ${targetBk.userEmail}. Lý do: ${reasonText}`,
+        'SYSTEM_POLICY',
+        targetBk.nodeId,
+        undefined,
+        targetBk.userEmail
+      );
+
+      recordRealtimeAuditLog(
+        'POLICY_CONFIG_UPDATED',
+        adminUsername,
+        targetBk.nodeId,
+        `[Admin Xóa Lịch & Gửi Thông Báo] @${adminUsername} đã xóa vé ${targetBk.bookingId} tại ${targetBk.nodeId} của ${targetBk.userEmail}. Lý do: "${reasonText}".`,
+        'AUTO_REVOKED'
+      );
+    }
+  };
+
   const handleUpdateNodeCoords = async (nodeId: string, posX: number, posY: number) => {
     setWorkspaceNodes((prev) =>
       prev.map((item) =>
@@ -834,6 +932,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     };
     setWorkspaceNodes((prev) => [...prev, newNode]);
     setSelectedNode(newNode);
+    playUiSoundEffect('SUCCESS');
   };
 
   const handleQuickBooking = (
@@ -876,6 +975,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     };
 
     setBookingsList((prev) => [newBookingItem, ...prev]);
+    playUiSoundEffect('SUCCESS');
 
     recordRealtimeAuditLog(
       'OPTIMISTIC_LOCK_WIN',
@@ -904,10 +1004,7 @@ const MainWorkspaceRoutes: React.FC = () => {
         `Nhân viên @${userSession?.userProfile.username} xin đặt phòng ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
         'BOOKING_APPROVAL_REQUEST',
         targetNode.nodeId,
-        {
-          approvalBookingId: newBookingId,
-          approvalHandledStatus: 'PENDING',
-        }
+        { approvalBookingId: newBookingId, approvalHandledStatus: 'PENDING' }
       );
     } else {
       pushRealtimeNotification(
@@ -935,6 +1032,7 @@ const MainWorkspaceRoutes: React.FC = () => {
           : b
       )
     );
+    playUiSoundEffect('SUCCESS');
 
     setTrustProfiles((prev) =>
       prev.map((tp) =>
@@ -975,13 +1073,13 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
   };
 
-  // Xử lý khi Cronjob 15 phút tự thu hồi chỗ (Auto-Release No-Show) & Trừ 10 điểm tín nhiệm
   const handlePenalizeNoShowBooking = (
     bookingId: string,
     targetUserEmail: string,
     nodeCode: string
   ) => {
     setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+    playUiSoundEffect('ERROR');
 
     setTrustProfiles((prev) =>
       prev.map((tp) => {
@@ -1014,6 +1112,7 @@ const MainWorkspaceRoutes: React.FC = () => {
         eq.equipmentId === equipmentId ? { ...eq, status: nextStatus } : eq
       )
     );
+    playUiSoundEffect('CLICK');
 
     fetch(`/api/v1/datamanager/equipments/${encodeURIComponent(equipmentId)}/status`, {
       method: 'PATCH',
@@ -1024,6 +1123,7 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const handleCancelBooking = (bookingId: string) => {
     setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
+    playUiSoundEffect('CLICK');
 
     fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}`, {
       method: 'DELETE',
@@ -1034,17 +1134,16 @@ const MainWorkspaceRoutes: React.FC = () => {
     setManagedUsers((prev) =>
       prev.map((u) =>
         u.username === username
-          ? {
-              ...u,
-              accountStatus: u.accountStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
-            }
+          ? { ...u, accountStatus: u.accountStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' }
           : u
       )
     );
+    playUiSoundEffect('CLICK');
   };
 
   const handleDeleteUserAccount = (username: string) => {
     setManagedUsers((prev) => prev.filter((u) => u.username !== username));
+    playUiSoundEffect('ERROR');
   };
 
   const currentUsernameKey = userSession?.userProfile.username || 'default';
@@ -1068,10 +1167,11 @@ const MainWorkspaceRoutes: React.FC = () => {
       },
     };
     setProfileCustomMap(nextMap);
+    playUiSoundEffect('SUCCESS');
     try {
       localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
     } catch {
-      // Bỏ qua nếu vượt dung lượng localStorage
+      // Bỏ qua
     }
 
     if (userSession) {
@@ -1106,48 +1206,18 @@ const MainWorkspaceRoutes: React.FC = () => {
         }),
       });
     } catch {
-      // Giữ bản lưu cục bộ nếu mạng tạm thời gián đoạn
+      // Giữ bản lưu cục bộ
     } finally {
       setIsSyncingMongo(false);
     }
   };
 
   const sidebarItems = [
-    {
-      id: 'OVERVIEW' as ActiveSidebarPage,
-      label: 'Tổng quan (Dashboard)',
-      sub: 'Số liệu thật & AI So sánh',
-      icon: LayoutDashboard,
-      adminOnly: false,
-    },
-    {
-      id: 'FLOORPLAN' as ActiveSidebarPage,
-      label: 'Sơ đồ Phòng họp',
-      sub: '5 Tầng 3D/2D & Hội trường',
-      icon: Map,
-      adminOnly: false,
-    },
-    {
-      id: 'BOOKING' as ActiveSidebarPage,
-      label: 'Đặt lịch Phòng họp',
-      sub: 'Giữ 5p, Lock & QR Check-in',
-      icon: CalendarCheck,
-      adminOnly: false,
-    },
-    {
-      id: 'DATAMANAGER' as ActiveSidebarPage,
-      label: 'Thiết bị & Tín nhiệm',
-      sub: 'Mã số thiết bị & Điểm số',
-      icon: Database,
-      adminOnly: false,
-    },
-    {
-      id: 'AUDIT' as ActiveSidebarPage,
-      label: 'Nhật ký & Quản trị User',
-      sub: 'Chỉ dành cho SYS_ADMIN',
-      icon: ShieldAlert,
-      adminOnly: true,
-    },
+    { id: 'OVERVIEW' as ActiveSidebarPage, label: 'Tổng quan (Dashboard)', sub: 'Số liệu thật & Trợ lý Chat', icon: LayoutDashboard, adminOnly: false },
+    { id: 'FLOORPLAN' as ActiveSidebarPage, label: 'Sơ đồ Phòng họp', sub: '5 Tầng 3D/2D & Hội trường', icon: Map, adminOnly: false },
+    { id: 'BOOKING' as ActiveSidebarPage, label: 'Đặt lịch Phòng họp', sub: 'Giữ 5p, Lock & QR Check-in', icon: CalendarCheck, adminOnly: false },
+    { id: 'DATAMANAGER' as ActiveSidebarPage, label: 'Thiết bị & Tín nhiệm', sub: 'Mã số thiết bị & Điểm số', icon: Database, adminOnly: false },
+    { id: 'AUDIT' as ActiveSidebarPage, label: 'Nhật ký & Quản trị User', sub: 'Chỉ dành cho SYS_ADMIN', icon: ShieldAlert, adminOnly: true },
   ].filter((item) => !item.adminOnly || isSysAdmin);
 
   return (
@@ -1204,7 +1274,10 @@ const MainWorkspaceRoutes: React.FC = () => {
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => setActivePage(item.id)}
+                          onClick={() => {
+                            setActivePage(item.id);
+                            playUiSoundEffect('CLICK');
+                          }}
                           className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-all ${
                             isActive
                               ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20'
@@ -1242,7 +1315,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v4.5 (Phase 3 Lock & Hold)
+                  SpotMatrix 5-Floor 3D v4.8 (Lofi & Multi-Guard)
                 </div>
               </aside>
 
@@ -1254,7 +1327,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       : 'bg-white/95 border-slate-200/90 shadow-sm'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <NotificationHeaderBell
                       notifications={notificationsList}
                       userRole={userSession.userProfile.role}
@@ -1277,7 +1350,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                           setSelectedNode(bestNode);
                           setActivePage('FLOORPLAN');
                           pushRealtimeNotification(
-                            `AI Đề xuất Phòng họp: ${bestNode.nodeCode}`,
+                            `Gợi ý Phòng họp Tối ưu: ${bestNode.nodeCode}`,
                             `"${bestNode.nodeLabel}" đang trống và phù hợp nhất.`,
                             'BOOKING_EVENT',
                             bestNode.nodeId
@@ -1287,15 +1360,46 @@ const MainWorkspaceRoutes: React.FC = () => {
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">AI Gợi ý Phòng họp</span>
+                      <span className="hidden sm:inline">Gợi ý Phòng họp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextLofi = !audioSettings.lofiEnabled;
+                        persistAudioSettings({ ...audioSettings, lofiEnabled: nextLofi });
+                        playUiSoundEffect('CLICK');
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition ${
+                        audioSettings.lofiEnabled
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                          : isDark
+                          ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                          : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                      }`}
+                      title="Bật/Tắt Nhạc nền Lofi Chill (Không bản quyền)"
+                    >
+                      {audioSettings.lofiEnabled ? (
+                        <>
+                          <Music className="w-3.5 h-3.5 animate-bounce" />
+                          <span className="hidden md:inline">Nhạc Lofi: Đang bật</span>
+                        </>
+                      ) : (
+                        <>
+                          <VolumeX className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">Bật Nhạc Lofi</span>
+                        </>
+                      )}
                     </button>
                   </div>
 
-                  {/* NGOÀI CÙNG BÊN PHẢI HEADER: NÚT AVATAR TRÒN & POP-UP NHỎ DÍNH BÊN PHẢI */}
                   <div className="relative ml-auto" ref={avatarDropdownRef}>
                     <button
                       type="button"
-                      onClick={() => setIsAvatarMenuOpen(!isAvatarMenuOpen)}
+                      onClick={() => {
+                        setIsAvatarMenuOpen(!isAvatarMenuOpen);
+                        playUiSoundEffect('CLICK');
+                      }}
                       className={`relative w-10 h-10 rounded-full border-2 flex items-center justify-center font-extrabold text-sm transition shadow-sm overflow-hidden ${
                         isDark
                           ? 'bg-indigo-950 border-indigo-500/60 text-indigo-200'
@@ -1338,9 +1442,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                               />
                             ) : (
                               <div className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0">
-                                {(userSession.userProfile.fullName || 'U')
-                                  .charAt(0)
-                                  .toUpperCase()}
+                                {(userSession.userProfile.fullName || 'U').charAt(0).toUpperCase()}
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
@@ -1387,6 +1489,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                             onClick={() => {
                               setIsAvatarMenuOpen(false);
                               setActivePage('PROFILE');
+                              playUiSoundEffect('CLICK');
                             }}
                             className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
                               isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
@@ -1421,13 +1524,14 @@ const MainWorkspaceRoutes: React.FC = () => {
                             onClick={() => {
                               setIsAvatarMenuOpen(false);
                               setActivePage('SETTINGS');
+                              playUiSoundEffect('CLICK');
                             }}
                             className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
                               isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
                             }`}
                           >
                             <Settings className="w-4 h-4 text-teal-600" />
-                            <span>Cài đặt Hệ thống & Tài khoản</span>
+                            <span>Cài đặt Nhạc Lofi, SFX & Hệ thống</span>
                           </button>
 
                           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
@@ -1456,7 +1560,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                         trustProfiles={trustProfiles}
                         auditLogs={auditLogs}
                         isDark={isDark}
-                        onNavigateSection={(sec) => setActivePage(sec)}
+                        userRole={userSession.userProfile.role}
+                        userEmail={userSession.userProfile.userEmail}
+                        onNavigateSection={(sec) => {
+                          setActivePage(sec);
+                          playUiSoundEffect('CLICK');
+                        }}
+                        onHandleApprovalDecision={handleApprovalDecision}
                       />
 
                       <FloorplanMainPages
@@ -1465,7 +1575,10 @@ const MainWorkspaceRoutes: React.FC = () => {
                         selectedNode={selectedNode}
                         userRole={userSession.userProfile.role}
                         isDark={isDark}
-                        onSelectNode={(n) => setSelectedNode(n)}
+                        onSelectNode={(n) => {
+                          setSelectedNode(n);
+                          playUiSoundEffect('CLICK');
+                        }}
                         onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
                         onUpdateNodeCoords={handleUpdateNodeCoords}
                         onUpdateNodeStatus={handleUpdateNodeStatus}
@@ -1481,7 +1594,10 @@ const MainWorkspaceRoutes: React.FC = () => {
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       isDark={isDark}
-                      onSelectNode={(n) => setSelectedNode(n)}
+                      onSelectNode={(n) => {
+                        setSelectedNode(n);
+                        playUiSoundEffect('CLICK');
+                      }}
                       onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
                       onUpdateNodeCoords={handleUpdateNodeCoords}
                       onUpdateNodeStatus={handleUpdateNodeStatus}
@@ -1561,6 +1677,9 @@ const MainWorkspaceRoutes: React.FC = () => {
                       onToggleBlockUser={handleToggleBlockUser}
                       onDeleteUserAccount={handleDeleteUserAccount}
                       onAdminOverrideBookingApproval={handleApprovalDecision}
+                      onAdminDeleteBookingWithNotification={
+                        handleAdminDeleteBookingWithNotification
+                      }
                     />
                   )}
 
@@ -1592,6 +1711,27 @@ const MainWorkspaceRoutes: React.FC = () => {
                       isDark={isDark}
                       userRole={userSession.userProfile.role}
                       onToggleTheme={toggleThemeMode}
+                      lofiEnabled={audioSettings.lofiEnabled}
+                      sfxEnabled={audioSettings.sfxEnabled}
+                      lofiVolume={audioSettings.lofiVolume}
+                      lofiTrackStyle={audioSettings.lofiTrackStyle}
+                      onToggleLofi={(nextVal) =>
+                        persistAudioSettings({ ...audioSettings, lofiEnabled: nextVal })
+                      }
+                      onToggleSfx={(nextVal) =>
+                        persistAudioSettings({ ...audioSettings, sfxEnabled: nextVal })
+                      }
+                      onChangeLofiVolume={(nextVol) =>
+                        persistAudioSettings({ ...audioSettings, lofiVolume: nextVol })
+                      }
+                      onChangeLofiTrackStyle={(nextStyle) =>
+                        persistAudioSettings({
+                          ...audioSettings,
+                          lofiTrackStyle: nextStyle,
+                          lofiEnabled: true,
+                        })
+                      }
+                      onPlayPreviewSfx={(type) => playUiSoundEffect(type, true)}
                     />
                   )}
                 </main>

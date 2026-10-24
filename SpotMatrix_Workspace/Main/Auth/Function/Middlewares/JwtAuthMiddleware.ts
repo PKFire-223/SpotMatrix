@@ -1,61 +1,59 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { loadSystemEnvConfig } from '../../../../Shared/Config/EnvConfig';
 import { UserRoleType } from '../../../../Shared/Types/GlobalSystemTypes';
-import { AppExceptionModel } from '../../../../Error/Function/Models/AppExceptionModel';
-
-const envConfig = loadSystemEnvConfig();
+import { verifyJwtAccessToken } from '../Services/AuthService';
+import {
+  createForbiddenException,
+  createUnauthorizedException,
+} from '../../../../Error/Function/Models/AppExceptionModel';
 
 export interface AuthenticatedRequest extends Request {
-  authenticatedUser?: {
-    accountCode: string;
+  authUser?: {
     username: string;
-    userEmail: string;
+    email: string;
     role: UserRoleType;
-    fullName: string;
   };
 }
 
-export function verifyAccessToken(
+export function verifyJwtTokenMiddleware(
   req: AuthenticatedRequest,
   _res: Response,
   next: NextFunction
 ): void {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppExceptionModel(
-        'Phiên đăng nhập không hợp lệ hoặc thiếu Bearer Token.',
-        401,
-        'UNAUTHORIZED_TOKEN'
-      );
-    }
-
-    const rawToken = authHeader.slice(7);
-    const decodedPayload = jwt.verify(rawToken, envConfig.jwtAccessSecret) as AuthenticatedRequest['authenticatedUser'];
-    req.authenticatedUser = decodedPayload;
-    next();
-  } catch (err) {
-    next(
-      err instanceof AppExceptionModel
-        ? err
-        : new AppExceptionModel('Token đã hết hạn hoặc không hợp lệ.', 401, 'TOKEN_EXPIRED')
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next(
+      createUnauthorizedException('Phiên làm việc thiếu mã xác thực Bearer JWT Token.')
     );
   }
+
+  const rawToken = authHeader.slice(7).trim();
+  const verified = verifyJwtAccessToken(rawToken);
+  if (!verified.valid || !verified.sub || !verified.role) {
+    return next(
+      createUnauthorizedException('Mã phiên đăng nhập (JWT) không hợp lệ hoặc đã hết hạn.')
+    );
+  }
+
+  req.authUser = {
+    username: verified.sub,
+    email: verified.email || '',
+    role: verified.role,
+  };
+  next();
 }
 
 export function requireAllowedRoles(allowedRoles: UserRoleType[]) {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {
-    const currentUser = req.authenticatedUser;
-    if (!currentUser) {
-      return next(new AppExceptionModel('Chưa xác thực người dùng.', 401, 'UNAUTHORIZED'));
-    }
-    if (!allowedRoles.includes(currentUser.role)) {
+    const roleFromToken = req.authUser?.role;
+    const roleFromHeader = req.headers['x-spotmatrix-role'] as UserRoleType | undefined;
+    const effectiveRole = roleFromToken || roleFromHeader;
+
+    if (!effectiveRole || !allowedRoles.includes(effectiveRole)) {
       return next(
-        new AppExceptionModel(
-          `Quyền truy cập bị từ chối: Chức năng này yêu cầu quyền [${allowedRoles.join(', ')}], tài khoản của bạn đang là [${currentUser.role}].`,
-          403,
-          'FORBIDDEN_ROLE'
+        createForbiddenException(
+          `Truy cập bị từ chối! Chức năng này yêu cầu quyền [${allowedRoles.join(
+            ' hoặc '
+          )}].`
         )
       );
     }
