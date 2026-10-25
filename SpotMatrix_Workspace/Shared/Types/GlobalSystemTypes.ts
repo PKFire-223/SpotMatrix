@@ -1,4 +1,9 @@
-export type WorkspaceZoneType = 'DESK_POD' | 'MEETING_ROOM' | 'FOCUS_BOOTH' | 'COLLAB_HUB';
+export type WorkspaceZoneType =
+  | 'DESK_POD'
+  | 'MEETING_ROOM'
+  | 'FOCUS_BOOTH'
+  | 'COLLAB_HUB'
+  | 'QUIET_POD';
 
 export type SeatStatusType =
   | 'AVAILABLE'
@@ -12,6 +17,13 @@ export type UserRoleType = 'EMPLOYEE' | 'MANAGER' | 'SYS_ADMIN';
 export type EquipmentStatusType = 'AVAILABLE' | 'IN_USE' | 'BROKEN';
 
 export type RecurringOptionType = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+export type HallBookingModeType =
+  | 'STANDARD_ROOM'
+  | 'HALL_EVENT_RENTAL'
+  | 'HALL_SEAT_BOOKING';
+
+export type WebLanguageCodeType = 'vi' | 'en' | 'ja';
 
 export type AuditEventCategoryType =
   | 'OPTIMISTIC_LOCK_WIN'
@@ -83,6 +95,9 @@ export interface BookingPayloadItem {
   approvedAtIso?: string | null;
   checkedInAtIso?: string | null;
   bookingEquipmentIds?: string[];
+  bookingMode?: HallBookingModeType;
+  allowedDepartments?: string[];
+  parentHallEventBookingId?: string | null;
 }
 
 export interface UserTrustProfileItem {
@@ -101,7 +116,13 @@ export interface SharedEquipmentItem {
   equipmentId: string;
   equipmentCode: string;
   equipmentName: string;
-  categoryName: 'PROJECTOR' | 'MONITOR_4K' | 'WACOM_TABLET' | 'TYPE_C_HUB' | 'AUDIO_POD';
+  categoryName:
+    | 'PROJECTOR'
+    | 'MONITOR_4K'
+    | 'WACOM_TABLET'
+    | 'TYPE_C_HUB'
+    | 'AUDIO_POD'
+    | 'CONF_MIC_CAM';
   status: EquipmentStatusType;
   assignedNodeId: string | null;
   position2D: { posX: number; posY: number };
@@ -133,4 +154,32 @@ export interface AuditConcurrencyLogItem {
   outcomeStatus: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED';
   detailMessage: string;
   createdAtIso: string;
+}
+
+// Cấu trúc dữ liệu Phòng ban (Mỗi nhân sự chỉ thuộc DUY NHẤT 1 Phòng ban)
+export interface OrganizationDepartmentItem {
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  description: string;
+  managerEmail: string;
+  managerName: string;
+  floorLocation: string;
+  colorBadge: 'INDIGO' | 'TEAL' | 'AMBER' | 'ROSE';
+  memberEmails: string[];
+  updatedAtIso: string;
+}
+
+// Cấu trúc dữ liệu Nhóm chuyên môn / Dự án (Một nhân sự có thể tham gia NHIỀU Nhóm)
+export interface OrganizationGroupItem {
+  groupId: string;
+  groupCode: string;
+  groupName: string;
+  departmentName: string;
+  description: string;
+  leaderEmail: string;
+  leaderName: string;
+  projectTag: string;
+  memberEmails: string[];
+  updatedAtIso: string;
 }

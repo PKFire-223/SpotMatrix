@@ -32,7 +32,9 @@ export async function handleCreateBooking(
   next: NextFunction
 ): Promise<void> {
   try {
-    const payload = req.body as BookingPayloadItem & { expectedLockVersion?: number };
+    const payload = req.body as BookingPayloadItem & {
+      expectedLockVersion?: number;
+    };
     const created = await createWorkspaceBooking(
       payload.nodeId || 'M1-01',
       payload.userEmail || 'employee.dev@spotmatrix.vn',
@@ -49,6 +51,9 @@ export async function handleCreateBooking(
         expectedLockVersion: payload.expectedLockVersion,
         approvalStatus: payload.approvalStatus,
         approvedByUsername: payload.approvedByUsername,
+        bookingMode: payload.bookingMode,
+        allowedDepartments: payload.allowedDepartments,
+        parentHallEventBookingId: payload.parentHallEventBookingId,
       }
     );
     res.status(201).json({
@@ -72,7 +77,9 @@ export async function handleAcquireFiveMinuteHold(
       nodeId || 'M1-01',
       userEmail || 'employee.dev@spotmatrix.vn',
       username || 'Employeedev123',
-      expectedLockVersion !== undefined ? Number(expectedLockVersion) : undefined
+      expectedLockVersion !== undefined
+        ? Number(expectedLockVersion)
+        : undefined
     );
     res.status(201).json({
       success: true,
@@ -153,7 +160,8 @@ export async function handlePatchBookingApproval(
   try {
     const { bookingId } = req.params;
     const { approvalStatus, approvedByUsername, approvedAtIso } = req.body;
-    const nextBookingStatus = approvalStatus === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED';
+    const nextBookingStatus =
+      approvalStatus === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED';
 
     if (getMongoConnectionState()) {
       const updated = await BookingRecordModel.findOneAndUpdate(
@@ -162,7 +170,8 @@ export async function handlePatchBookingApproval(
           $set: {
             approvalStatus,
             approvedByUsername,
-            approvedAtIso: approvedAtIso || new Date().toLocaleTimeString('vi-VN'),
+            approvedAtIso:
+              approvedAtIso || new Date().toLocaleTimeString('vi-VN'),
             bookingStatus: nextBookingStatus,
           },
         },
@@ -174,7 +183,12 @@ export async function handlePatchBookingApproval(
 
     res.json({
       success: true,
-      data: { bookingId, approvalStatus, approvedByUsername, bookingStatus: nextBookingStatus },
+      data: {
+        bookingId,
+        approvalStatus,
+        approvedByUsername,
+        bookingStatus: nextBookingStatus,
+      },
     });
   } catch (err) {
     next(err);
@@ -196,7 +210,8 @@ export async function handlePatchBookingCheckin(
         {
           $set: {
             bookingStatus: 'CHECKED_IN',
-            checkedInAtIso: checkedInAtIso || new Date().toLocaleString('vi-VN'),
+            checkedInAtIso:
+              checkedInAtIso || new Date().toLocaleString('vi-VN'),
           },
         },
         { new: true }

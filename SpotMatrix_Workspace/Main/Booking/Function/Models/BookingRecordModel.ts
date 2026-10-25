@@ -44,10 +44,26 @@ const bookingRecordSchema = new Schema<BookingPayloadItem>(
     approvedByUsername: { type: String, default: null },
     approvedAtIso: { type: String, default: null },
     checkedInAtIso: { type: String, default: null },
+    bookingMode: {
+      type: String,
+      enum: ['STANDARD_ROOM', 'HALL_EVENT_RENTAL', 'HALL_SEAT_BOOKING'],
+      default: 'STANDARD_ROOM',
+    },
+    allowedDepartments: {
+      type: [String],
+      default: [],
+    },
+    parentHallEventBookingId: {
+      type: String,
+      default: null,
+    },
   },
   { timestamps: true, collection: 'spotmatrix_booking_records' }
 );
 
 export const BookingRecordModel =
   mongoose.models.SpotMatrixBookingRecord ||
-  mongoose.model<BookingPayloadItem>('SpotMatrixBookingRecord', bookingRecordSchema);
+  mongoose.model<BookingPayloadItem>(
+    'SpotMatrixBookingRecord',
+    bookingRecordSchema
+  );

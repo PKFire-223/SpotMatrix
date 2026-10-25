@@ -1,5 +1,6 @@
 import {
   BookingPayloadItem,
+  HallBookingModeType,
   RecurringOptionType,
   UserRoleType,
 } from '../../../../Shared/Types/GlobalSystemTypes';
@@ -35,6 +36,7 @@ const memoryBookingsFallback: BookingPayloadItem[] = [
     userEmail: 'employee.dev@spotmatrix.vn',
     requesterUsername: 'Employeedev123',
     requesterRole: 'EMPLOYEE',
+    departmentName: 'Product & Engineering',
     bookingDateIso: formatIsoDateString(new Date()),
     startTimeIso: '08:00',
     endTimeIso: '10:00',
@@ -45,6 +47,32 @@ const memoryBookingsFallback: BookingPayloadItem[] = [
     bookingStatus: 'CONFIRMED',
     approvalStatus: 'APPROVED',
     approvedByUsername: 'Managerlead123',
+    bookingMode: 'STANDARD_ROOM',
+    allowedDepartments: [],
+  },
+  {
+    bookingId: 'BK-2026-HALL-01',
+    nodeId: 'H-01',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    requesterUsername: 'Systemadmin123',
+    requesterRole: 'SYS_ADMIN',
+    departmentName: 'System Governance',
+    bookingDateIso: formatIsoDateString(new Date()),
+    startTimeIso: '13:00',
+    endTimeIso: '15:00',
+    purposeNote: 'Townhall Quý 4 & Ra mắt Kiến trúc Không gian 3D',
+    recurringOption: 'NONE',
+    occurrenceDates: [formatIsoDateString(new Date())],
+    lockVersion: 1,
+    bookingStatus: 'CONFIRMED',
+    approvalStatus: 'APPROVED',
+    approvedByUsername: 'Systemadmin123',
+    bookingMode: 'HALL_EVENT_RENTAL',
+    allowedDepartments: [
+      'System Governance',
+      'Product & Engineering',
+      'Product Design & UX',
+    ],
   },
   {
     bookingId: 'BK-2026-002',
@@ -52,6 +80,7 @@ const memoryBookingsFallback: BookingPayloadItem[] = [
     userEmail: 'manager.lead@spotmatrix.vn',
     requesterUsername: 'Managerlead123',
     requesterRole: 'MANAGER',
+    departmentName: 'Product & Engineering',
     bookingDateIso: formatIsoDateString(new Date()),
     startTimeIso: '13:00',
     endTimeIso: '15:00',
@@ -63,10 +92,11 @@ const memoryBookingsFallback: BookingPayloadItem[] = [
     approvalStatus: 'APPROVED',
     approvedByUsername: 'Systemadmin123',
     checkedInAtIso: '12:45:10 • Hôm nay',
+    bookingMode: 'HALL_SEAT_BOOKING',
+    parentHallEventBookingId: 'BK-2026-HALL-01',
   },
 ];
 
-// 1. Lấy hoặc khởi tạo trạng thái Optimistic Lock + Hold 5 phút của 1 phòng/ghế
 export function getOrInitRoomLockState(nodeId: string): RoomHoldLockState {
   const existing = roomOptimisticLockMap.get(nodeId);
   const nowMs = Date.now();
@@ -110,7 +140,6 @@ export function listAllRoomLockStates(): Record<string, RoomHoldLockState> {
   return result;
 }
 
-// 2. Giữ chỗ tạm thời 5 phút (Optimistic Locking: Kiểm tra lockVersion trước khi cấp quyền giữ chỗ)
 export async function acquireFiveMinuteRoomHold(
   nodeId: string,
   userEmail: string,
@@ -212,7 +241,6 @@ export async function releaseFiveMinuteRoomHold(
   return released;
 }
 
-// 3. Mô phỏng trực tiếp 2 người bấm đặt cùng 1 phòng tại cùng 1 mili-giây (Optimistic Locking Race)
 export async function simulateConcurrentOptimisticRace(
   nodeId: string,
   winnerEmail: string,
@@ -271,7 +299,7 @@ export async function listAllWorkspaceBookings(): Promise<
   return memoryBookingsFallback;
 }
 
-// 4. Tạo đơn đặt phòng mới (Hỗ trợ Đơn lẻ & Định kỳ + Kiểm tra Optimistic Lock + Va chạm lịch & Hạn mức tuần theo Role)
+// 4. Tạo đơn đặt phòng mới (Hỗ trợ Đơn lẻ & Định kỳ + Kiểm tra Optimistic Lock + Va chạm lịch & Quy tắc Hội trường 2 chế độ)
 export async function createWorkspaceBooking(
   nodeId: string,
   userEmail: string,
@@ -288,6 +316,9 @@ export async function createWorkspaceBooking(
     expectedLockVersion?: number;
     approvalStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
     approvedByUsername?: string | null;
+    bookingMode?: HallBookingModeType;
+    allowedDepartments?: string[];
+    parentHallEventBookingId?: string | null;
   }
 ): Promise<BookingPayloadItem> {
   const currentLock = getOrInitRoomLockState(nodeId);
@@ -314,6 +345,9 @@ export async function createWorkspaceBooking(
     extraOptions?.bookingDateIso || formatIsoDateString(new Date());
   const recurringOption: RecurringOptionType =
     extraOptions?.recurringOption || 'NONE';
+  const requesterRole: UserRoleType = extraOptions?.requesterRole || 'EMPLOYEE';
+  const departmentName =
+    extraOptions?.departmentName || 'Product & Engineering';
 
   const collisionResult = validateSingleAndRecurringCollision(
     nodeId,
@@ -323,13 +357,14 @@ export async function createWorkspaceBooking(
     recurringOption,
     allExisting,
     userEmail,
-    extraOptions?.requesterRole || 'EMPLOYEE'
+    requesterRole,
+    departmentName
   );
 
   if (collisionResult.hasCollision) {
     throw createConflictException(
       collisionResult.firstConflictMessage ||
-        `Vị trí ${nodeId} bị trùng lịch đặt hoặc vượt hạn mức tuần trong khung giờ ${startTimeIso} - ${endTimeIso}.`
+        `Vị trí ${nodeId} bị trùng lịch đặt, chưa có sự kiện Hội trường được duyệt, hoặc vượt hạn mức tuần trong khung giờ ${startTimeIso} - ${endTimeIso}.`
     );
   }
 
@@ -353,6 +388,30 @@ export async function createWorkspaceBooking(
     recurringOption
   );
 
+  const isHallWholeRoomRental = nodeId === 'H-01';
+  const isHallSeatBooking = /^H01-[A-C]\d+$/i.test(nodeId);
+
+  const resolvedBookingMode: HallBookingModeType =
+    extraOptions?.bookingMode ||
+    (isHallWholeRoomRental
+      ? 'HALL_EVENT_RENTAL'
+      : isHallSeatBooking
+      ? 'HALL_SEAT_BOOKING'
+      : 'STANDARD_ROOM');
+
+  let resolvedApprovalStatus: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' =
+    extraOptions?.approvalStatus || 'APPROVED';
+
+  if (isHallWholeRoomRental) {
+    resolvedApprovalStatus =
+      requesterRole === 'SYS_ADMIN' ? 'APPROVED' : 'PENDING_APPROVAL';
+  } else if (isHallSeatBooking) {
+    resolvedApprovalStatus = 'APPROVED';
+  } else if (!extraOptions?.approvalStatus) {
+    resolvedApprovalStatus =
+      requesterRole === 'EMPLOYEE' ? 'PENDING_APPROVAL' : 'APPROVED';
+  }
+
   const createdRecord: BookingPayloadItem = {
     bookingId:
       extraOptions?.bookingId || `BK-${Date.now().toString().slice(-4)}`,
@@ -360,8 +419,8 @@ export async function createWorkspaceBooking(
     userEmail,
     requesterUsername:
       extraOptions?.requesterUsername || userEmail.split('@')[0],
-    requesterRole: extraOptions?.requesterRole || 'EMPLOYEE',
-    departmentName: extraOptions?.departmentName || 'Product & Engineering',
+    requesterRole,
+    departmentName,
     bookingDateIso: baseDateIso,
     startTimeIso,
     endTimeIso,
@@ -377,8 +436,17 @@ export async function createWorkspaceBooking(
     noShowDeadlineIso: noShowDeadlineTime.toISOString(),
     autoReleasedReason: null,
     bookingStatus: 'CONFIRMED',
-    approvalStatus: extraOptions?.approvalStatus || 'APPROVED',
-    approvedByUsername: extraOptions?.approvedByUsername ?? null,
+    approvalStatus: resolvedApprovalStatus,
+    approvedByUsername:
+      resolvedApprovalStatus === 'APPROVED'
+        ? extraOptions?.approvedByUsername || 'Systemadmin123'
+        : null,
+    bookingMode: resolvedBookingMode,
+    allowedDepartments: extraOptions?.allowedDepartments || [],
+    parentHallEventBookingId:
+      extraOptions?.parentHallEventBookingId ||
+      collisionResult.matchedHallEvent?.bookingId ||
+      null,
   };
 
   if (getMongoConnectionState()) {
@@ -397,13 +465,12 @@ export async function createWorkspaceBooking(
     targetNodeId: nodeId,
     lockVersionAttempted: nextVersion,
     outcomeStatus: 'SUCCESS',
-    detailMessage: `[Đặt Lịch Thành Công - Lock v${nextVersion}] @${createdRecord.requesterUsername} đặt ${nodeId} (${startTimeIso}-${endTimeIso}, Chu kỳ: ${recurringOption}, Số buổi: ${occurrenceDates.length}).`,
+    detailMessage: `[Đặt Lịch Thành Công - Lock v${nextVersion}] @${createdRecord.requesterUsername} (${departmentName}) đặt ${nodeId} [Chế độ: ${resolvedBookingMode}] (${startTimeIso}-${endTimeIso}, Trạng thái duyệt: ${resolvedApprovalStatus}).`,
   });
 
   return createdRecord;
 }
 
-// 5. Cronjob quét tự động thu hồi phòng quá 15 phút không Check-in QR (No-Show Auto-Release)
 export async function runFifteenMinuteNoShowCronSweep(options?: {
   forceTargetBookingId?: string;
 }): Promise<{
@@ -472,7 +539,7 @@ export async function runFifteenMinuteNoShowCronSweep(options?: {
           booking.nodeId
         );
       } catch {
-        // Bỏ qua nếu email chưa có trong bảng trust profile
+        // Bỏ qua
       }
 
       await recordAuditConcurrencyLog({

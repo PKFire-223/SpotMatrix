@@ -8,7 +8,10 @@ export type BookingConflictCategoryType =
   | 'NONE'
   | 'ROOM_OCCUPIED_BY_OTHER'
   | 'ROOM_ALREADY_BOOKED_BY_SELF'
-  | 'USER_BUSY_IN_OTHER_ROOM';
+  | 'USER_BUSY_IN_OTHER_ROOM'
+  | 'HALL_NO_APPROVED_EVENT'
+  | 'HALL_DEPARTMENT_NOT_ALLOWED'
+  | 'HALL_RENTAL_FORBIDDEN_FOR_EMPLOYEE';
 
 export interface OccurrenceCollisionCheckItem {
   occurrenceIndex: number;
@@ -38,6 +41,7 @@ export interface ScheduleCollisionValidationResult {
   firstConflictMessage: string | null;
   allConflictMessages: string[];
   weeklyQuotaCheck?: RoleWeeklyBookingQuotaResult;
+  matchedHallEvent?: BookingPayloadItem | null;
 }
 
 export const ROLE_WEEKLY_BOOKING_LIMITS: Record<UserRoleType, number> = {
@@ -206,6 +210,8 @@ export function generateRecurringOccurrenceDates(
   return [safeBase];
 }
 
+// Chuẩn hóa khoảng thời gian họp & Khung giờ Quét mã QR Check-in chuẩn xác:
+// Mở quét QR từ TRƯỚC 30 PHÚT (startTime - 30p) đến TRỄ TỐI ĐA 30 PHÚT (startTime + 30p) so với giờ bắt đầu
 export function buildNormalizedMeetingDateRange(
   bookingDateStr: string,
   startTimeStr: string,
@@ -214,6 +220,7 @@ export function buildNormalizedMeetingDateRange(
   startDateObj: Date;
   endDateObj: Date;
   earliestCheckinTime: Date;
+  latestCheckinTime: Date;
   noShowDeadlineTime: Date;
 } {
   const now = new Date();
@@ -236,11 +243,21 @@ export function buildNormalizedMeetingDateRange(
     normalizedStartHour = 0;
   }
 
-  const startDateObj = new Date(year, month, day, normalizedStartHour, rawStartMin, 0, 0);
+  const startDateObj = new Date(
+    year,
+    month,
+    day,
+    normalizedStartHour,
+    rawStartMin,
+    0,
+    0
+  );
   const endDateObj = new Date(year, month, day, rawEndHour, rawEndMin, 0, 0);
 
   const isSameDayAsNow =
-    now.getFullYear() === year && now.getMonth() === month && now.getDate() === day;
+    now.getFullYear() === year &&
+    now.getMonth() === month &&
+    now.getDate() === day;
   if (isSameDayAsNow && now.getHours() >= 21 && normalizedStartHour < 6) {
     startDateObj.setDate(startDateObj.getDate() + 1);
     endDateObj.setDate(endDateObj.getDate() + 1);
@@ -250,12 +267,88 @@ export function buildNormalizedMeetingDateRange(
     endDateObj.setDate(endDateObj.getDate() + 1);
   }
 
-  const earliestCheckinTime = new Date(startDateObj.getTime() - 2 * 60 * 60 * 1000);
-  const noShowDeadlineTime = new Date(startDateObj.getTime() + 15 * 60 * 1000);
+  const earliestCheckinTime = new Date(
+    startDateObj.getTime() - 30 * 60 * 1000
+  );
+  const latestCheckinTime = new Date(
+    startDateObj.getTime() + 30 * 60 * 1000
+  );
+  const noShowDeadlineTime = new Date(
+    startDateObj.getTime() + 15 * 60 * 1000
+  );
 
-  return { startDateObj, endDateObj, earliestCheckinTime, noShowDeadlineTime };
+  return {
+    startDateObj,
+    endDateObj,
+    earliestCheckinTime,
+    latestCheckinTime,
+    noShowDeadlineTime,
+  };
 }
 
+// Tìm sự kiện thuê cả Hội trường Tầng 5 (H-01) đã được phê duyệt (APPROVED) trong khung giờ
+export function findApprovedHallEventInSlot(
+  candidateDateIso: string,
+  startTimeIso: string,
+  endTimeIso: string,
+  existingBookings: BookingPayloadItem[]
+): {
+  approvedEvent: BookingPayloadItem | null;
+  pendingEvent: BookingPayloadItem | null;
+} {
+  const candidateRange = buildNormalizedMeetingDateRange(
+    candidateDateIso,
+    startTimeIso,
+    endTimeIso
+  );
+
+  let approvedEvent: BookingPayloadItem | null = null;
+  let pendingEvent: BookingPayloadItem | null = null;
+
+  for (const existing of existingBookings) {
+    if (
+      existing.bookingStatus === 'CANCELLED' ||
+      existing.approvalStatus === 'REJECTED'
+    ) {
+      continue;
+    }
+
+    const isHallRental =
+      existing.nodeId === 'H-01' ||
+      existing.bookingMode === 'HALL_EVENT_RENTAL';
+    if (!isHallRental) continue;
+
+    const existingDates =
+      existing.occurrenceDates && existing.occurrenceDates.length > 0
+        ? existing.occurrenceDates
+        : [existing.bookingDateIso || formatIsoDateString(new Date())];
+
+    if (!existingDates.includes(candidateDateIso)) continue;
+
+    const existingRange = buildNormalizedMeetingDateRange(
+      candidateDateIso,
+      existing.startTimeIso,
+      existing.endTimeIso
+    );
+
+    const isOverlapping =
+      candidateRange.startDateObj < existingRange.endDateObj &&
+      candidateRange.endDateObj > existingRange.startDateObj;
+
+    if (!isOverlapping) continue;
+
+    if (existing.approvalStatus === 'APPROVED') {
+      approvedEvent = existing;
+      break;
+    } else if (existing.approvalStatus === 'PENDING_APPROVAL') {
+      pendingEvent = existing;
+    }
+  }
+
+  return { approvedEvent, pendingEvent };
+}
+
+// Kiểm tra va chạm lịch toàn diện + Quy tắc 2 chế độ Hội trường Tầng 5 + Kiểm tra Phòng ban được phép tham gia
 export function validateSingleAndRecurringCollision(
   targetNodeId: string,
   baseDateIso: string,
@@ -264,13 +357,29 @@ export function validateSingleAndRecurringCollision(
   recurringOption: RecurringOptionType,
   existingBookings: BookingPayloadItem[],
   currentUserEmail = '',
-  currentUserRole: UserRoleType = 'EMPLOYEE'
+  currentUserRole: UserRoleType = 'EMPLOYEE',
+  currentUserDepartment = 'Product & Engineering'
 ): ScheduleCollisionValidationResult {
-  const occurrenceDates = generateRecurringOccurrenceDates(baseDateIso, recurringOption);
+  const occurrenceDates = generateRecurringOccurrenceDates(
+    baseDateIso,
+    recurringOption
+  );
   const occurrenceChecks: OccurrenceCollisionCheckItem[] = [];
   const allConflictMessages: string[] = [];
   let firstConflictMessage: string | null = null;
   const normalizedCurrentEmail = (currentUserEmail || '').trim().toLowerCase();
+
+  const isHallWholeRoomRental = targetNodeId === 'H-01';
+  const isHallSeatBooking = /^H01-[A-C]\d+$/i.test(targetNodeId);
+
+  let matchedHallEventForFirstDate: BookingPayloadItem | null = null;
+
+  if (isHallWholeRoomRental && currentUserRole === 'EMPLOYEE') {
+    const msg =
+      'Vai trò Nhân viên (EMPLOYEE) chỉ có quyền hạn đặt chỗ ghế ngồi (H01-A1..C12) khi Hội trường có sự kiện, không có quyền thuê cả phòng Hội trường (H-01)!';
+    allConflictMessages.push(msg);
+    firstConflictMessage = msg;
+  }
 
   occurrenceDates.forEach((candidateDate, idx) => {
     const candidateRange = buildNormalizedMeetingDateRange(
@@ -282,61 +391,109 @@ export function validateSingleAndRecurringCollision(
     let conflictCategory: BookingConflictCategoryType = 'NONE';
     let conflictReasonText: string | null = null;
 
-    for (const existing of existingBookings) {
-      if (
-        existing.bookingStatus === 'CANCELLED' ||
-        existing.approvalStatus === 'REJECTED'
-      ) {
-        continue;
-      }
-
-      const existingDatesList =
-        existing.occurrenceDates && existing.occurrenceDates.length > 0
-          ? existing.occurrenceDates
-          : [existing.bookingDateIso || formatIsoDateString(new Date())];
-
-      if (!existingDatesList.includes(candidateDate)) continue;
-
-      const existingRange = buildNormalizedMeetingDateRange(
+    if (isHallSeatBooking) {
+      const { approvedEvent, pendingEvent } = findApprovedHallEventInSlot(
         candidateDate,
-        existing.startTimeIso,
-        existing.endTimeIso
+        startTimeIso,
+        endTimeIso,
+        existingBookings
       );
 
-      const isTimeOverlapping =
-        candidateRange.startDateObj < existingRange.endDateObj &&
-        candidateRange.endDateObj > existingRange.startDateObj;
-
-      if (!isTimeOverlapping) continue;
-
-      const isSameRoom = existing.nodeId === targetNodeId;
-      const isSameUser =
-        normalizedCurrentEmail !== '' &&
-        (existing.userEmail || '').trim().toLowerCase() === normalizedCurrentEmail;
-
-      if (isSameRoom) {
-        matchedConflict = existing;
-        if (isSameUser) {
-          conflictCategory = 'ROOM_ALREADY_BOOKED_BY_SELF';
-          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Chính bạn đã đăng ký vị trí ${targetNodeId} trong khung giờ (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId} - "${existing.purposeNote}").`;
-        } else {
-          conflictCategory = 'ROOM_OCCUPIED_BY_OTHER';
-          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Vị trí ${targetNodeId} đã có người khác (@${
-            existing.requesterUsername || existing.userEmail
-          }) đặt trong khung giờ (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId} - "${existing.purposeNote}").`;
-        }
-        break;
+      if (idx === 0) {
+        matchedHallEventForFirstDate = approvedEvent;
       }
 
-      if (!isSameRoom && isSameUser) {
-        matchedConflict = existing;
-        conflictCategory = 'USER_BUSY_IN_OTHER_ROOM';
-        conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Trùng lịch cá nhân ở phòng khác! Bạn đã đăng ký vị trí [${existing.nodeId}] trong khung giờ trùng lặp (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId}). Một người không thể đặt và sử dụng 2 phòng cùng lúc!`;
-        break;
+      if (!approvedEvent) {
+        conflictCategory = 'HALL_NO_APPROVED_EVENT';
+        conflictReasonText = pendingEvent
+          ? `Kỳ #${idx + 1} (${candidateDate}): Hội trường Tầng 5 đang có yêu cầu thuê sự kiện "${pendingEvent.purposeNote}" của Quản lý @${
+              pendingEvent.requesterUsername || pendingEvent.userEmail
+            } nhưng CHƯA ĐƯỢC ADMIN CHẤP NHẬN. Chỉ khi Admin phê duyệt thuê Hội trường thì mới có thể đặt ghế ngồi!`
+          : `Kỳ #${idx + 1} (${candidateDate}): Phòng Hội trường hiện đang không có sự kiện gì để tham gia trong khung giờ (${startTimeIso} – ${endTimeIso})! Chỉ có thể đặt ghế ngồi khi Hội trường đã được Admin hoặc Quản lý thuê tổ chức hoạt động thành công.`;
+      } else {
+        const allowedDepts = approvedEvent.allowedDepartments || [];
+        const isDeptAllowed =
+          currentUserRole === 'SYS_ADMIN' ||
+          allowedDepts.length === 0 ||
+          allowedDepts.includes('ALL') ||
+          allowedDepts.some(
+            (d) =>
+              d.trim().toLowerCase() ===
+              (currentUserDepartment || '').trim().toLowerCase()
+          );
+
+        if (!isDeptAllowed) {
+          conflictCategory = 'HALL_DEPARTMENT_NOT_ALLOWED';
+          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Sự kiện Hội trường "${approvedEvent.purposeNote}" chỉ dành cho các phòng ban: [${allowedDepts.join(
+            ', '
+          )}]. Phòng ban hiện tại của bạn (${currentUserDepartment}) không nằm trong danh sách được tham gia sự kiện này!`;
+        }
       }
     }
 
-    if (matchedConflict && conflictReasonText) {
+    if (conflictCategory === 'NONE') {
+      for (const existing of existingBookings) {
+        if (
+          existing.bookingStatus === 'CANCELLED' ||
+          existing.approvalStatus === 'REJECTED'
+        ) {
+          continue;
+        }
+
+        const existingDatesList =
+          existing.occurrenceDates && existing.occurrenceDates.length > 0
+            ? existing.occurrenceDates
+            : [existing.bookingDateIso || formatIsoDateString(new Date())];
+
+        if (!existingDatesList.includes(candidateDate)) continue;
+
+        const existingRange = buildNormalizedMeetingDateRange(
+          candidateDate,
+          existing.startTimeIso,
+          existing.endTimeIso
+        );
+
+        const isTimeOverlapping =
+          candidateRange.startDateObj < existingRange.endDateObj &&
+          candidateRange.endDateObj > existingRange.startDateObj;
+
+        if (!isTimeOverlapping) continue;
+
+        const isSameRoom = existing.nodeId === targetNodeId;
+        const isSameUser =
+          normalizedCurrentEmail !== '' &&
+          (existing.userEmail || '').trim().toLowerCase() ===
+            normalizedCurrentEmail;
+
+        if (isSameRoom) {
+          matchedConflict = existing;
+          if (isSameUser) {
+            conflictCategory = 'ROOM_ALREADY_BOOKED_BY_SELF';
+            conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Chính bạn đã đăng ký vị trí ${targetNodeId} trong khung giờ (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId} - "${existing.purposeNote}").`;
+          } else {
+            conflictCategory = 'ROOM_OCCUPIED_BY_OTHER';
+            conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Vị trí ${targetNodeId} đã có người khác (@${
+              existing.requesterUsername || existing.userEmail
+            }) đặt trong khung giờ (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId} - "${existing.purposeNote}").`;
+          }
+          break;
+        }
+
+        const isOrganizerBookingSeatInOwnHallEvent =
+          isHallSeatBooking &&
+          existing.nodeId === 'H-01' &&
+          isSameUser;
+
+        if (!isSameRoom && isSameUser && !isOrganizerBookingSeatInOwnHallEvent) {
+          matchedConflict = existing;
+          conflictCategory = 'USER_BUSY_IN_OTHER_ROOM';
+          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Trùng lịch cá nhân ở phòng khác! Bạn đã đăng ký vị trí [${existing.nodeId}] trong khung giờ trùng lặp (${existing.startTimeIso} – ${existing.endTimeIso}, Mã vé: ${existing.bookingId}). Một người không thể đặt và sử dụng 2 phòng/ghế cùng lúc!`;
+          break;
+        }
+      }
+    }
+
+    if (conflictReasonText) {
       allConflictMessages.push(conflictReasonText);
       if (!firstConflictMessage) {
         firstConflictMessage = conflictReasonText;
@@ -346,7 +503,7 @@ export function validateSingleAndRecurringCollision(
     occurrenceChecks.push({
       occurrenceIndex: idx + 1,
       dateIso: candidateDate,
-      hasConflict: Boolean(matchedConflict),
+      hasConflict: conflictCategory !== 'NONE',
       conflictCategory,
       conflictBooking: matchedConflict,
       conflictReasonText,
@@ -361,7 +518,10 @@ export function validateSingleAndRecurringCollision(
     existingBookings
   );
 
-  if (weeklyQuotaCheck.isQuotaExceeded && weeklyQuotaCheck.quotaExceededReasonText) {
+  if (
+    weeklyQuotaCheck.isQuotaExceeded &&
+    weeklyQuotaCheck.quotaExceededReasonText
+  ) {
     allConflictMessages.push(weeklyQuotaCheck.quotaExceededReasonText);
     if (!firstConflictMessage) {
       firstConflictMessage = weeklyQuotaCheck.quotaExceededReasonText;
@@ -369,6 +529,7 @@ export function validateSingleAndRecurringCollision(
   }
 
   const hasCollision =
+    (isHallWholeRoomRental && currentUserRole === 'EMPLOYEE') ||
     occurrenceChecks.some((item) => item.hasConflict) ||
     weeklyQuotaCheck.isQuotaExceeded;
 
@@ -380,5 +541,6 @@ export function validateSingleAndRecurringCollision(
     firstConflictMessage,
     allConflictMessages,
     weeklyQuotaCheck,
+    matchedHallEvent: matchedHallEventForFirstDate,
   };
 }

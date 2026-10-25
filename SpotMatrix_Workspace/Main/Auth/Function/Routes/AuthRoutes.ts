@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  handleChangeUserPassword,
   handleConfirmPasswordReset,
   handleGetUserProfileFromMongo,
   handleLoginAccount,
@@ -12,9 +13,8 @@ export const authRouter = Router();
 
 authRouter.post('/login', handleLoginAccount);
 authRouter.post('/register', handleRegisterAccount);
-authRouter.post('/forgot-password/request-otp', handleRequestPasswordOtp);
-authRouter.post('/forgot-password/confirm', handleConfirmPasswordReset);
-
-// API đọc và ghi Hồ sơ + Ảnh Avatar + Ảnh nền Background trực tiếp trên MongoDB Atlas
+authRouter.post('/password-otp', handleRequestPasswordOtp);
+authRouter.post('/password-reset', handleConfirmPasswordReset);
+authRouter.post('/change-password', handleChangeUserPassword);
 authRouter.get('/profile/:username', handleGetUserProfileFromMongo);
 authRouter.put('/profile', handleUpdateUserProfileInMongo);
