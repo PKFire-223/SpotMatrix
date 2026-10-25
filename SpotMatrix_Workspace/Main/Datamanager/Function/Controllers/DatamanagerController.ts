@@ -1,15 +1,22 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   adjustUserTrustScore,
+  assignUserToSingleDepartment,
   calculateZoneOccupancyRate,
+  deleteOrganizationDepartment,
+  deleteOrganizationGroup,
   evaluateUserBookingEligibility,
   getActivePolicyConfig,
   listAuditConcurrencyLogs,
+  listOrganizationStructure,
   listSharedEquipments,
   listUserTrustProfiles,
   recordAuditConcurrencyLog,
+  toggleMemberInOrganizationGroup,
   updateActivePolicyConfig,
   updateEquipmentAttachmentStatus,
+  upsertOrganizationDepartment,
+  upsertOrganizationGroup,
 } from '../Services/DatamanagerService';
 import { createValidationException } from '../../../../Error/Function/Models/AppExceptionModel';
 import { EquipmentStatusType } from '../../../../Shared/Types/GlobalSystemTypes';
@@ -21,7 +28,6 @@ export function handleGetOccupancySummary(_req: Request, res: Response): void {
   });
 }
 
-// 1. Controllers cho Diem Tin Nhiem (Trust Score)
 export async function handleGetTrustProfiles(
   _req: Request,
   res: Response,
@@ -43,9 +49,15 @@ export async function handleAdjustTrustScore(
   try {
     const { userEmail, eventType, targetNodeId } = req.body;
     if (!userEmail || !eventType) {
-      throw createValidationException('Thieu userEmail hoac eventType (QR_CHECKIN_ONTIME | NO_SHOW_EXPIRED).');
+      throw createValidationException(
+        'Thiếu userEmail hoặc eventType (QR_CHECKIN_ONTIME | NO_SHOW_EXPIRED).'
+      );
     }
-    const updatedProfile = await adjustUserTrustScore(userEmail, eventType, targetNodeId);
+    const updatedProfile = await adjustUserTrustScore(
+      userEmail,
+      eventType,
+      targetNodeId
+    );
     res.json({ success: true, data: updatedProfile });
   } catch (err) {
     next(err);
@@ -60,7 +72,9 @@ export async function handleEvaluateBookingEligibility(
   try {
     const { userEmail, isRecurringRequest, requestedAdvanceDays } = req.body;
     if (!userEmail) {
-      throw createValidationException('Vui long cung cap userEmail de kiem tra diem tin nhiem.');
+      throw createValidationException(
+        'Vui lòng cung cấp userEmail để kiểm tra điểm tín nhiệm.'
+      );
     }
     const result = await evaluateUserBookingEligibility(
       userEmail,
@@ -73,7 +87,6 @@ export async function handleEvaluateBookingEligibility(
   }
 }
 
-// 2. Controllers cho Thiet Bi Dung Chung (Shared Equipment Inventory)
 export async function handleGetSharedEquipments(
   req: Request,
   res: Response,
@@ -82,7 +95,11 @@ export async function handleGetSharedEquipments(
   try {
     const statusFilter = req.query.status as EquipmentStatusType | undefined;
     const equipments = await listSharedEquipments(statusFilter);
-    res.json({ success: true, totalCount: equipments.length, data: equipments });
+    res.json({
+      success: true,
+      totalCount: equipments.length,
+      data: equipments,
+    });
   } catch (err) {
     next(err);
   }
@@ -97,7 +114,9 @@ export async function handlePatchEquipmentStatus(
     const { equipmentId } = req.params;
     const { status, bookingId, assignedNodeId } = req.body;
     if (!equipmentId || !status) {
-      throw createValidationException('Thieu equipmentId hoac trang thai status (AVAILABLE | IN_USE | BROKEN).');
+      throw createValidationException(
+        'Thiếu equipmentId hoặc trạng thái status (AVAILABLE | IN_USE | BROKEN).'
+      );
     }
     const updatedEq = await updateEquipmentAttachmentStatus(
       equipmentId,
@@ -111,7 +130,6 @@ export async function handlePatchEquipmentStatus(
   }
 }
 
-// 3. Controllers cho Chinh Sach & Han Muc (Quota & Policy Config)
 export async function handleGetPolicyConfig(
   _req: Request,
   res: Response,
@@ -132,14 +150,16 @@ export async function handleUpdatePolicyConfig(
 ): Promise<void> {
   try {
     const { adminEmail, ...policyPayload } = req.body;
-    const updatedPolicy = await updateActivePolicyConfig(policyPayload, adminEmail);
+    const updatedPolicy = await updateActivePolicyConfig(
+      policyPayload,
+      adminEmail
+    );
     res.json({ success: true, data: updatedPolicy });
   } catch (err) {
     next(err);
   }
 }
 
-// 4. Controllers cho Nhat Ky Xung Dot & Truy Vet (Concurrency & Audit Logs)
 export async function handleGetAuditLogs(
   _req: Request,
   res: Response,
@@ -160,7 +180,7 @@ export async function handleSimulateConcurrencyLock(
 ): Promise<void> {
   try {
     const { winnerEmail, challengerEmail, targetNodeId } = req.body;
-    const nodeCode = targetNodeId || 'NODE-A01';
+    const nodeCode = targetNodeId || 'M1-01';
     const firstUser = winnerEmail || 'employee.dev@spotmatrix.vn';
     const secondUser = challengerEmail || 'member.warning@spotmatrix.vn';
 
@@ -170,7 +190,7 @@ export async function handleSimulateConcurrencyLock(
       targetNodeId: nodeCode,
       lockVersionAttempted: 2,
       outcomeStatus: 'SUCCESS',
-      detailMessage: `User ${firstUser} chiem Lock thanh cong tai ${nodeCode} (lockVersion tang tu 1 -> 2, giu cho 5 phut).`,
+      detailMessage: `User ${firstUser} chiếm Lock thành công tại ${nodeCode} (lockVersion tăng từ 1 -> 2, giữ chỗ 5 phút).`,
     });
 
     const rejectLog = await recordAuditConcurrencyLog({
@@ -179,15 +199,117 @@ export async function handleSimulateConcurrencyLock(
       targetNodeId: nodeCode,
       lockVersionAttempted: 1,
       outcomeStatus: 'CONFLICT_BLOCKED',
-      detailMessage: `User ${secondUser} bi tu choi tai ${nodeCode} do xung dot Optimistic Lock (gui lockVersion=1 nhung DB hien tai la 2).`,
+      detailMessage: `User ${secondUser} bị từ chối tại ${nodeCode} do xung đột Optimistic Lock (gửi lockVersion=1 nhưng DB hiện tại là 2).`,
     });
 
     res.status(201).json({
       success: true,
-      simulationSummary: `Da mo phong thanh cong xung dot dat cho dong thoi tai ${nodeCode}`,
+      simulationSummary: `Đã mô phỏng thành công xung đột đặt chỗ đồng thời tại ${nodeCode}`,
       winnerEvent: winLog,
       rejectedEvent: rejectLog,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetOrganizationStructure(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await listOrganizationStructure();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleUpsertDepartment(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const saved = await upsertOrganizationDepartment(req.body);
+    res.json({ success: true, data: saved });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleDeleteDepartment(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { departmentId } = req.params;
+    await deleteOrganizationDepartment(departmentId);
+    res.json({ success: true, deletedId: departmentId });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleAssignUserDepartment(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { userEmail, departmentName } = req.body;
+    if (!userEmail || !departmentName) {
+      throw createValidationException('Thiếu userEmail hoặc departmentName.');
+    }
+    const result = await assignUserToSingleDepartment(
+      userEmail,
+      departmentName
+    );
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleUpsertGroup(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const saved = await upsertOrganizationGroup(req.body);
+    res.json({ success: true, data: saved });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleDeleteGroup(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { groupId } = req.params;
+    await deleteOrganizationGroup(groupId);
+    res.json({ success: true, deletedId: groupId });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleToggleGroupMember(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { groupId } = req.params;
+    const { userEmail } = req.body;
+    const updated = await toggleMemberInOrganizationGroup(groupId, userEmail);
+    res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
   }
