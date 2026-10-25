@@ -1076,8 +1076,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-extrabold block mb-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              
+                <Clock className="w-3.5 h-3.5 text-indigo-600" /><label className="text-xs font-extrabold mb-2 flex items-center gap-1.5">
                 Chọn Khung giờ Hoạt động Hôm nay ({todayIso}):
               </label>
               <div className="space-y-1.5">

@@ -1,22 +1,15 @@
 import { Router } from 'express';
 import {
   handleAdjustTrustScore,
-  handleAssignUserDepartment,
-  handleDeleteDepartment,
-  handleDeleteGroup,
   handleEvaluateBookingEligibility,
   handleGetAuditLogs,
   handleGetOccupancySummary,
-  handleGetOrganizationStructure,
   handleGetPolicyConfig,
   handleGetSharedEquipments,
   handleGetTrustProfiles,
   handlePatchEquipmentStatus,
   handleSimulateConcurrencyLock,
-  handleToggleGroupMember,
   handleUpdatePolicyConfig,
-  handleUpsertDepartment,
-  handleUpsertGroup,
 } from '../Controllers/DatamanagerController';
 
 export const datamanagerRouter = Router();
@@ -43,21 +36,4 @@ datamanagerRouter.get('/audit-logs', handleGetAuditLogs);
 datamanagerRouter.post(
   '/audit-logs/simulate-conflict',
   handleSimulateConcurrencyLock
-);
-
-datamanagerRouter.get('/organization', handleGetOrganizationStructure);
-datamanagerRouter.post('/organization/departments', handleUpsertDepartment);
-datamanagerRouter.delete(
-  '/organization/departments/:departmentId',
-  handleDeleteDepartment
-);
-datamanagerRouter.patch(
-  '/organization/departments/assign-user',
-  handleAssignUserDepartment
-);
-datamanagerRouter.post('/organization/groups', handleUpsertGroup);
-datamanagerRouter.delete('/organization/groups/:groupId', handleDeleteGroup);
-datamanagerRouter.patch(
-  '/organization/groups/:groupId/toggle-member',
-  handleToggleGroupMember
 );
