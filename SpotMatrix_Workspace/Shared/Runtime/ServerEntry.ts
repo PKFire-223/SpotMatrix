@@ -7,6 +7,7 @@ import { floorplanRouter } from '../../Main/Floorplan/Function/Routes/FloorplanR
 import { bookingRouter } from '../../Main/Booking/Function/Routes/BookingRoutes';
 import { aiRouter } from '../../Ai/Function/Routes/AiRoutes';
 import { datamanagerRouter } from '../../Main/Datamanager/Function/Routes/DatamanagerRoutes';
+import { organizationRouter } from '../../Main/Organization/Function/Routes/OrganizationRoutes';
 import { authRouter } from '../../Main/Auth/Function/Routes/AuthRoutes';
 import { healthCheckRouter } from '../../Error/Function/Routes/HealthCheckRoutes';
 import { handleGlobalException } from '../../Error/Function/Middlewares/GlobalErrorMiddleware';
@@ -24,7 +25,6 @@ async function bootstrapBackendServer(): Promise<void> {
       credentials: true,
     })
   );
-  // Mở giới hạn 15MB để lưu chuỗi ảnh Avatar & Background (Base64) trực tiếp vào MongoDB Atlas
   appServer.use(express.json({ limit: '15mb' }));
   appServer.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
@@ -32,6 +32,7 @@ async function bootstrapBackendServer(): Promise<void> {
   appServer.use('/api/v1/bookings', bookingRouter);
   appServer.use('/api/v1/ai', aiRouter);
   appServer.use('/api/v1/datamanager', datamanagerRouter);
+  appServer.use('/api/v1/organization', organizationRouter);
   appServer.use('/api/v1/auth', authRouter);
   appServer.use('/api/v1/system', healthCheckRouter);
 

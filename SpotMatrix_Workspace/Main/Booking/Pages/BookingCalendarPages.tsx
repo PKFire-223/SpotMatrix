@@ -18,10 +18,14 @@ import {
   RotateCcw,
   ShieldAlert,
   Award,
+  Building2,
+  Users,
 } from 'lucide-react';
 import {
   AuditEventCategoryType,
   BookingPayloadItem,
+  HallBookingModeType,
+  OrganizationDepartmentItem,
   RecurringOptionType,
   SeatStatusType,
   UserRoleType,
@@ -30,6 +34,7 @@ import {
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 import {
   buildNormalizedMeetingDateRange,
+  findApprovedHallEventInSlot,
   formatIsoDateString,
   validateSingleAndRecurringCollision,
 } from '../Function/Validators/BookingValidator';
@@ -41,15 +46,25 @@ export interface BookingTimeWindowInput {
   recurringOption?: RecurringOptionType;
   occurrenceDates?: string[];
   lockVersion?: number;
+  bookingMode?: HallBookingModeType;
+  allowedDepartments?: string[];
+  parentHallEventBookingId?: string | null;
 }
 
 export interface BookingCalendarPagesProps {
   bookingsList: BookingPayloadItem[];
   workspaceNodes: WorkspaceNodeItem[];
+  departmentsList?: OrganizationDepartmentItem[];
   selectedNode: WorkspaceNodeItem | null;
-  preselectedSlot?: { start: string; end: string } | null;
+  preselectedSlot?: {
+    start: string;
+    end: string;
+    seatCode?: string;
+    hallMode?: 'HALL_EVENT_RENTAL' | 'HALL_SEAT_BOOKING';
+  } | null;
   userEmail: string;
   userRole: UserRoleType;
+  userDepartment?: string;
   isDark: boolean;
   onCreateNewBooking: (
     email: string,
@@ -68,7 +83,11 @@ export interface BookingCalendarPagesProps {
     outcomeStatus?: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED',
     lockVersionAttempted?: number
   ) => void;
-  onPenalizeNoShowBooking?: (bookingId: string, userEmail: string, nodeCode: string) => void;
+  onPenalizeNoShowBooking?: (
+    bookingId: string,
+    userEmail: string,
+    nodeCode: string
+  ) => void;
 }
 
 interface ActiveHoldTimerState {
@@ -89,17 +108,20 @@ interface RaceSimulationBannerState {
 }
 
 const AMPHITHEATER_SEATS = [
-  'H01-A1', 'H01-A2', 'H01-A3', 'H01-A4', 'H01-A5', 'H01-A6',
-  'H01-B1', 'H01-B2', 'H01-B3', 'H01-B4', 'H01-B5', 'H01-B6', 'H01-B7', 'H01-B8',
+  'H01-A1', 'H01-A2', 'H01-A3', 'H01-A4', 'H01-A5', 'H01-A6', 'H01-A7',
+  'H01-B1', 'H01-B2', 'H01-B3', 'H01-B4', 'H01-B5', 'H01-B6', 'H01-B7', 'H01-B8', 'H01-B9',
+  'H01-C1', 'H01-C2', 'H01-C3', 'H01-C4', 'H01-C5', 'H01-C6', 'H01-C7', 'H01-C8', 'H01-C9', 'H01-C10', 'H01-C11', 'H01-C12',
 ];
 
 export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   bookingsList,
   workspaceNodes,
+  departmentsList = [],
   selectedNode,
   preselectedSlot,
   userEmail,
   userRole,
+  userDepartment = 'Product & Engineering',
   isDark,
   onCreateNewBooking,
   onCheckInBooking,
@@ -111,31 +133,59 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const [selectedRoomCode, setSelectedRoomCode] = useState<string>(
     selectedNode?.nodeCode || workspaceNodes[0]?.nodeCode || 'M1-01'
   );
-  const [selectedAmphitheaterSeat, setSelectedAmphitheaterSeat] = useState<string>('H01-A1');
-  const [selectedDate, setSelectedDate] = useState<string>(() => formatIsoDateString(new Date()));
-  const [startTime, setStartTime] = useState<string>(preselectedSlot?.start || '09:00');
-  const [endTime, setEndTime] = useState<string>(preselectedSlot?.end || '11:00');
+  const [hallActionMode, setHallActionMode] = useState<
+    'HALL_EVENT_RENTAL' | 'HALL_SEAT_BOOKING'
+  >('HALL_SEAT_BOOKING');
+  const [selectedAmphitheaterSeat, setSelectedAmphitheaterSeat] =
+    useState<string>('H01-A4');
+  const [selectedAllowedDepartments, setSelectedAllowedDepartments] = useState<
+    string[]
+  >(() =>
+    departmentsList.length > 0
+      ? departmentsList.map((d) => d.departmentName)
+      : ['System Governance', 'Product & Engineering', 'Product Design & UX']
+  );
+
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    formatIsoDateString(new Date())
+  );
+  const [startTime, setStartTime] = useState<string>(
+    preselectedSlot?.start || '13:00'
+  );
+  const [endTime, setEndTime] = useState<string>(
+    preselectedSlot?.end || '15:00'
+  );
   const [purposeTitle, setPurposeTitle] = useState<string>(
     'Họp triển khai dự án & Review Kiến trúc Hệ thống'
   );
-  const [recurringOption, setRecurringOption] = useState<RecurringOptionType>('NONE');
+  const [recurringOption, setRecurringOption] =
+    useState<RecurringOptionType>('NONE');
   const [selectedBookingForQr, setSelectedBookingForQr] = useState<string>(
     bookingsList[0]?.bookingId || ''
   );
 
-  const [roomLockVersions, setRoomLockVersions] = useState<Record<string, number>>({
+  const [roomLockVersions, setRoomLockVersions] = useState<
+    Record<string, number>
+  >({
     'M1-01': 1,
     'M1-02': 2,
     'H-01': 1,
   });
-  const [activeHoldMap, setActiveHoldMap] = useState<Record<string, ActiveHoldTimerState>>({});
+  const [activeHoldMap, setActiveHoldMap] = useState<
+    Record<string, ActiveHoldTimerState>
+  >({});
   const [nowTickMs, setNowTickMs] = useState<number>(() => Date.now());
-  const [raceSimResult, setRaceSimResult] = useState<RaceSimulationBannerState | null>(null);
+  const [raceSimResult, setRaceSimResult] =
+    useState<RaceSimulationBannerState | null>(null);
   const [cronSweepBanner, setCronSweepBanner] = useState<string | null>(null);
 
-  const [checkinErrorAlert, setCheckinErrorAlert] = useState<string | null>(null);
+  const [checkinErrorAlert, setCheckinErrorAlert] = useState<string | null>(
+    null
+  );
   const [bookingFormError, setBookingFormError] = useState<string | null>(null);
-  const [bookingSuccessBanner, setBookingSuccessBanner] = useState<string | null>(null);
+  const [bookingSuccessBanner, setBookingSuccessBanner] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (selectedNode?.nodeCode) {
@@ -148,7 +198,26 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       setStartTime(preselectedSlot.start);
       setEndTime(preselectedSlot.end);
     }
-  }, [preselectedSlot]);
+    if (preselectedSlot?.seatCode) {
+      setSelectedAmphitheaterSeat(preselectedSlot.seatCode);
+    }
+    if (preselectedSlot?.hallMode) {
+      if (
+        preselectedSlot.hallMode === 'HALL_EVENT_RENTAL' &&
+        userRole === 'EMPLOYEE'
+      ) {
+        setHallActionMode('HALL_SEAT_BOOKING');
+      } else {
+        setHallActionMode(preselectedSlot.hallMode);
+      }
+    }
+  }, [preselectedSlot, userRole]);
+
+  useEffect(() => {
+    if (userRole === 'EMPLOYEE' && hallActionMode === 'HALL_EVENT_RENTAL') {
+      setHallActionMode('HALL_SEAT_BOOKING');
+    }
+  }, [userRole, hallActionMode]);
 
   const bookingsCount = bookingsList.length;
   const newestBookingId = bookingsList[0]?.bookingId || '';
@@ -174,13 +243,23 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     currentRoomNode?.floorLevel === 5 || currentRoomNode?.nodeCode === 'H-01';
 
   const targetBookableCode = isAmphitheaterSelected
-    ? selectedAmphitheaterSeat
+    ? hallActionMode === 'HALL_EVENT_RENTAL'
+      ? 'H-01'
+      : selectedAmphitheaterSeat
     : currentRoomNode?.nodeCode || 'M1-01';
 
   const currentTargetLockVersion = roomLockVersions[targetBookableCode] || 1;
   const activeHoldForTarget = activeHoldMap[targetBookableCode] || null;
 
-  // Kiểm tra va chạm lịch: Trùng phòng người khác + Trùng phòng chính mình + Trùng giờ ở phòng khác + Hạn mức tuần theo Role
+  const currentHallEventCheck = useMemo(() => {
+    return findApprovedHallEventInSlot(
+      selectedDate,
+      startTime,
+      endTime,
+      bookingsList
+    );
+  }, [selectedDate, startTime, endTime, bookingsList]);
+
   const liveCollisionValidation = useMemo(() => {
     return validateSingleAndRecurringCollision(
       targetBookableCode,
@@ -190,7 +269,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       recurringOption,
       bookingsList,
       userEmail,
-      userRole
+      userRole,
+      userDepartment
     );
   }, [
     targetBookableCode,
@@ -201,9 +281,30 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     bookingsList,
     userEmail,
     userRole,
+    userDepartment,
   ]);
 
   const weeklyQuotaInfo = liveCollisionValidation.weeklyQuotaCheck;
+
+  const availableDepartmentNames = useMemo(() => {
+    if (departmentsList.length > 0) {
+      return departmentsList.map((d) => d.departmentName);
+    }
+    return [
+      'System Governance',
+      'Product & Engineering',
+      'Product Design & UX',
+      'AI & Data Science',
+    ];
+  }, [departmentsList]);
+
+  const handleToggleAllowedDepartment = (deptName: string) => {
+    setSelectedAllowedDepartments((prev) =>
+      prev.includes(deptName)
+        ? prev.filter((d) => d !== deptName)
+        : [...prev, deptName]
+    );
+  };
 
   const handleReleaseHoldInternal = useCallback(
     (codeToRelease: string, reasonText: string) => {
@@ -234,10 +335,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       fetch(`/api/v1/bookings/hold/${encodeURIComponent(codeToRelease)}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userEmail: holdItem.heldByEmail, reason: reasonText }),
+        body: JSON.stringify({
+          userEmail: holdItem.heldByEmail,
+          reason: reasonText,
+        }),
       }).catch(() => {});
     },
-    [activeHoldMap, roomLockVersions, onUpdateNodeStatus, onRecordConcurrencyAudit]
+    [
+      activeHoldMap,
+      roomLockVersions,
+      onUpdateNodeStatus,
+      onRecordConcurrencyAudit,
+    ]
   );
 
   useEffect(() => {
@@ -246,7 +355,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       setNowTickMs(currentMs);
       Object.values(activeHoldMap).forEach((holdItem) => {
         if (holdItem.expiresAtMs <= currentMs) {
-          handleReleaseHoldInternal(holdItem.nodeCode, 'TIMEOUT_5_MINUTES_EXPIRED');
+          handleReleaseHoldInternal(
+            holdItem.nodeCode,
+            'TIMEOUT_5_MINUTES_EXPIRED'
+          );
         }
       });
     }, 1000);
@@ -262,7 +374,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       setBookingFormError(
         `Không thể giữ chỗ 5 phút: ${
           liveCollisionValidation.firstConflictMessage ||
-          'Khung giờ bạn chọn đang bị trùng lịch hoặc vượt hạn mức tuần.'
+          'Khung giờ bạn chọn đang bị trùng lịch, chưa có sự kiện Hội trường hoặc vượt hạn mức tuần.'
         }`
       );
       return;
@@ -272,7 +384,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const nextVersion = expectedVersion + 1;
     const expiresAtMs = Date.now() + 5 * 60 * 1000;
 
-    setRoomLockVersions((prev) => ({ ...prev, [targetBookableCode]: nextVersion }));
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBookableCode]: nextVersion,
+    }));
     setActiveHoldMap((prev) => ({
       ...prev,
       [targetBookableCode]: {
@@ -323,7 +438,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const challengerEmail = 'challenger.concurrent@spotmatrix.vn';
     const expiresAtMs = Date.now() + 5 * 60 * 1000;
 
-    setRoomLockVersions((prev) => ({ ...prev, [targetBookableCode]: winnerVer }));
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBookableCode]: winnerVer,
+    }));
     setActiveHoldMap((prev) => ({
       ...prev,
       [targetBookableCode]: {
@@ -382,23 +500,35 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     (booking: BookingPayloadItem) => {
       const now = new Date(nowTickMs);
       const bookingDateStr = booking.bookingDateIso || formatIsoDateString(now);
-      const { startDateObj, endDateObj, earliestCheckinTime, noShowDeadlineTime } =
-        buildNormalizedMeetingDateRange(bookingDateStr, booking.startTimeIso, booking.endTimeIso);
+      const {
+        startDateObj,
+        earliestCheckinTime,
+        latestCheckinTime,
+        noShowDeadlineTime,
+      } = buildNormalizedMeetingDateRange(
+        bookingDateStr,
+        booking.startTimeIso,
+        booking.endTimeIso
+      );
 
-      const earliestStr = `${String(earliestCheckinTime.getHours()).padStart(2, '0')}:${String(
-        earliestCheckinTime.getMinutes()
-      ).padStart(2, '0')}`;
-      const startStr = `${String(startDateObj.getHours()).padStart(2, '0')}:${String(
-        startDateObj.getMinutes()
-      ).padStart(2, '0')}`;
-      const endStr = `${String(endDateObj.getHours()).padStart(2, '0')}:${String(
-        endDateObj.getMinutes()
-      ).padStart(2, '0')}`;
-      const deadlineStr = `${String(noShowDeadlineTime.getHours()).padStart(2, '0')}:${String(
-        noShowDeadlineTime.getMinutes()
-      ).padStart(2, '0')}`;
+      const earliestStr = `${String(earliestCheckinTime.getHours()).padStart(
+        2,
+        '0'
+      )}:${String(earliestCheckinTime.getMinutes()).padStart(2, '0')}`;
+      const startStr = `${String(startDateObj.getHours()).padStart(
+        2,
+        '0'
+      )}:${String(startDateObj.getMinutes()).padStart(2, '0')}`;
+      const latestStr = `${String(latestCheckinTime.getHours()).padStart(
+        2,
+        '0'
+      )}:${String(latestCheckinTime.getMinutes()).padStart(2, '0')}`;
+      const deadlineStr = `${String(noShowDeadlineTime.getHours()).padStart(
+        2,
+        '0'
+      )}:${String(noShowDeadlineTime.getMinutes()).padStart(2, '0')}`;
 
-      const windowLabel = `${earliestStr} – ${endStr}`;
+      const windowLabel = `${earliestStr} – ${latestStr} (±30p quanh mốc ${startStr})`;
       const secondsUntilNoShowRevoke = Math.floor(
         (noShowDeadlineTime.getTime() - now.getTime()) / 1000
       );
@@ -406,17 +536,17 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       if (now < earliestCheckinTime) {
         return {
           allowed: false,
-          reason: `Chưa đến giờ mở Check-in! Quy định chỉ nhận Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (Mở cổng từ ${earliestStr} đến ${startStr}).`,
+          reason: `Chưa đến giờ mở quét QR Check-in! Quy định chỉ cho phép quét mã QR từ trước 30 phút (${earliestStr}) đến trễ tối đa 30 phút (${latestStr}) so với giờ bắt đầu (${startStr}).`,
           windowLabel,
           noShowDeadlineLabel: deadlineStr,
           secondsUntilNoShowRevoke,
         };
       }
 
-      if (now > endDateObj) {
+      if (now > latestCheckinTime) {
         return {
           allowed: false,
-          reason: `Ca họp (${booking.startTimeIso} - ${booking.endTimeIso}) đã kết thúc, không thể Check-in.`,
+          reason: `Đã quá hạn quét QR Check-in! Quy định chỉ nhận quét mã QR từ trước 30 phút (${earliestStr}) đến trễ tối đa 30 phút (${latestStr}) so với giờ bắt đầu (${startStr}).`,
           windowLabel,
           noShowDeadlineLabel: deadlineStr,
           secondsUntilNoShowRevoke,
@@ -425,7 +555,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
       return {
         allowed: true,
-        reason: `Đang trong khung giờ Check-in hợp lệ (${earliestStr} – ${endStr}).`,
+        reason: `Đang trong khung giờ Quét mã QR hợp lệ (${windowLabel}).`,
         windowLabel,
         noShowDeadlineLabel: deadlineStr,
         secondsUntilNoShowRevoke,
@@ -438,12 +568,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const targetBooking = forceBookingId
       ? bookingsList.find((b) => b.bookingId === forceBookingId)
       : bookingsList.find((b) => {
-          if (b.bookingStatus !== 'CONFIRMED' || b.approvalStatus === 'REJECTED') return false;
+          if (
+            b.bookingStatus !== 'CONFIRMED' ||
+            b.approvalStatus === 'REJECTED'
+          )
+            return false;
           const check = validateCheckinTimeWindow(b);
           return check.secondsUntilNoShowRevoke <= 0;
         }) ||
         bookingsList.find(
-          (b) => b.bookingId === selectedBookingForQr && b.bookingStatus === 'CONFIRMED'
+          (b) =>
+            b.bookingId === selectedBookingForQr &&
+            b.bookingStatus === 'CONFIRMED'
         );
 
     if (!targetBooking) {
@@ -461,7 +597,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }
 
     const nextVer = (roomLockVersions[targetBooking.nodeId] || 1) + 1;
-    setRoomLockVersions((prev) => ({ ...prev, [targetBooking.nodeId]: nextVer }));
+    setRoomLockVersions((prev) => ({
+      ...prev,
+      [targetBooking.nodeId]: nextVer,
+    }));
 
     if (onPenalizeNoShowBooking) {
       onPenalizeNoShowBooking(
@@ -473,7 +612,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       onCancelBooking(targetBooking.bookingId);
     }
 
-    const matchedRoom = workspaceNodes.find((n) => n.nodeCode === targetBooking.nodeId);
+    const matchedRoom = workspaceNodes.find(
+      (n) => n.nodeCode === targetBooking.nodeId
+    );
     if (matchedRoom && onUpdateNodeStatus) {
       onUpdateNodeStatus(matchedRoom.nodeId, 'AVAILABLE');
     }
@@ -506,9 +647,17 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     const occupiedSet = new Set<string>();
     if (!isAmphitheaterSelected) return occupiedSet;
 
-    const candidateRange = buildNormalizedMeetingDateRange(selectedDate, startTime, endTime);
+    const candidateRange = buildNormalizedMeetingDateRange(
+      selectedDate,
+      startTime,
+      endTime
+    );
     for (const item of bookingsList) {
-      if (item.approvalStatus === 'REJECTED' || item.bookingStatus === 'CANCELLED') continue;
+      if (
+        item.approvalStatus === 'REJECTED' ||
+        item.bookingStatus === 'CANCELLED'
+      )
+        continue;
       const itemDate = item.bookingDateIso || formatIsoDateString(new Date());
       if (itemDate !== selectedDate) continue;
       if (!AMPHITHEATER_SEATS.includes(item.nodeId)) continue;
@@ -530,15 +679,17 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
   const handleFillQuickCheckinSlot = () => {
     const now = new Date();
-    const startCandidate = new Date(now.getTime() + 30 * 60 * 1000);
-    const endCandidate = new Date(now.getTime() + 90 * 60 * 1000);
+    const startCandidate = new Date(now.getTime() + 10 * 60 * 1000);
+    const endCandidate = new Date(now.getTime() + 70 * 60 * 1000);
 
-    const startStr = `${String(startCandidate.getHours()).padStart(2, '0')}:${String(
-      startCandidate.getMinutes()
-    ).padStart(2, '0')}`;
-    const endStr = `${String(endCandidate.getHours()).padStart(2, '0')}:${String(
-      endCandidate.getMinutes()
-    ).padStart(2, '0')}`;
+    const startStr = `${String(startCandidate.getHours()).padStart(
+      2,
+      '0'
+    )}:${String(startCandidate.getMinutes()).padStart(2, '0')}`;
+    const endStr = `${String(endCandidate.getHours()).padStart(
+      2,
+      '0'
+    )}:${String(endCandidate.getMinutes()).padStart(2, '0')}`;
 
     setSelectedDate(formatIsoDateString(startCandidate));
     setStartTime(startStr);
@@ -556,8 +707,25 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     setCheckinErrorAlert(null);
 
     const finalCode = targetBookableCode;
+    const resolvedMode: HallBookingModeType = isAmphitheaterSelected
+      ? hallActionMode
+      : 'STANDARD_ROOM';
+
+    if (
+      isAmphitheaterSelected &&
+      hallActionMode === 'HALL_EVENT_RENTAL' &&
+      selectedAllowedDepartments.length === 0
+    ) {
+      setBookingFormError(
+        'Vui lòng chọn ít nhất 1 Phòng ban được phép tham gia sự kiện Hội trường!'
+      );
+      return;
+    }
+
     const finalLabel = isAmphitheaterSelected
-      ? `[Hội trường Tầng 5 - Ghế ${selectedAmphitheaterSeat}] ${purposeTitle}`
+      ? hallActionMode === 'HALL_EVENT_RENTAL'
+        ? `[Sự kiện Thuê Hội trường H-01] ${purposeTitle}`
+        : `[Hội trường Tầng 5 - Ghế ${selectedAmphitheaterSeat}] ${purposeTitle}`
       : purposeTitle;
 
     const existingHold = activeHoldMap[finalCode];
@@ -575,7 +743,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     if (liveCollisionValidation.hasCollision) {
       setBookingFormError(
         liveCollisionValidation.firstConflictMessage ||
-          `Phát hiện va chạm lịch hoặc vượt hạn mức tại vị trí ${finalCode}. Vui lòng chọn khung giờ/phòng khác.`
+          `Phát hiện va chạm lịch hoặc chưa đủ điều kiện sự kiện Hội trường tại vị trí ${finalCode}.`
       );
       return;
     }
@@ -598,26 +766,40 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       recurringOption,
       occurrenceDates: liveCollisionValidation.occurrenceDates,
       lockVersion: nextLockVer,
+      bookingMode: resolvedMode,
+      allowedDepartments:
+        resolvedMode === 'HALL_EVENT_RENTAL' ? selectedAllowedDepartments : [],
+      parentHallEventBookingId:
+        resolvedMode === 'HALL_SEAT_BOOKING'
+          ? currentHallEventCheck.approvedEvent?.bookingId || null
+          : null,
     });
 
-    const cycleLabel =
-      recurringOption === 'NONE'
-        ? 'Đơn lẻ (1 buổi)'
-        : recurringOption === 'DAILY'
-        ? `Định kỳ Hàng ngày (${liveCollisionValidation.occurrenceDates.length} buổi)`
-        : recurringOption === 'WEEKLY'
-        ? `Định kỳ Hàng tuần (${liveCollisionValidation.occurrenceDates.length} tuần)`
-        : `Định kỳ Hàng tháng (${liveCollisionValidation.occurrenceDates.length} tháng)`;
+    if (isAmphitheaterSelected && hallActionMode === 'HALL_EVENT_RENTAL') {
+      setBookingSuccessBanner(
+        userRole === 'SYS_ADMIN'
+          ? `Đã thuê cả Hội trường H-01 tổ chức sự kiện "${purposeTitle}" (${startTime} – ${endTime}) mà không cần cấp phép! Các phòng ban [${selectedAllowedDepartments.join(
+              ', '
+            )}] đã có thể bắt đầu đặt ghế ngồi.`
+          : `Đã gửi yêu cầu thuê cả Hội trường H-01 tổ chức sự kiện "${purposeTitle}" (${startTime} – ${endTime}). Đang chờ System Admin chấp nhận để mở khóa đặt ghế cho nhân viên!`
+      );
+      return;
+    }
 
     setBookingSuccessBanner(
-      userRole === 'EMPLOYEE'
-        ? `Đã gửi yêu cầu đặt vị trí ${finalCode} (${startTime} – ${endTime}, ${cycleLabel}, Lock v${nextLockVer}) lên MongoDB. Đang chờ Quản lý hoặc Admin phê duyệt.`
-        : `Đã xác nhận đặt vị trí ${finalCode} (${startTime} – ${endTime}, ${cycleLabel}, Lock v${nextLockVer}) và đồng bộ lên MongoDB.`
+      isAmphitheaterSelected
+        ? `Đã đặt ghế ngồi ${finalCode} tham gia sự kiện Hội trường (${startTime} – ${endTime}, Lock v${nextLockVer}) thành công! Quét mã QR trong khoảng trước 30 phút đến trễ 30 phút so với giờ bắt đầu.`
+        : userRole === 'EMPLOYEE'
+        ? `Đã gửi yêu cầu đặt phòng ${finalCode} (${startTime} – ${endTime}, Lock v${nextLockVer}) lên MongoDB. Đang chờ Quản lý hoặc Admin phê duyệt.`
+        : `Đã xác nhận đặt phòng ${finalCode} (${startTime} – ${endTime}, Lock v${nextLockVer}) và đồng bộ lên MongoDB.`
     );
   };
 
   const activeQrBooking = useMemo(() => {
-    return bookingsList.find((item) => item.bookingId === selectedBookingForQr) || bookingsList[0];
+    return (
+      bookingsList.find((item) => item.bookingId === selectedBookingForQr) ||
+      bookingsList[0]
+    );
   }, [bookingsList, selectedBookingForQr]);
 
   const activeBookingTimeValidation = useMemo(() => {
@@ -625,10 +807,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     return validateCheckinTimeWindow(activeQrBooking);
   }, [activeQrBooking, validateCheckinTimeWindow]);
 
-  // Chặn quét mã QR nếu vé bị trùng phòng người khác hoặc người dùng đã Check-in ở một phòng khác cùng giờ
   const validateQrCheckinConflict = useCallback(
-    (targetTicket: BookingPayloadItem): { hasQrConflict: boolean; conflictReason: string | null } => {
-      const ticketDate = targetTicket.bookingDateIso || formatIsoDateString(new Date());
+    (
+      targetTicket: BookingPayloadItem
+    ): { hasQrConflict: boolean; conflictReason: string | null } => {
+      const ticketDate =
+        targetTicket.bookingDateIso || formatIsoDateString(new Date());
       const ticketRange = buildNormalizedMeetingDateRange(
         ticketDate,
         targetTicket.startTimeIso,
@@ -637,9 +821,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
       for (const other of bookingsList) {
         if (other.bookingId === targetTicket.bookingId) continue;
-        if (other.bookingStatus === 'CANCELLED' || other.approvalStatus === 'REJECTED') continue;
+        if (
+          other.bookingStatus === 'CANCELLED' ||
+          other.approvalStatus === 'REJECTED'
+        )
+          continue;
 
-        const otherDate = other.bookingDateIso || formatIsoDateString(new Date());
+        const otherDate =
+          other.bookingDateIso || formatIsoDateString(new Date());
         if (otherDate !== ticketDate) continue;
 
         const otherRange = buildNormalizedMeetingDateRange(
@@ -662,9 +851,19 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           };
         }
 
+        const isSameUser =
+          other.userEmail.toLowerCase() ===
+          targetTicket.userEmail.toLowerCase();
+        const isHallOrganizerAndSeat =
+          (targetTicket.nodeId === 'H-01' &&
+            /^H01-[A-C]\d+$/i.test(other.nodeId)) ||
+          (/^H01-[A-C]\d+$/i.test(targetTicket.nodeId) &&
+            other.nodeId === 'H-01');
+
         if (
-          other.userEmail.toLowerCase() === targetTicket.userEmail.toLowerCase() &&
-          other.nodeId !== targetTicket.nodeId
+          isSameUser &&
+          other.nodeId !== targetTicket.nodeId &&
+          !isHallOrganizerAndSeat
         ) {
           return {
             hasQrConflict: true,
@@ -706,20 +905,23 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
     if (activeQrBooking.approvalStatus === 'PENDING_APPROVAL') {
       setCheckinErrorAlert(
-        'Yêu cầu đặt phòng này đang chờ Quản lý (Manager) hoặc Admin phê duyệt. Chưa thể quét mã Check-in!'
+        'Yêu cầu đặt phòng/hội trường này đang chờ phê duyệt. Chưa thể quét mã Check-in!'
       );
       return;
     }
 
     if (activeQrBooking.approvalStatus === 'REJECTED') {
-      setCheckinErrorAlert('Yêu cầu đặt phòng này đã bị từ chối. Mã QR đã bị vô hiệu hóa!');
+      setCheckinErrorAlert(
+        'Yêu cầu đặt phòng này đã bị từ chối. Mã QR đã bị vô hiệu hóa!'
+      );
       return;
     }
 
     const qrConflict = validateQrCheckinConflict(activeQrBooking);
     if (qrConflict.hasQrConflict) {
       setCheckinErrorAlert(
-        qrConflict.conflictReason || 'Vé đặt phòng này đang bị trùng lịch nên không thể quét mã QR!'
+        qrConflict.conflictReason ||
+          'Vé đặt phòng này đang bị trùng lịch nên không thể quét mã QR!'
       );
       return;
     }
@@ -731,23 +933,36 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }
 
     const now = new Date();
-    const frozenTime = `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+    const frozenTime = `${now.toLocaleTimeString(
+      'vi-VN'
+    )} • Ngày ${now.toLocaleDateString('vi-VN')}`;
     onCheckInBooking(activeQrBooking.bookingId, frozenTime);
     window.open(qrTargetCheckinUrl, '_blank', 'noopener,noreferrer');
   };
 
   const holdRemainingSeconds = activeHoldForTarget
-    ? Math.max(0, Math.ceil((activeHoldForTarget.expiresAtMs - nowTickMs) / 1000))
+    ? Math.max(
+        0,
+        Math.ceil((activeHoldForTarget.expiresAtMs - nowTickMs) / 1000)
+      )
     : 0;
-  const holdMinutesPart = String(Math.floor(holdRemainingSeconds / 60)).padStart(2, '0');
+  const holdMinutesPart = String(Math.floor(holdRemainingSeconds / 60)).padStart(
+    2,
+    '0'
+  );
   const holdSecondsPart = String(holdRemainingSeconds % 60).padStart(2, '0');
-  const holdProgressPercent = Math.min(100, Math.round((holdRemainingSeconds / 300) * 100));
+  const holdProgressPercent = Math.min(
+    100,
+    Math.round((holdRemainingSeconds / 300) * 100)
+  );
 
   return (
     <div className="space-y-5">
       <div
         className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+          isDark
+            ? 'bg-slate-900/90 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
         <div className="flex items-center gap-3.5">
@@ -761,11 +976,20 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             <Calendar className="w-6 h-6" />
           </div>
           <div>
-            <h1 className={`text-lg font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Đặt chỗ Thời gian thực, Giữ chỗ 5 phút & Chống trùng lịch Đa chiều
+            <h1
+              className={`text-lg font-bold ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              Đặt chỗ Phòng họp & Hội trường 2 Chế độ (Thuê Sự kiện vs Đặt Ghế ngồi)
             </h1>
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Optimistic Locking (v{currentTargetLockVersion}) • Chống trùng phòng & chống đặt 2 phòng cùng giờ • Hạn mức tuần theo Role
+            <p
+              className={`text-xs ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}
+            >
+              Optimistic Locking (v{currentTargetLockVersion}) • Quét mã QR từ trước 30 phút đến trễ 30 phút • Phòng ban của bạn:{' '}
+              <strong>{userDepartment}</strong>
             </p>
           </div>
         </div>
@@ -781,7 +1005,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            Điền nhanh Giờ Test Check-in Ngay
+            Điền nhanh Giờ Test Quét QR (±30 phút)
           </button>
 
           <span
@@ -799,7 +1023,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
       <div
         className={`p-5 rounded-3xl border space-y-4 ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+          isDark
+            ? 'bg-slate-900/90 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -808,7 +1034,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               <Lock className="w-3 h-3" />
               Optimistic Lock: v{currentTargetLockVersion}
             </span>
-            <span className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+            <span
+              className={`text-xs font-bold ${
+                isDark ? 'text-slate-200' : 'text-slate-800'
+              }`}
+            >
               Điều khiển Giữ chỗ 5 phút (Hold 5p), Chống đặt trùng đồng thời & Cronjob 15 phút
             </span>
           </div>
@@ -833,7 +1063,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <button
                   type="button"
                   onClick={() =>
-                    handleReleaseHoldInternal(targetBookableCode, 'DEMO_FAST_FORWARD_5M_TIMEOUT')
+                    handleReleaseHoldInternal(
+                      targetBookableCode,
+                      'DEMO_FAST_FORWARD_5M_TIMEOUT'
+                    )
                   }
                   className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5 transition"
                 >
@@ -842,7 +1075,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleReleaseHoldInternal(targetBookableCode, 'USER_MANUAL_RELEASE')}
+                  onClick={() =>
+                    handleReleaseHoldInternal(
+                      targetBookableCode,
+                      'USER_MANUAL_RELEASE'
+                    )
+                  }
                   className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 hover:bg-rose-500/25 transition"
                 >
                   Nhả giữ chỗ
@@ -865,7 +1103,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <button
               type="button"
-              onClick={() => handleRunFifteenMinuteCronSweep(activeQrBooking?.bookingId)}
+              onClick={() =>
+                handleRunFifteenMinuteCronSweep(activeQrBooking?.bookingId)
+              }
               className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition ${
                 isDark
                   ? 'bg-rose-500/15 border-rose-500/30 text-rose-300 hover:bg-rose-500/25'
@@ -890,7 +1130,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               <div className="flex items-center gap-2 text-xs font-bold">
                 <Timer className="w-4 h-4 text-amber-600 animate-pulse" />
                 <span>
-                  Đang giữ chỗ tạm thời 5 phút cho vị trí <strong>{activeHoldForTarget.nodeCode}</strong> • Người giữ: <strong>{activeHoldForTarget.heldByEmail}</strong> (Lock v{activeHoldForTarget.lockVersion})
+                  Đang giữ chỗ tạm thời 5 phút cho vị trí{' '}
+                  <strong>{activeHoldForTarget.nodeCode}</strong> • Người giữ:{' '}
+                  <strong>{activeHoldForTarget.heldByEmail}</strong> (Lock v
+                  {activeHoldForTarget.lockVersion})
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-xs font-extrabold tracking-wider">
@@ -917,18 +1160,26 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             <div className="space-y-1 text-xs">
               <div className="font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                 <Zap className="w-4 h-4" />
-                Kết quả Kiểm thử Optimistic Locking tại {raceSimResult.nodeCode} (Lúc {raceSimResult.timestampText}):
+                Kết quả Kiểm thử Optimistic Locking tại {raceSimResult.nodeCode}{' '}
+                (Lúc {raceSimResult.timestampText}):
               </div>
               <p>
-                • <strong>Request #1 ({raceSimResult.winnerEmail})</strong> gửi <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                • <strong>Request #1 ({raceSimResult.winnerEmail})</strong> gửi{' '}
+                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code>{' '}
+                →{' '}
                 <span className="text-teal-600 dark:text-teal-400 font-bold">
-                  THÀNH CÔNG (Nâng khóa lên v{raceSimResult.finalVersion} & giữ chỗ 5 phút)
+                  THÀNH CÔNG (Nâng khóa lên v{raceSimResult.finalVersion} & giữ
+                  chỗ 5 phút)
                 </span>
               </p>
               <p>
-                • <strong>Request #2 ({raceSimResult.challengerEmail})</strong> gửi cùng <code>expectedLockVersion=v{raceSimResult.initialVersion}</code> →{' '}
+                • <strong>Request #2 ({raceSimResult.challengerEmail})</strong>{' '}
+                gửi cùng{' '}
+                <code>expectedLockVersion=v{raceSimResult.initialVersion}</code>{' '}
+                →{' '}
                 <span className="text-rose-600 dark:text-rose-400 font-bold">
-                  BỊ CHẶN (HTTP 409 Conflict do DB đã ở v{raceSimResult.finalVersion})
+                  BỊ CHẶN (HTTP 409 Conflict do DB đã ở v
+                  {raceSimResult.finalVersion})
                 </span>
               </p>
             </div>
@@ -968,7 +1219,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-7 p-6 rounded-3xl border flex flex-col justify-between ${
-            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
           <form onSubmit={handleCreateBookingSubmit} className="space-y-5">
@@ -987,8 +1240,15 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <div className="flex items-center gap-2">
                   <Award className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span>
-                    Hạn mức tuần của vai trò <strong>{userRole}</strong> ({weeklyQuotaInfo.weekRangeLabel}): Tối đa <strong>{weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần/tuần</strong>
-                    <span className="opacity-75"> (Nhân viên: 3 • Quản lý: 8 • Admin: 25)</span>
+                    Hạn mức tuần của vai trò <strong>{userRole}</strong> (
+                    {weeklyQuotaInfo.weekRangeLabel}): Tối đa{' '}
+                    <strong>
+                      {weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần/tuần
+                    </strong>
+                    <span className="opacity-75">
+                      {' '}
+                      (Nhân viên: 3 • Quản lý: 8 • Admin: 25)
+                    </span>
                   </span>
                 </div>
                 <span
@@ -998,7 +1258,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       : 'bg-indigo-600 text-white'
                   }`}
                 >
-                  Đã đặt: {weeklyQuotaInfo.usedBookingsInWeekCount}/{weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần (Còn {weeklyQuotaInfo.remainingBookingsInWeekCount} lượt)
+                  Đã đặt: {weeklyQuotaInfo.usedBookingsInWeekCount}/
+                  {weeklyQuotaInfo.maxWeeklyBookingsAllowed} lần (Còn{' '}
+                  {weeklyQuotaInfo.remainingBookingsInWeekCount} lượt)
                 </span>
               </div>
             )}
@@ -1028,7 +1290,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
                   1. Chọn Phòng họp (Tầng 1–4) hoặc Hội trường (Tầng 5)
                 </label>
                 <select
@@ -1038,7 +1304,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
                   {[1, 2, 3, 4, 5].map((floorNum) => (
@@ -1046,7 +1314,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       key={floorNum}
                       label={
                         floorNum === 5
-                          ? 'Tầng 5 — Hội trường Lớn Đấu Trường La Mã'
+                          ? 'Tầng 5 — Hội trường Lớn Đấu Trường La Mã (2 Chế độ)'
                           : `Tầng ${floorNum} — Khu Phòng họp Chính thức`
                       }
                     >
@@ -1054,7 +1322,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         .filter((n) => n.floorLevel === floorNum)
                         .map((room) => (
                           <option key={room.nodeId} value={room.nodeCode}>
-                            [Tầng {room.floorLevel}] {room.nodeCode} — {room.nodeLabel} ({room.capacityCount} chỗ)
+                            [Tầng {room.floorLevel}] {room.nodeCode} —{' '}
+                            {room.nodeLabel} ({room.capacityCount} chỗ)
                           </option>
                         ))}
                     </optgroup>
@@ -1063,8 +1332,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               </div>
 
               <div>
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  2. Ngày bắt đầu họp
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
+                  2. Ngày bắt đầu họp / sự kiện
                 </label>
                 <input
                   type="date"
@@ -1074,15 +1347,173 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
             </div>
 
+            {isAmphitheaterSelected && (
+              <div
+                className={`p-4 rounded-2xl border space-y-3.5 ${
+                  isDark
+                    ? 'bg-slate-950 border-indigo-500/30'
+                    : 'bg-indigo-50/50 border-indigo-200'
+                }`}
+              >
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4" />
+                    Chế độ Hoạt động Hội trường Tầng 5 (Chia 2 Dạng theo Role {userRole}):
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    Phòng ban của bạn: <strong>{userDepartment}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (userRole === 'EMPLOYEE') {
+                        setBookingFormError(
+                          'Vai trò Nhân viên (EMPLOYEE) chỉ có quyền đặt ghế ngồi tham gia, không có quyền thuê cả phòng Hội trường (H-01)!'
+                        );
+                        return;
+                      }
+                      setHallActionMode('HALL_EVENT_RENTAL');
+                      setBookingFormError(null);
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition ${
+                      hallActionMode === 'HALL_EVENT_RENTAL'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                        : userRole === 'EMPLOYEE'
+                        ? 'bg-slate-200/60 dark:bg-slate-900/50 border-slate-300 dark:border-slate-800 opacity-60 cursor-not-allowed'
+                        : isDark
+                        ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500'
+                        : 'bg-white border-slate-200 text-slate-800 hover:border-indigo-400'
+                    }`}
+                  >
+                    <p className="text-xs font-extrabold flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 shrink-0" />
+                      Dạng 1: Thuê Cả Phòng Hội Trường (H-01)
+                    </p>
+                    <p
+                      className={`text-[11px] mt-1 ${
+                        hallActionMode === 'HALL_EVENT_RENTAL'
+                          ? 'text-indigo-100'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {userRole === 'SYS_ADMIN'
+                        ? 'System Admin: Thuê cả phòng tổ chức ngay không cần cấp phép.'
+                        : userRole === 'MANAGER'
+                        ? 'Quản lý: Đăng ký thuê cả phòng (cần System Admin chấp nhận).'
+                        : 'Nhân viên: Không có quyền thuê cả phòng Hội trường.'}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHallActionMode('HALL_SEAT_BOOKING');
+                      setBookingFormError(null);
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left transition ${
+                      hallActionMode === 'HALL_SEAT_BOOKING'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-md'
+                        : isDark
+                        ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-teal-500'
+                        : 'bg-white border-slate-200 text-slate-800 hover:border-teal-400'
+                    }`}
+                  >
+                    <p className="text-xs font-extrabold flex items-center gap-1.5">
+                      <Users className="w-4 h-4 shrink-0" />
+                      Dạng 2: Đặt Chỗ Ghế Ngồi ({selectedAmphitheaterSeat})
+                    </p>
+                    <p
+                      className={`text-[11px] mt-1 ${
+                        hallActionMode === 'HALL_SEAT_BOOKING'
+                          ? 'text-teal-100'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      Đặt ghế ngồi khi Hội trường đã được thuê tổ chức hoạt động thành công & đúng Phòng ban được mời.
+                    </p>
+                  </button>
+                </div>
+
+                {hallActionMode === 'HALL_EVENT_RENTAL' &&
+                  userRole !== 'EMPLOYEE' && (
+                    <div
+                      className={`p-3.5 rounded-xl border space-y-2 ${
+                        isDark
+                          ? 'bg-slate-900 border-slate-800'
+                          : 'bg-white border-indigo-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-extrabold">
+                          Thiết lập Phòng ban được phép đặt ghế tham gia sự kiện này:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedAllowedDepartments(
+                              availableDepartmentNames
+                            )
+                          }
+                          className="text-[11px] font-bold text-indigo-600 underline"
+                        >
+                          Chọn tất cả Phòng ban
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {availableDepartmentNames.map((deptName) => {
+                          const isChecked =
+                            selectedAllowedDepartments.includes(deptName);
+                          return (
+                            <button
+                              key={deptName}
+                              type="button"
+                              onClick={() =>
+                                handleToggleAllowedDepartment(deptName)
+                              }
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition ${
+                                isChecked
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : isDark
+                                  ? 'bg-slate-950 border-slate-800 text-slate-400'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600'
+                              }`}
+                            >
+                              <Check
+                                className={`w-3.5 h-3.5 ${
+                                  isChecked ? 'opacity-100' : 'opacity-25'
+                                }`}
+                              />
+                              <span>{deptName}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        * Những người thuộc các phòng ban được chọn mới có thể đặt ghế ngồi; những phòng ban không được chọn sẽ bị chặn đặt ghế (Riêng System Admin có toàn quyền không bị cấm).
+                      </p>
+                    </div>
+                  )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
                   Giờ bắt đầu (24h)
                 </label>
                 <input
@@ -1093,12 +1524,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
               <div>
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
                   Giờ kết thúc (24h)
                 </label>
                 <input
@@ -1109,30 +1546,45 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     setBookingFormError(null);
                   }}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
               <div>
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
                   Chu kỳ đặt lịch (Đơn lẻ / Định kỳ)
                 </label>
                 <select
                   value={recurringOption}
-                  onChange={(e) => setRecurringOption(e.target.value as RecurringOptionType)}
+                  onChange={(e) =>
+                    setRecurringOption(e.target.value as RecurringOptionType)
+                  }
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
                   <option value="NONE">Đặt đơn lẻ (1 lần duy nhất)</option>
-                  <option value="DAILY">Lặp hàng ngày (5 ngày liên tiếp)</option>
-                  <option value="WEEKLY">Lặp hàng tuần (4 tuần cùng thứ)</option>
-                  <option value="MONTHLY">Lặp hàng tháng (3 tháng liên tiếp)</option>
+                  <option value="DAILY">
+                    Lặp hàng ngày (5 ngày liên tiếp)
+                  </option>
+                  <option value="WEEKLY">
+                    Lặp hàng tuần (4 tuần cùng thứ)
+                  </option>
+                  <option value="MONTHLY">
+                    Lặp hàng tháng (3 tháng liên tiếp)
+                  </option>
                 </select>
               </div>
             </div>
 
-            {/* MA TRẬN KIỂM TRA VA CHẠM LỊCH & GIẢI THÍCH LÝ DO TRÙNG */}
             <div
               className={`p-4 rounded-2xl border space-y-3 ${
                 liveCollisionValidation.hasCollision
@@ -1148,11 +1600,18 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <div className="flex items-center gap-2">
                   <Repeat
                     className={`w-4 h-4 ${
-                      liveCollisionValidation.hasCollision ? 'text-rose-500' : 'text-teal-600'
+                      liveCollisionValidation.hasCollision
+                        ? 'text-rose-500'
+                        : 'text-teal-600'
                     }`}
                   />
-                  <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Kiểm tra Va chạm Lịch ({liveCollisionValidation.occurrenceChecks.length} buổi):
+                  <span
+                    className={`text-xs font-bold ${
+                      isDark ? 'text-white' : 'text-slate-900'
+                    }`}
+                  >
+                    Kiểm tra Điều kiện Đặt & Va chạm Lịch (
+                    {liveCollisionValidation.occurrenceChecks.length} buổi):
                   </span>
                 </div>
                 <span
@@ -1163,41 +1622,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   }`}
                 >
                   {liveCollisionValidation.hasCollision
-                    ? 'KHÔNG THỂ ĐẶT • PHÁT HIỆN TRÙNG LỊCH / VƯỢT HẠN MỨC'
-                    : 'HỢP LỆ • TẤT CẢ CÁC KỲ ĐỀU TRỐNG'}
+                    ? 'KHÔNG THỂ ĐẶT • XEM LÝ DO BÊN DƯỚI'
+                    : 'HỢP LỆ • ĐỦ ĐIỀU KIỆN ĐẶT NGAY'}
                 </span>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {liveCollisionValidation.occurrenceChecks.map((occ) => (
-                  <div
-                    key={occ.dateIso}
-                    className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 ${
-                      occ.hasConflict
-                        ? isDark
-                          ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-                          : 'bg-white border-rose-300 text-rose-700'
-                        : isDark
-                        ? 'bg-slate-900 border-slate-700 text-teal-300'
-                        : 'bg-white border-teal-200 text-teal-800'
-                    }`}
-                  >
-                    <span>
-                      Kỳ #{occ.occurrenceIndex}: {occ.dateIso}
-                    </span>
-                    {occ.hasConflict ? (
-                      <span className="text-[10px] font-extrabold text-rose-500">
-                        {occ.conflictCategory === 'USER_BUSY_IN_OTHER_ROOM'
-                          ? `(Trùng phòng khác ${occ.conflictBooking?.nodeId} của bạn - ${occ.conflictBooking?.bookingId})`
-                          : occ.conflictCategory === 'ROOM_ALREADY_BOOKED_BY_SELF'
-                          ? `(Chính bạn đã đặt vé ${occ.conflictBooking?.bookingId})`
-                          : `(Người khác đang dùng - ${occ.conflictBooking?.bookingId})`}
-                      </span>
-                    ) : (
-                      <Check className="w-3.5 h-3.5 text-teal-600" />
-                    )}
-                  </div>
-                ))}
               </div>
 
               {liveCollisionValidation.hasCollision &&
@@ -1213,67 +1640,112 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       <span>Lý do không thể đặt lịch cho khung giờ này:</span>
                     </div>
-                    {liveCollisionValidation.allConflictMessages.map((msg, idx) => (
-                      <p key={idx} className="pl-5 leading-relaxed font-medium">
-                        • {msg}
-                      </p>
-                    ))}
+                    {liveCollisionValidation.allConflictMessages.map(
+                      (msg, idx) => (
+                        <p
+                          key={idx}
+                          className="pl-5 leading-relaxed font-medium"
+                        >
+                          • {msg}
+                        </p>
+                      )
+                    )}
                   </div>
                 )}
             </div>
 
             <div
               className={`p-5 rounded-2xl border ${
-                isDark ? 'bg-slate-950/90 border-slate-800' : 'bg-[#F8FAFC] border-indigo-100'
+                isDark
+                  ? 'bg-slate-950/90 border-slate-800'
+                  : 'bg-[#F8FAFC] border-indigo-100'
               }`}
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-indigo-600" />
-                  <span className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                    Xem trước Bố cục Phòng: {currentRoomNode?.nodeLabel}
+                  <span
+                    className={`text-xs font-bold ${
+                      isDark ? 'text-white' : 'text-slate-900'
+                    }`}
+                  >
+                    {isAmphitheaterSelected
+                      ? hallActionMode === 'HALL_EVENT_RENTAL'
+                        ? 'Đang chọn: Thuê Cả Hội Trường Đấu Trường La Mã (H-01 - 30 chỗ)'
+                        : `Chọn Ghế Ngồi Hội Trường Tầng 5 (Đang chọn: ${selectedAmphitheaterSeat})`
+                      : `Xem trước Bố cục Phòng: ${currentRoomNode?.nodeLabel}`}
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-slate-500">
-                  Tầng {currentRoomNode?.floorLevel} • Sức chứa: {currentRoomNode?.capacityCount} người
+                  Tầng {currentRoomNode?.floorLevel} • Sức chứa:{' '}
+                  {currentRoomNode?.capacityCount} người
                 </span>
               </div>
 
               {isAmphitheaterSelected ? (
                 <div className="space-y-3">
-                  <p className="text-[11px] text-amber-600 font-semibold">
-                    Hội trường Đấu trường La Mã (Tầng 5): Chọn trước ghế ngồi quanh Bục Diễn Giả trung tâm:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {AMPHITHEATER_SEATS.map((seatCode) => {
-                      const isTaken = occupiedAmphitheaterSeatsInSlot.has(seatCode);
-                      const isSelected = selectedAmphitheaterSeat === seatCode;
-                      return (
-                        <button
-                          key={seatCode}
-                          type="button"
-                          onClick={() => {
-                            setSelectedAmphitheaterSeat(seatCode);
-                            setBookingFormError(null);
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : isTaken
-                              ? isDark
-                                ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
-                                : 'bg-rose-50 border-rose-200 text-rose-600'
-                              : isDark
-                              ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500/50'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300'
-                          }`}
-                        >
-                          <span>{seatCode}</span>
-                          {isTaken && <span className="text-[9px] uppercase opacity-80">(Đã đặt)</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {currentHallEventCheck.approvedEvent ? (
+                    <div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-700 dark:text-teal-300 text-xs font-bold">
+                      ★ Sự kiện đang mở ({startTime} – {endTime}): "
+                      {currentHallEventCheck.approvedEvent.purposeNote}" • Phòng ban được tham gia:{' '}
+                      {currentHallEventCheck.approvedEvent.allowedDepartments
+                        ?.length
+                        ? currentHallEventCheck.approvedEvent.allowedDepartments.join(
+                            ', '
+                          )
+                        : 'Tất cả Phòng ban'}
+                    </div>
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold">
+                      ⚠ Khung giờ ({startTime} – {endTime}) ngày {selectedDate}{' '}
+                      hiện chưa có sự kiện Hội trường nào được phê duyệt.
+                    </div>
+                  )}
+
+                  {hallActionMode === 'HALL_SEAT_BOOKING' && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {AMPHITHEATER_SEATS.map((seatCode) => {
+                        const isTaken =
+                          occupiedAmphitheaterSeatsInSlot.has(seatCode);
+                        const isSelected =
+                          selectedAmphitheaterSeat === seatCode;
+                        return (
+                          <button
+                            key={seatCode}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAmphitheaterSeat(seatCode);
+                              if (!currentHallEventCheck.approvedEvent) {
+                                setBookingFormError(
+                                  `Không thể đặt ghế ${seatCode}: Phòng Hội trường hiện đang không có sự kiện gì để tham gia trong khung giờ (${startTime} – ${endTime})!`
+                                );
+                              } else {
+                                setBookingFormError(null);
+                              }
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all flex items-center gap-1 ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                : isTaken
+                                ? isDark
+                                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-300'
+                                  : 'bg-rose-50 border-rose-200 text-rose-600'
+                                : isDark
+                                ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500/50'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300'
+                            }`}
+                          >
+                            <span>{seatCode.replace('H01-', '')}</span>
+                            {isTaken && (
+                              <span className="text-[9px] uppercase opacity-80">
+                                (Đã đặt)
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-3">
@@ -1287,21 +1759,32 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     <div className="space-y-2.5 flex flex-col items-center">
                       <div className="flex gap-3">
                         {Array.from({
-                          length: Math.ceil((currentRoomNode?.capacityCount || 4) / 2),
+                          length: Math.ceil(
+                            (currentRoomNode?.capacityCount || 4) / 2
+                          ),
                         }).map((_, idx) => (
-                          <span key={idx} className="w-5 h-2.5 rounded-t-md bg-indigo-600 inline-block" />
+                          <span
+                            key={idx}
+                            className="w-5 h-2.5 rounded-t-md bg-indigo-600 inline-block"
+                          />
                         ))}
                       </div>
                       <div className="w-48 h-12 rounded-xl bg-amber-600/20 border-2 border-amber-600 flex items-center justify-center">
                         <span className="text-[10px] font-extrabold text-amber-700 dark:text-amber-400">
-                          BÀN HỌP {currentRoomNode?.nodeCode} ({currentRoomNode?.capacityCount} GHẾ)
+                          BÀN HỌP {currentRoomNode?.nodeCode} (
+                          {currentRoomNode?.capacityCount} GHẾ)
                         </span>
                       </div>
                       <div className="flex gap-3">
                         {Array.from({
-                          length: Math.floor((currentRoomNode?.capacityCount || 4) / 2),
+                          length: Math.floor(
+                            (currentRoomNode?.capacityCount || 4) / 2
+                          ),
                         }).map((_, idx) => (
-                          <span key={idx} className="w-5 h-2.5 rounded-b-md bg-indigo-600 inline-block" />
+                          <span
+                            key={idx}
+                            className="w-5 h-2.5 rounded-b-md bg-indigo-600 inline-block"
+                          />
                         ))}
                       </div>
                     </div>
@@ -1312,8 +1795,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
               <div className="flex-1">
-                <label className={`block text-xs font-bold mb-1.5 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-                  3. Nội dung cuộc họp
+                <label
+                  className={`block text-xs font-bold mb-1.5 ${
+                    isDark ? 'text-slate-300' : 'text-slate-700'
+                  }`}
+                >
+                  3. Nội dung sự kiện / cuộc họp
                 </label>
                 <input
                   type="text"
@@ -1321,7 +1808,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   value={purposeTitle}
                   onChange={(e) => setPurposeTitle(e.target.value)}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium outline-none ${
-                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
@@ -1337,7 +1826,15 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               >
                 <CheckCircle2 className="w-4 h-4" />
                 {liveCollisionValidation.hasCollision
-                  ? 'Không thể Đặt (Đang Trùng lịch)'
+                  ? 'Không thể Đặt (Chưa đủ điều kiện / Trùng lịch)'
+                  : isAmphitheaterSelected &&
+                    hallActionMode === 'HALL_EVENT_RENTAL'
+                  ? userRole === 'SYS_ADMIN'
+                    ? 'Thuê Cả Hội Trường H-01 (Duyệt Ngay)'
+                    : 'Gửi Yêu Cầu Thuê Hội Trường H-01 (Chờ Admin)'
+                  : isAmphitheaterSelected &&
+                    hallActionMode === 'HALL_SEAT_BOOKING'
+                  ? `Đặt Ghế Ngồi ${selectedAmphitheaterSeat}`
                   : userRole === 'EMPLOYEE'
                   ? `Gửi Yêu cầu Đặt ${targetBookableCode}`
                   : `Xác nhận Đặt Phòng ${targetBookableCode}`}
@@ -1346,21 +1843,30 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           </form>
         </div>
 
-        {/* CỘT PHẢI: MÃ QR THẬT QUÉT ĐƯỢC, CRONJOB 15P & DANH SÁCH VÉ */}
         <div
           className={`lg:col-span-5 p-6 rounded-3xl border flex flex-col justify-between ${
-            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
           <div>
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200/70 dark:border-slate-800">
               <div>
-                <h2 className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                <h2
+                  className={`text-sm font-bold flex items-center gap-2 ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
                   <QrCode className="w-4 h-4 text-teal-600" />
-                  Mã QR Check-in Thực tế & Giám sát Cronjob 15p
+                  Mã QR Check-in Thực tế (Khung giờ chuẩn: ±30 phút)
                 </h2>
-                <p className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Mở Check-in trước 2 tiếng • Chặn quét QR nếu trùng phòng hoặc đặt 2 phòng cùng giờ
+                <p
+                  className={`text-[11px] mt-0.5 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                >
+                  Chỉ cho phép quét mã QR từ trước 30 phút đến trễ tối đa 30 phút so với giờ bắt đầu quy định
                 </p>
               </div>
             </div>
@@ -1375,11 +1881,15 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             {activeQrBooking ? (
               <div
                 className={`p-5 rounded-2xl border text-center mb-4 ${
-                  isDark ? 'bg-slate-950 border-slate-800' : 'bg-[#F8FAFC] border-indigo-100'
+                  isDark
+                    ? 'bg-slate-950 border-slate-800'
+                    : 'bg-[#F8FAFC] border-indigo-100'
                 }`}
               >
                 <div className="text-xs font-extrabold text-indigo-600 mb-1">
-                  Vé: {activeQrBooking.bookingId} • Phòng: {activeQrBooking.nodeId} • {activeQrBooking.startTimeIso} – {activeQrBooking.endTimeIso}
+                  Vé: {activeQrBooking.bookingId} • Vị trí:{' '}
+                  {activeQrBooking.nodeId} • {activeQrBooking.startTimeIso} –{' '}
+                  {activeQrBooking.endTimeIso}
                 </div>
 
                 {activeBookingTimeValidation && (
@@ -1398,7 +1908,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       {activeQrBooking.bookingStatus === 'CHECKED_IN' ? (
                         <>
                           <Check className="w-3 h-3" />
-                          Đã Check-in lúc: {activeQrBooking.checkedInAtIso || 'Đúng hạn'}
+                          Đã Check-in lúc:{' '}
+                          {activeQrBooking.checkedInAtIso || 'Đúng hạn'}
                         </>
                       ) : activeQrConflictStatus.hasQrConflict ? (
                         <>
@@ -1408,22 +1919,15 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       ) : activeBookingTimeValidation.allowed ? (
                         <>
                           <Check className="w-3 h-3" />
-                          Sẵn sàng quét QR (Mở: {activeBookingTimeValidation.windowLabel})
+                          Sẵn sàng quét QR ({activeBookingTimeValidation.windowLabel})
                         </>
                       ) : (
                         <>
                           <Clock className="w-3 h-3" />
-                          Khung giờ mở Check-in: {activeBookingTimeValidation.windowLabel}
+                          Giờ mở Quét QR: {activeBookingTimeValidation.windowLabel}
                         </>
                       )}
                     </span>
-
-                    {activeQrBooking.bookingStatus !== 'CHECKED_IN' && (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400">
-                        <Timer className="w-3 h-3" />
-                        Hạn Cronjob 15p thu hồi: {activeBookingTimeValidation.noShowDeadlineLabel}
-                      </span>
-                    )}
                   </div>
                 )}
 
@@ -1447,7 +1951,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   />
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="w-11 h-11 rounded-xl bg-white p-1 shadow-md border border-slate-200 flex items-center justify-center">
-                      <SpotMatrixLogo variant="icon" theme="light" className="scale-90" />
+                      <SpotMatrixLogo
+                        variant="icon"
+                        theme="light"
+                        className="scale-90"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1466,7 +1974,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     <QrCode className="w-4 h-4" />
                     {activeQrConflictStatus.hasQrConflict
                       ? 'Không thể Quét QR (Đang Trùng Lịch)'
-                      : 'Demo Quét QR (Kiểm tra Giờ & Mở Tab Xác Nhận)'}
+                      : 'Demo Quét QR (Kiểm tra Khung ±30p & Mở Tab Xác Nhận)'}
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1479,8 +1987,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
             <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
               {bookingsList.map((item) => {
-                const isSelected = activeQrBooking?.bookingId === item.bookingId;
-                const occCount = item.occurrenceDates?.length || 1;
+                const isSelected =
+                  activeQrBooking?.bookingId === item.bookingId;
                 return (
                   <div
                     key={item.bookingId}
@@ -1504,17 +2012,12 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                           {item.nodeId}
                         </span>
                         <span
-                          className={`text-xs font-bold truncate max-w-[150px] ${
+                          className={`text-xs font-bold truncate max-w-[155px] ${
                             isDark ? 'text-white' : 'text-slate-900'
                           }`}
                         >
                           {item.purposeNote}
                         </span>
-                        {occCount > 1 && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-500/15 text-amber-600">
-                            Lặp {occCount} kỳ
-                          </span>
-                        )}
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                             item.bookingStatus === 'CHECKED_IN'
@@ -1529,7 +2032,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                           {item.bookingStatus === 'CHECKED_IN'
                             ? `ĐÃ QUÉT (${item.checkedInAtIso || 'Đúng hạn'})`
                             : item.approvalStatus === 'PENDING_APPROVAL'
-                            ? 'CHỜ QUẢN LÝ/ADMIN DUYỆT'
+                            ? 'CHỜ ADMIN/QUẢN LÝ DUYỆT'
                             : item.approvalStatus === 'REJECTED'
                             ? 'BỊ TỪ CHỐI'
                             : 'ĐÃ DUYỆT • CHỜ QUÉT QR'}
@@ -1542,9 +2045,13 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       >
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-indigo-500" />
-                          {item.bookingDateIso || formatIsoDateString(new Date())} • {item.startTimeIso} – {item.endTimeIso}
+                          {item.bookingDateIso ||
+                            formatIsoDateString(new Date())}{' '}
+                          • {item.startTimeIso} – {item.endTimeIso}
                         </span>
-                        {item.lockVersion && <span>• Lock v{item.lockVersion}</span>}
+                        {item.departmentName && (
+                          <span>• {item.departmentName}</span>
+                        )}
                       </div>
                     </div>
 
@@ -1574,7 +2081,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           >
             <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              Mọi thao tác Giữ chỗ 5p, Optimistic Lock và Thu hồi No-Show 15p đều tự động ghi vết vào Nhật ký Quản trị & MongoDB Atlas.
+              Quy định Quét mã QR Check-in: Chỉ chấp nhận quét từ trước 30 phút đến trễ tối đa 30 phút so với giờ bắt đầu quy định.
             </span>
           </div>
         </div>

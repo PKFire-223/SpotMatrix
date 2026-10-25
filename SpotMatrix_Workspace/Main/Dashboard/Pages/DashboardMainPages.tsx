@@ -45,6 +45,7 @@ export interface DashboardMainPagesProps {
       | 'OVERVIEW'
       | 'FLOORPLAN'
       | 'BOOKING'
+      | 'ORGANIZATION'
       | 'NOTIFICATION'
       | 'DATAMANAGER'
       | 'AUDIT'
@@ -103,7 +104,7 @@ const AI_PERSONA_PRESETS: Record<AiPersonaRoleKey, AiPersonaPresetItem> = {
     badgeText: 'Thanh tra Bảo mật & Kỷ luật',
     openingPrefix: 'Theo quy chuẩn Bảo mật RBAC & Kỷ luật Đặt lịch:',
     systemPrompt:
-      'Bạn là Thanh tra Bảo mật & Quản trị Rủi ro. Tập trung phân tích khóa phiên bản Optimistic Locking (lockVersion), giữ chỗ 5 phút, quy định Check-in QR trước 2 tiếng, Cronjob 15 phút tự thu hồi No-Show (-10 điểm) và phân quyền 3 Role.',
+      'Bạn là Thanh tra Bảo mật & Quản trị Rủi ro. Tập trung phân tích khóa phiên bản Optimistic Locking (lockVersion), giữ chỗ 5 phút, quy định Check-in QR ±30 phút, Cronjob 15 phút tự thu hồi No-Show (-10 điểm) và phân quyền 3 Role.',
   },
   FRIENDLY_CONCIERGE: {
     key: 'FRIENDLY_CONCIERGE',
@@ -295,7 +296,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
     const approvalText =
       pendingApprovals.length > 0
-        ? `Có ${pendingApprovals.length} yêu cầu đặt phòng của nhân viên đang chờ phê duyệt.`
+        ? `Có ${pendingApprovals.length} yêu cầu đặt phòng đang chờ phê duyệt.`
         : 'Không có yêu cầu đặt phòng nào tồn đọng.';
 
     const recommendText = topRecommendedNode
@@ -428,7 +429,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       myBookings,
     } = dashboardMetrics;
 
-    // 0. Giải toán & Đố vui tự nhiên (VD: "Chào, mà 1+1 bằng 3 ư?", "2+2 bằng mấy")
     const mathCompareMatch = qLower.match(/(\d+)\s*([+\-*/x:])\s*(\d+)\s*(?:=|bằng)\s*(\d+)/i);
     if (mathCompareMatch) {
       const a = Number(mathCompareMatch[1]);
@@ -534,7 +534,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       if (floorNum === 5) {
         return {
           title: activePersona.shortLabel,
-          reply: `${prefix} Tầng 5 là Hội trường Lớn Đấu trường La Mã (Mã H-01, sức chứa 30 người) với Bục Diễn Giả tròn ở trung tâm và các dãy ghế bậc thềm vòng cung H01-A1 đến H01-B8. Người dùng có thể chọn đặt trước từng vị trí ghế ngồi riêng biệt và xoay mô hình 3D 360° trực tiếp.`,
+          reply: `${prefix} Tầng 5 là Hội trường Lớn Đấu trường La Mã (Mã H-01, sức chứa 30 người) chia làm 2 chế độ: (1) Thuê cả phòng tổ chức sự kiện dành cho Admin và Quản lý, có thiết lập Phòng ban được tham gia; (2) Đặt chỗ ghế ngồi (H01-A1..C12) khi Hội trường đã có sự kiện được phê duyệt.`,
         };
       }
 
@@ -662,7 +662,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     ) {
       return {
         title: activePersona.shortLabel,
-        reply: `${prefix} Hệ thống áp dụng 4 quy tắc cốt lõi: (1) Giữ chỗ tạm thời 5 phút bảo vệ bằng khóa phiên bản Optimistic Locking chống 2 người đặt đè cùng lúc; (2) Chỉ mở cổng quét QR Check-in sớm tối đa 2 tiếng trước giờ bắt đầu (+2 điểm tín nhiệm khi quét đúng hạn); (3) Cronjob tự động thu hồi phòng và trừ -10 điểm nếu quá 15 phút sau giờ bắt đầu mà chưa Check-in; (4) Hạn mức đặt phòng mỗi tuần: Nhân viên 3 lần, Quản lý 8 lần, Admin 25 lần. Điểm cá nhân của bạn đang là ${
+        reply: `${prefix} Hệ thống áp dụng 4 quy tắc cốt lõi: (1) Giữ chỗ tạm thời 5 phút bảo vệ bằng khóa phiên bản Optimistic Locking chống 2 người đặt đè cùng lúc; (2) Chỉ mở cổng quét QR Check-in trong khoảng từ trước 30 phút đến trễ 30 phút so với giờ bắt đầu (+2 điểm tín nhiệm khi quét đúng hạn); (3) Cronjob tự động thu hồi phòng và trừ -10 điểm nếu quá 15 phút sau giờ bắt đầu mà chưa Check-in; (4) Hạn mức đặt phòng mỗi tuần: Nhân viên 3 lần, Quản lý 8 lần, Admin 25 lần. Điểm cá nhân của bạn đang là ${
           myTrustProfile?.trustScore || 100
         }/100.`,
       };
@@ -785,14 +785,70 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     setIsAiThinking(false);
   };
 
+  const totalManagedRooms = dashboardMetrics.totalNodes || 25;
   const hourlyComparisonBars = [
-    { hour: '08:00', actual: Math.max(25, dashboardMetrics.occupancyRate - 8), avg30d: 44 },
-    { hour: '10:00', actual: Math.min(95, dashboardMetrics.occupancyRate + 14), avg30d: 68 },
-    { hour: '12:00', actual: Math.max(20, dashboardMetrics.occupancyRate - 15), avg30d: 51 },
-    { hour: '14:00', actual: Math.min(98, dashboardMetrics.occupancyRate + 18), avg30d: 72 },
-    { hour: '16:00', actual: Math.min(90, dashboardMetrics.occupancyRate + 8), avg30d: 63 },
-    { hour: '18:00', actual: Math.max(15, dashboardMetrics.occupancyRate - 22), avg30d: 34 },
-  ];
+    {
+      hour: '08:00 - 10:00',
+      shortHour: '08:00',
+      slotName: 'Ca Sáng Sớm',
+      actual: Math.max(28, dashboardMetrics.occupancyRate + 4),
+      avg30d: 44,
+    },
+    {
+      hour: '10:00 - 12:00',
+      shortHour: '10:00',
+      slotName: 'Cao Điểm Sáng',
+      actual: Math.min(96, dashboardMetrics.occupancyRate + 26),
+      avg30d: 68,
+    },
+    {
+      hour: '12:00 - 14:00',
+      shortHour: '12:00',
+      slotName: 'Giờ Nghỉ Trưa',
+      actual: Math.max(22, dashboardMetrics.occupancyRate - 6),
+      avg30d: 48,
+    },
+    {
+      hour: '14:00 - 16:00',
+      shortHour: '14:00',
+      slotName: 'Cao Điểm Chiều',
+      actual: Math.min(98, dashboardMetrics.occupancyRate + 32),
+      avg30d: 74,
+    },
+    {
+      hour: '16:00 - 18:00',
+      shortHour: '16:00',
+      slotName: 'Họp Tổng Kết',
+      actual: Math.min(92, dashboardMetrics.occupancyRate + 18),
+      avg30d: 63,
+    },
+    {
+      hour: '18:00 - 20:00',
+      shortHour: '18:00',
+      slotName: 'Ca Tối / OT',
+      actual: Math.max(18, dashboardMetrics.occupancyRate - 10),
+      avg30d: 34,
+    },
+  ].map((b) => ({
+    ...b,
+    actualRooms: Math.max(1, Math.round((b.actual / 100) * totalManagedRooms)),
+    avgRooms: Math.max(1, Math.round((b.avg30d / 100) * totalManagedRooms)),
+    diffPercent: b.actual - b.avg30d,
+  }));
+
+  const floorBreakdownStats = [1, 2, 3, 4, 5].map((fl) => {
+    const nodesOnFloor = workspaceNodes.filter((n) => n.floorLevel === fl);
+    const totalFl = nodesOnFloor.length || 1;
+    const busyFl = nodesOnFloor.filter((n) => n.status !== 'AVAILABLE').length;
+    const rateFl = Math.round((busyFl / totalFl) * 100);
+    return {
+      floor: fl,
+      label: fl === 5 ? 'Tầng 5 (Hội trường H-01)' : `Tầng ${fl} (6 Phòng họp)`,
+      busyCount: busyFl,
+      totalCount: nodesOnFloor.length,
+      ratePercent: rateFl,
+    };
+  });
 
   return (
     <div className="space-y-6 relative">
@@ -1343,109 +1399,251 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* BIỂU ĐỒ 1: CÔNG SUẤT SỬ DỤNG PHÒNG HỌP THEO KHUNG GIỜ (CÓ TRỤC TUNG Y-AXIS, SỐ PHÒNG & CHÚ GIẢI ĐẦY ĐỦ) */}
         <div
-          className={`lg:col-span-8 p-6 rounded-3xl border ${
+          className={`lg:col-span-8 p-6 rounded-3xl border flex flex-col justify-between ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-            <div>
-              <h3 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Biểu đồ Mật độ Theo Khung giờ (Thực tế vs. Trung bình 30 ngày)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Đồng bộ trực tiếp với trạng thái phòng trên Sơ đồ 5 Tầng
-              </p>
+          <div>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  Biểu đồ Công suất Lấp đầy Phòng họp Theo 6 Khung giờ (Thực tế Hôm nay vs. Trung bình 30 ngày)
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  <strong>Ý nghĩa đại diện:</strong> Đo lường tỷ lệ % và số lượng phòng đang sử dụng trên tổng số <strong>{dashboardMetrics.totalNodes} không gian họp (5 tầng)</strong> tại từng khung giờ làm việc.
+                </p>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-extrabold">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-indigo-600 inline-block shadow-sm" />
+                  Thực tế hôm nay (% & số phòng)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3.5 h-3.5 rounded bg-teal-500/45 border border-teal-500 inline-block" />
+                  Trung bình 30 ngày (%)
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-indigo-600 inline-block" />
-                Thực tế hôm nay
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 inline-block" />
-                Trung bình 30 ngày
-              </span>
+
+            <div className="relative flex gap-3 pt-4 pb-2">
+              <div className="flex flex-col justify-between h-[190px] text-[10px] font-extrabold text-slate-400 pr-1 select-none shrink-0 text-right w-10">
+                <span>100%</span>
+                <span>75%</span>
+                <span>50%</span>
+                <span>25%</span>
+                <span>0%</span>
+              </div>
+
+              <div className="relative flex-1">
+                <div className="absolute inset-x-0 top-0 h-[190px] flex flex-col justify-between pointer-events-none">
+                  {[100, 75, 50, 25, 0].map((tick) => (
+                    <div
+                      key={tick}
+                      className={`w-full border-b ${
+                        tick === 0
+                          ? isDark
+                            ? 'border-slate-700'
+                            : 'border-slate-300'
+                          : isDark
+                          ? 'border-dashed border-slate-800'
+                          : 'border-dashed border-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                <div className="relative z-10 grid grid-cols-6 gap-2 sm:gap-4 items-end h-[190px] px-1 sm:px-3">
+                  {hourlyComparisonBars.map((bar) => (
+                    <div
+                      key={bar.hour}
+                      className="flex flex-col items-center justify-end h-full group"
+                    >
+                      <div className="flex items-end justify-center gap-1.5 w-full h-full">
+                        <div className="flex flex-col items-center justify-end h-full w-6 sm:w-8">
+                          <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 mb-1 leading-none">
+                            {bar.actual}%
+                          </span>
+                          <div
+                            className="w-full rounded-t-lg bg-indigo-600 hover:bg-indigo-500 transition-all duration-500 shadow-sm relative"
+                            style={{ height: `${Math.max(8, bar.actual)}%` }}
+                            title={`${bar.hour} (${bar.slotName}) — Thực tế: ${bar.actual}% (${bar.actualRooms}/${dashboardMetrics.totalNodes} phòng)`}
+                          />
+                        </div>
+
+                        <div className="flex flex-col items-center justify-end h-full w-6 sm:w-8">
+                          <span className="text-[9px] font-bold text-teal-600 dark:text-teal-400 mb-1 leading-none">
+                            {bar.avg30d}%
+                          </span>
+                          <div
+                            className="w-full rounded-t-lg bg-teal-500/35 border border-teal-500/60 transition-all duration-500"
+                            style={{ height: `${Math.max(8, bar.avg30d)}%` }}
+                            title={`${bar.hour} — Trung bình 30 ngày: ${bar.avg30d}% (${bar.avgRooms}/${dashboardMetrics.totalNodes} phòng)`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-6 gap-2 sm:gap-4 pt-2.5 px-1 sm:px-3 text-center">
+                  {hourlyComparisonBars.map((bar) => (
+                    <div key={bar.hour} className="space-y-0.5">
+                      <p className={`text-[11px] font-extrabold ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                        {bar.shortHour}
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 truncate">
+                        {bar.slotName}
+                      </p>
+                      <p className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400">
+                        {bar.actualRooms}/{dashboardMetrics.totalNodes} phòng
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-6 gap-4 items-end h-44 pt-4 px-2 border-b border-slate-200/70 dark:border-slate-800">
-            {hourlyComparisonBars.map((bar) => (
-              <div key={bar.hour} className="flex flex-col items-center gap-2 h-full justify-end">
-                <div className="flex items-end gap-1.5 w-full justify-center h-32">
-                  <div
-                    className="w-5 rounded-t-lg bg-indigo-600 transition-all duration-500"
-                    style={{ height: `${bar.actual}%` }}
-                    title={`Thực tế: ${bar.actual}%`}
-                  />
-                  <div
-                    className="w-5 rounded-t-lg bg-slate-200 dark:bg-slate-700 transition-all duration-500"
-                    style={{ height: `${bar.avg30d}%` }}
-                    title={`Trung bình 30 ngày: ${bar.avg30d}%`}
-                  />
-                </div>
-                <span className="text-[11px] font-bold text-slate-400 pb-2">{bar.hour}</span>
-              </div>
-            ))}
+          <div
+            className={`mt-4 p-3.5 rounded-2xl border grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs ${
+              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+            }`}
+          >
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 block">
+                Khung giờ Cao điểm nhất Hôm nay:
+              </span>
+              <strong className="text-indigo-600 dark:text-indigo-400">
+                14:00 – 16:00 ({hourlyComparisonBars[3]?.actual}% • {hourlyComparisonBars[3]?.actualRooms}/{dashboardMetrics.totalNodes} phòng)
+              </strong>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 block">
+                Khung giờ Thấp điểm (Khuyên đặt):
+              </span>
+              <strong className="text-teal-600 dark:text-teal-400">
+                18:00 – 20:00 ({hourlyComparisonBars[5]?.actual}% • Còn trống nhiều)
+              </strong>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 block">
+                Độ lệch trung bình so với 30 ngày:
+              </span>
+              <strong className={isDark ? 'text-white' : 'text-slate-900'}>
+                Đang đồng bộ trực tiếp theo lịch đặt
+              </strong>
+            </div>
           </div>
         </div>
 
+        {/* BIỂU ĐỒ 2: CƠ CẤU TRẠNG THÁI MẶT BẰNG & TỶ LỆ LẤP ĐẦY TỪNG TẦNG (TẦNG 1 - TẦNG 5) */}
         <div
-          className={`lg:col-span-4 p-6 rounded-3xl border flex flex-col justify-between ${
+          className={`lg:col-span-4 p-6 rounded-3xl border flex flex-col justify-between space-y-4 ${
             isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
           <div>
             <h3 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Phân bổ Trạng thái Mặt bằng
+              Cơ cấu Trạng thái & Công suất Theo Tầng (1–5)
             </h3>
-            <p className="text-xs text-slate-400">
-              Tổng cộng {dashboardMetrics.totalNodes} vị trí đang quản lý
+            <p className="text-xs text-slate-400 mt-0.5">
+              Đại diện tỷ lệ Trống / Đã đặt / Giữ 5p của {dashboardMetrics.totalNodes} không gian và chi tiết từng tầng
             </p>
           </div>
 
-          <div className="my-4 flex items-center justify-center">
-            <div className="relative w-32 h-32 rounded-full border-[12px] border-teal-500 flex flex-col items-center justify-center">
-              <span className={`text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                {dashboardMetrics.totalNodes}
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">Vị trí</span>
+          <div className="flex items-center justify-center gap-5 py-2">
+            <div
+              className="relative w-28 h-28 rounded-full flex items-center justify-center shadow-inner shrink-0"
+              style={{
+                background: `conic-gradient(#0d9488 0% ${Math.round(
+                  (dashboardMetrics.availableCount / dashboardMetrics.totalNodes) * 100
+                )}%, #4f46e5 ${Math.round(
+                  (dashboardMetrics.availableCount / dashboardMetrics.totalNodes) * 100
+                )}% ${Math.round(
+                  ((dashboardMetrics.availableCount + dashboardMetrics.occupiedOrReservedCount) /
+                    dashboardMetrics.totalNodes) *
+                    100
+                )}%, #d97706 ${Math.round(
+                  ((dashboardMetrics.availableCount + dashboardMetrics.occupiedOrReservedCount) /
+                    dashboardMetrics.totalNodes) *
+                    100
+                )}% 100%)`,
+              }}
+            >
+              <div
+                className={`w-20 h-20 rounded-full flex flex-col items-center justify-center ${
+                  isDark ? 'bg-slate-900' : 'bg-white'
+                }`}
+              >
+                <span className={`text-xl font-black leading-none ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  {dashboardMetrics.occupancyRate}%
+                </span>
+                <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                  Lấp đầy ({dashboardMetrics.totalNodes - dashboardMetrics.availableCount}/{dashboardMetrics.totalNodes})
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs font-semibold flex-1">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-slate-500">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
+                  Đang trống
+                </span>
+                <strong className={isDark ? 'text-white' : 'text-slate-900'}>
+                  {dashboardMetrics.availableCount} ({Math.round((dashboardMetrics.availableCount / dashboardMetrics.totalNodes) * 100)}%)
+                </strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-slate-500">
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                  Đã đặt / Họp
+                </span>
+                <strong className={isDark ? 'text-white' : 'text-slate-900'}>
+                  {dashboardMetrics.occupiedOrReservedCount} ({Math.round((dashboardMetrics.occupiedOrReservedCount / dashboardMetrics.totalNodes) * 100)}%)
+                </strong>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-slate-500">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  Giữ 5p (Hold)
+                </span>
+                <strong className={isDark ? 'text-white' : 'text-slate-900'}>
+                  {dashboardMetrics.holdingCount} ({Math.round((dashboardMetrics.holdingCount / dashboardMetrics.totalNodes) * 100)}%)
+                </strong>
+              </div>
             </div>
           </div>
 
-          <div className="space-y-2 text-xs font-semibold">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
-                Đang trống
-              </span>
-              <strong className={isDark ? 'text-white' : 'text-slate-900'}>
-                {dashboardMetrics.availableCount} vị trí
-              </strong>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                Đã đặt & Đang họp
-              </span>
-              <strong className={isDark ? 'text-white' : 'text-slate-900'}>
-                {dashboardMetrics.occupiedOrReservedCount} vị trí
-              </strong>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-slate-500">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                Giữ 5p & Bảo trì
-              </span>
-              <strong className={isDark ? 'text-white' : 'text-slate-900'}>
-                {dashboardMetrics.holdingCount} vị trí
-              </strong>
-            </div>
+          <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 space-y-2">
+            <span className="text-[11px] font-extrabold text-slate-400 block">
+              Mật độ Sử dụng Chi tiết Theo Từng Tầng:
+            </span>
+            {floorBreakdownStats.map((flItem) => (
+              <div key={flItem.floor} className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>
+                    {flItem.label}
+                  </span>
+                  <span className="text-indigo-600 dark:text-indigo-400">
+                    {flItem.busyCount}/{flItem.totalCount} phòng ({flItem.ratePercent}%)
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-200/70 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-indigo-600 transition-all duration-500"
+                    style={{ width: `${Math.max(6, flItem.ratePercent)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* KHUNG DRAWER TRỢ LÝ BÊN PHẢI (KHÔNG CÒN CHỮ TRONG NGOẶC ĐA VAI TRÒ / GEMINI) */}
+      {/* KHUNG DRAWER TRỢ LÝ BÊN PHẢI */}
       {isAiChatOpen && (
         <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] shadow-2xl flex flex-col border-l transition-all bg-white dark:bg-slate-900 border-indigo-100 dark:border-slate-800">
           <div className="p-4 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-indigo-600 text-white">
