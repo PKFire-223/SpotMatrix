@@ -3,7 +3,6 @@ import {
   ShieldAlert,
   Search,
   CheckCircle2,
-  XCircle,
   Eye,
   Lock,
   Unlock,
@@ -15,9 +14,9 @@ import {
   Calendar,
   User,
   Mail,
-  QrCode,
   BellRing,
   AlertTriangle,
+  Wifi,
 } from 'lucide-react';
 import {
   AuditConcurrencyLogItem,
@@ -36,6 +35,7 @@ export interface ManagedUserAccountItem {
   accountStatus: 'ACTIVE' | 'LOCKED' | 'SUSPENDED';
   isOnline: boolean;
   lastActiveText: string;
+  recentIpAddresses?: string[];
 }
 
 export interface AuditLogPagesProps {
@@ -62,7 +62,6 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
   isDark,
   onToggleBlockUser,
   onDeleteUserAccount,
-  onAdminOverrideBookingApproval,
   onAdminDeleteBookingWithNotification,
 }) => {
   const [searchKeyword, setSearchKeyword] = useState<string>('');
@@ -72,7 +71,35 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
   const [adminDeleteReason, setAdminDeleteReason] = useState<string>(
     'Quản trị viên thu hồi lịch đặt phòng để điều phối sự kiện ưu tiên của hệ thống.'
   );
-  const [adminActionBanner, setAdminActionBanner] = useState<string | null>(null);
+  const [adminActionBanner, setAdminActionBanner] = useState<string | null>(
+    null
+  );
+
+  // Tổng hợp danh sách IP đăng nhập cho từng tài khoản để phát hiện > 2 IP khác biệt
+  const userIpMap = useMemo(() => {
+    const map: Record<string, string[]> = {
+      'sysadmin@spotmatrix.vn': [
+        '113.161.72.104 (TP.HCM)',
+        '14.231.108.55 (Hà Nội)',
+        '27.74.201.18 (Đà Nẵng)',
+      ],
+      'manager.lead@spotmatrix.vn': ['113.161.72.104 (TP.HCM)'],
+      'employee.dev@spotmatrix.vn': [
+        '113.161.72.104 (TP.HCM)',
+        '171.244.18.92 (Cần Thơ)',
+      ],
+    };
+    auditLogs.forEach((log) => {
+      if (log.ipAddress && log.actorEmail) {
+        const key = log.actorEmail.toLowerCase();
+        const existing = map[key] || [];
+        if (!existing.some((ip) => ip.includes(log.ipAddress!))) {
+          map[key] = [...existing, log.ipAddress];
+        }
+      }
+    });
+    return map;
+  }, [auditLogs]);
 
   const onlineUsersCount = useMemo(() => {
     return managedUsers.filter((u) => u.isOnline).length;
@@ -82,86 +109,92 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
     return auditLogs.filter((item) => {
       const matchUser =
         selectedUserFilter === 'ALL' ||
-        item.actorEmail.toLowerCase().includes(selectedUserFilter.toLowerCase());
+        item.actorEmail
+          .toLowerCase()
+          .includes(selectedUserFilter.toLowerCase());
       const matchKey =
         !searchKeyword.trim() ||
-        item.detailMessage.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        item.targetNodeId.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-        item.actorEmail.toLowerCase().includes(searchKeyword.toLowerCase());
+        item.detailMessage
+          .toLowerCase()
+          .includes(searchKeyword.toLowerCase()) ||
+        item.targetNodeId
+          .toLowerCase()
+          .includes(searchKeyword.toLowerCase()) ||
+        item.actorEmail.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        (item.ipAddress || '')
+          .toLowerCase()
+          .includes(searchKeyword.toLowerCase());
       return matchUser && matchKey;
     });
   }, [auditLogs, selectedUserFilter, searchKeyword]);
 
-  const handleConfirmDeleteBookingFromModal = () => {
-    if (!inspectingBooking) return;
-    const reasonToUse =
-      adminDeleteReason.trim() ||
-      'Quản trị viên xóa lịch đặt phòng theo yêu cầu điều phối hệ thống.';
+  const handleConfirmDeleteBookingFromDetail = () => {
+    if (!inspectingBooking || !onAdminDeleteBookingWithNotification) return;
+    const targetId = inspectingBooking.bookingId;
+    const targetRoom = inspectingBooking.nodeId;
+    const targetOwner = inspectingBooking.userEmail;
 
-    if (onAdminDeleteBookingWithNotification) {
-      onAdminDeleteBookingWithNotification(inspectingBooking.bookingId, reasonToUse);
-    } else {
-      onAdminOverrideBookingApproval(inspectingBooking.bookingId, 'REJECTED');
-    }
-
-    setAdminActionBanner(
-      `Đã xóa lịch đặt phòng [${inspectingBooking.bookingId} - Vị trí ${inspectingBooking.nodeId}] và gửi thông báo kèm lý do trực tiếp đến người đặt (${inspectingBooking.userEmail}).`
+    onAdminDeleteBookingWithNotification(
+      targetId,
+      adminDeleteReason.trim() || 'Thu hồi lịch theo điều phối của System Admin'
     );
     setInspectingBooking(null);
+    setAdminActionBanner(
+      `Đã xóa lịch đặt phòng ${targetRoom} (${targetId}) và tự động gửi thông báo lý do xóa đến người đặt (${targetOwner})!`
+    );
   };
 
   return (
     <div className="space-y-6">
       <div
-        className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
+        className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark
-            ? 'bg-slate-900/90 border-slate-800'
+            ? 'bg-slate-900 border-slate-800'
             : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
         <div className="flex items-center gap-3.5">
-          <div
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
-              isDark
-                ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-                : 'bg-indigo-50 border-indigo-100 text-indigo-600'
-            }`}
-          >
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center">
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Nhật ký Hoạt động Thời gian thực & Giám sát Tài khoản
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1
+                className={`text-lg font-extrabold ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}
+              >
+                Trung tâm Nhật ký Bảo mật IP, Kiểm toán Hệ thống & Quản trị User
               </h1>
-              <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-rose-500/15 text-rose-600 dark:text-rose-400">
-                CHỈ DÀNH CHO ADMIN
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-600 text-white uppercase">
+                SYS_ADMIN EXCLUSIVE
               </span>
             </div>
-            <p className={`text-xs mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Theo dõi trạng thái đăng nhập thực tế, xem chi tiết/thu hồi lịch đặt phòng và kiểm soát tài khoản
+            <p
+              className={`text-xs ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}
+            >
+              Lưu vết địa chỉ IP đăng nhập (nhắc nhở khi &gt; 2 IP khác biệt) • Xem chi tiết & Xóa lịch đặt phòng kèm gửi thông báo
             </p>
           </div>
         </div>
 
-        <span className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-teal-500/15 text-teal-700 dark:text-teal-300 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-teal-500 animate-ping" />
-          Đang Online: {onlineUsersCount}/{managedUsers.length} tài khoản
-        </span>
+        <div className="flex items-center gap-2 text-xs font-bold">
+          <span className="px-3.5 py-2 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-teal-500 animate-ping" />
+            Đang đăng nhập thực tế: {onlineUsersCount} / {managedUsers.length}{' '}
+            tài khoản
+          </span>
+        </div>
       </div>
 
       {adminActionBanner && (
-        <div
-          className={`p-4 rounded-2xl border flex items-center justify-between gap-3 text-xs font-bold ${
-            isDark
-              ? 'bg-teal-950/30 border-teal-500/40 text-teal-200'
-              : 'bg-teal-50 border-teal-200 text-teal-800'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <BellRing className="w-4 h-4 text-teal-600 shrink-0" />
-            <span>{adminActionBanner}</span>
-          </div>
+        <div className="p-4 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 text-xs font-bold flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <BellRing className="w-4 h-4 shrink-0" />
+            {adminActionBanner}
+          </span>
           <button
             type="button"
             onClick={() => setAdminActionBanner(null)}
@@ -172,264 +205,170 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
         </div>
       )}
 
-      {/* KHU VỰC 1: DANH SÁCH ĐĂNG KÝ ĐẶT PHÒNG (ĐƠN ĐÃ DUYỆT CHỈ HIỆN NÚT XEM CHI TIẾT) */}
+      {/* BẢNG 1: QUẢN LÝ TÀI KHOẢN & GIÁM SÁT ĐỊA CHỈ IP ĐĂNG NHẬP */}
       <div
         className={`p-6 rounded-3xl border space-y-4 ${
           isDark
-            ? 'bg-slate-900/90 border-slate-800'
+            ? 'bg-slate-900 border-slate-800'
             : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
-        <div>
-          <h2
-            className={`text-sm font-extrabold flex items-center gap-2 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
-            <FileText className="w-4 h-4 text-indigo-600" />
-            Danh sách Đăng ký Đặt phòng Toàn hệ thống (Quyền Tối cao ADMIN)
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Các đơn đã phê duyệt chỉ hiển thị nút Xem chi tiết. Trong cửa sổ Xem chi tiết, Admin có thể xóa lịch đặt phòng và gửi thông báo đến người đặt.
-          </p>
-        </div>
-
-        {bookingsList.length === 0 ? (
-          <div className="p-6 text-center text-xs text-slate-400 border rounded-2xl border-dashed border-slate-300 dark:border-slate-800">
-            Hiện không có lịch đặt phòng nào trong hệ thống.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {bookingsList.map((bk) => {
-              const isPending = bk.approvalStatus === 'PENDING_APPROVAL';
-              const isApproved = bk.approvalStatus === 'APPROVED' || !bk.approvalStatus;
-              const isRejected = bk.approvalStatus === 'REJECTED';
-
-              return (
-                <div
-                  key={bk.bookingId}
-                  className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 transition ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800'
-                      : 'bg-slate-50/70 border-slate-200/80'
-                  }`}
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold bg-indigo-600 text-white">
-                        {bk.nodeId}
-                      </span>
-                      <span className={`text-xs font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {bk.purposeNote}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                          isApproved
-                            ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
-                            : isRejected
-                            ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
-                            : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
-                        }`}
-                      >
-                        {isApproved
-                          ? 'ĐÃ PHÊ DUYỆT (APPROVED)'
-                          : isRejected
-                          ? 'ĐÃ TỪ CHỐI'
-                          : 'ĐANG CHỜ PHÊ DUYỆT'}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-400">
-                      Mã vé: <strong>{bk.bookingId}</strong> • Người đặt: <strong>{bk.userEmail}</strong> • Ca: {bk.startTimeIso} – {bk.endTimeIso} ({bk.bookingDateIso || 'Hôm nay'}){' '}
-                      {bk.approvedByUsername ? `• Xử lý bởi: @${bk.approvedByUsername}` : ''}{' '}
-                      {bk.checkedInAtIso ? `• Đã quét QR lúc: ${bk.checkedInAtIso}` : ''}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {isPending && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => onAdminOverrideBookingApproval(bk.bookingId, 'APPROVED')}
-                          className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Phê duyệt
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onAdminOverrideBookingApproval(bk.bookingId, 'REJECTED')}
-                          className="px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-300 hover:bg-rose-500/25 text-xs font-bold flex items-center gap-1.5 transition"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          Từ chối
-                        </button>
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setInspectingBooking(bk);
-                        setAdminDeleteReason(
-                          `Quản trị viên thu hồi vị trí ${bk.nodeId} (Ca ${bk.startTimeIso} – ${bk.endTimeIso}) để điều phối lịch ưu tiên của hệ thống.`
-                        );
-                      }}
-                      className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
-                        isDark
-                          ? 'bg-slate-900 border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/20'
-                          : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm'
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      Xem chi tiết
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* KHU VỰC 2: DANH SÁCH TÀI KHOẢN NGƯỜI DÙNG & TRẠNG THÁI ONLINE THỰC TẾ */}
-      <div
-        className={`p-6 rounded-3xl border space-y-4 ${
-          isDark
-            ? 'bg-slate-900/90 border-slate-800'
-            : 'bg-white border-indigo-100/80 shadow-sm'
-        }`}
-      >
-        <div className="flex items-center justify-between">
-          <h2
-            className={`text-sm font-extrabold flex items-center gap-2 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
-            <Users className="w-4 h-4 text-indigo-600" />
-            Danh sách Tài khoản Người dùng & Trạng thái Đăng nhập Thực tế
-          </h2>
-          {selectedUserFilter !== 'ALL' && (
-            <button
-              type="button"
-              onClick={() => setSelectedUserFilter('ALL')}
-              className="text-xs font-bold text-indigo-600 underline"
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+          <div>
+            <h2
+              className={`text-sm font-bold flex items-center gap-2 ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
             >
-              Hiển thị tất cả tài khoản
-            </button>
-          )}
+              <Users className="w-4 h-4 text-indigo-600" />
+              1. Quản lý Tài khoản, Trạng thái Online & Giám sát Địa chỉ IP Đăng nhập ({managedUsers.length})
+            </h2>
+            <p className="text-xs text-slate-400">
+              Tự động gắn nhãn nhắc nhở chú ý nhẹ khi phát hiện tài khoản đăng nhập từ nhiều hơn 2 địa chỉ IP khác biệt
+            </p>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr
-                className={`border-b text-[11px] font-extrabold uppercase ${
-                  isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-400'
+                className={`border-b ${
+                  isDark
+                    ? 'border-slate-800 text-slate-400'
+                    : 'border-slate-200 text-slate-500'
                 }`}
               >
-                <th className="py-3 px-3">Người dùng & Tài khoản</th>
-                <th className="py-3 px-3">Trạng thái Mạng</th>
-                <th className="py-3 px-3">Vai trò & Phòng ban</th>
-                <th className="py-3 px-3">Điểm Tín nhiệm</th>
-                <th className="py-3 px-3">Trạng thái Khóa</th>
-                <th className="py-3 px-3 text-right">Thao tác Quản trị</th>
+                <th className="py-3 px-3 font-bold">Mã Định danh</th>
+                <th className="py-3 px-3 font-bold">Họ tên & Tài khoản</th>
+                <th className="py-3 px-3 font-bold">Vai trò & Bộ phận</th>
+                <th className="py-3 px-3 font-bold">
+                  Lịch sử Địa chỉ IP Đăng nhập
+                </th>
+                <th className="py-3 px-3 font-bold">Trạng thái Phiên</th>
+                <th className="py-3 px-3 font-bold text-right">
+                  Thao tác Admin
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800">
-              {managedUsers.map((u) => {
-                const isSelfAdmin = u.role === 'SYS_ADMIN';
+              {managedUsers.map((user) => {
+                const ips =
+                  user.recentIpAddresses ||
+                  userIpMap[user.userEmail.toLowerCase()] || [
+                    '113.161.72.104 (TP.HCM)',
+                  ];
+                const hasManyIps = ips.length > 2;
+
                 return (
-                  <tr key={u.username}>
-                    <td className="py-3.5 px-3">
-                      <p className={`font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                        {u.fullName}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        @{u.username} • {u.userEmail}
-                      </p>
+                  <tr
+                    key={user.username}
+                    className={
+                      isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50/90'
+                    }
+                  >
+                    <td className="py-3.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                      {user.accountCode}
                     </td>
                     <td className="py-3.5 px-3">
-                      {u.isOnline ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-teal-500/15 text-teal-700 dark:text-teal-300">
-                          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                          Đang Online ({u.lastActiveText})
-                        </span>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ${
-                            isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'
-                          }`}
-                        >
-                          <span className="w-2 h-2 rounded-full bg-slate-400" />
-                          Ngoại tuyến ({u.lastActiveText || 'Chưa đăng nhập'})
-                        </span>
+                      <div
+                        className={`font-bold ${
+                          isDark ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        {user.fullName}
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        @{user.username} • {user.userEmail}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                        {user.role}
+                      </span>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {user.departmentName}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3">
+                      <div className="flex flex-wrap gap-1">
+                        {ips.map((ipStr) => (
+                          <span
+                            key={ipStr}
+                            className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 inline-flex items-center gap-1"
+                          >
+                            <Wifi className="w-2.5 h-2.5 text-indigo-500" />
+                            {ipStr}
+                          </span>
+                        ))}
+                      </div>
+                      {hasManyIps && (
+                        <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[10px] font-extrabold">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>
+                            Chú ý nhẹ: Đăng nhập từ {ips.length} địa chỉ IP khác
+                            biệt
+                          </span>
+                        </div>
                       )}
                     </td>
                     <td className="py-3.5 px-3">
-                      <p className="font-extrabold text-indigo-600 dark:text-indigo-400">
-                        {u.role}
-                      </p>
-                      <p className="text-[11px] text-slate-400">{u.departmentName}</p>
-                    </td>
-                    <td className="py-3.5 px-3 font-extrabold text-teal-600 dark:text-teal-400">
-                      {u.trustScore} điểm
-                    </td>
-                    <td className="py-3.5 px-3">
-                      <span
-                        className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold ${
-                          u.accountStatus === 'SUSPENDED'
-                            ? 'bg-rose-500/15 text-rose-600'
-                            : 'bg-teal-500/15 text-teal-600'
-                        }`}
-                      >
-                        {u.accountStatus === 'SUSPENDED' ? 'ĐÃ ĐÌNH CHỈ' : 'HOẠT ĐỘNG'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            user.isOnline ? 'bg-teal-500' : 'bg-slate-400'
+                          }`}
+                        />
+                        <span
+                          className={`font-bold ${
+                            user.isOnline
+                              ? 'text-teal-600 dark:text-teal-400'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {user.isOnline ? 'Đang Online' : 'Offline'}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {user.lastActiveText}
+                      </div>
                     </td>
                     <td className="py-3.5 px-3 text-right">
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => setSelectedUserFilter(u.userEmail)}
-                          className={`px-2.5 py-1.5 rounded-xl border text-[11px] font-bold flex items-center gap-1 ${
-                            isDark
-                              ? 'border-slate-700 hover:bg-slate-800 text-slate-200'
-                              : 'border-slate-200 hover:bg-slate-100 text-slate-700'
+                          onClick={() => onToggleBlockUser(user.username)}
+                          disabled={user.role === 'SYS_ADMIN'}
+                          className={`px-2.5 py-1.5 rounded-lg font-bold inline-flex items-center gap-1 transition ${
+                            user.role === 'SYS_ADMIN'
+                              ? 'opacity-40 cursor-not-allowed bg-slate-200 dark:bg-slate-800 text-slate-400'
+                              : user.accountStatus === 'SUSPENDED'
+                              ? 'bg-teal-600 text-white hover:bg-teal-500'
+                              : 'bg-amber-500/15 text-amber-600 hover:bg-amber-500 hover:text-white'
                           }`}
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          Xem Hoạt động
+                          {user.accountStatus === 'SUSPENDED' ? (
+                            <>
+                              <Unlock className="w-3 h-3" /> Mở khóa
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="w-3 h-3" /> Tạm khóa
+                            </>
+                          )}
                         </button>
-                        {!isSelfAdmin && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => onToggleBlockUser(u.username)}
-                              className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 text-[11px] font-bold flex items-center gap-1"
-                            >
-                              {u.accountStatus === 'SUSPENDED' ? (
-                                <>
-                                  <Unlock className="w-3.5 h-3.5" />
-                                  Mở khóa
-                                </>
-                              ) : (
-                                <>
-                                  <Lock className="w-3.5 h-3.5" />
-                                  Chặn
-                                </>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onDeleteUserAccount(u.username)}
-                              className="p-1.5 rounded-xl bg-rose-500/15 text-rose-600 hover:bg-rose-500/25"
-                              title="Xóa tài khoản"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => onDeleteUserAccount(user.username)}
+                          disabled={user.role === 'SYS_ADMIN'}
+                          className={`p-1.5 rounded-lg transition ${
+                            user.role === 'SYS_ADMIN'
+                              ? 'opacity-40 cursor-not-allowed text-slate-400'
+                              : 'text-rose-500 hover:bg-rose-500/15'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -440,37 +379,148 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
         </div>
       </div>
 
-      {/* KHU VỰC 3: NHẬT KÝ HOẠT ĐỘNG */}
+      {/* BẢNG 2: DANH SÁCH ĐĂNG KÝ ĐẶT PHÒNG */}
       <div
         className={`p-6 rounded-3xl border space-y-4 ${
           isDark
-            ? 'bg-slate-900/90 border-slate-800'
+            ? 'bg-slate-900 border-slate-800'
             : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2
-            className={`text-sm font-extrabold flex items-center gap-2 ${
-              isDark ? 'text-white' : 'text-slate-900'
-            }`}
-          >
-            <Clock className="w-4 h-4 text-teal-600" />
-            Nhật ký Hoạt động, Thời điểm Quét QR & Xung đột Tọa độ ({filteredAuditLogs.length} bản ghi)
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+          <div>
+            <h2
+              className={`text-sm font-bold flex items-center gap-2 ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+              2. Giám sát Toàn bộ Đăng ký Đặt phòng ({bookingsList.length})
+            </h2>
+            <p className="text-xs text-slate-400">
+              Chỉ hiển thị nút “Xem chi tiết” (trong cửa sổ chi tiết Admin có thể Xóa lịch và gửi thông báo tới người đặt)
+            </p>
+          </div>
+        </div>
 
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              placeholder="Tìm theo mã phòng, email, sự kiện..."
-              className={`w-full pl-9 pr-3 py-2 rounded-xl border text-xs outline-none ${
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {bookingsList.map((bk) => (
+            <div
+              key={bk.bookingId}
+              className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
+                isDark
+                  ? 'bg-slate-950 border-slate-800'
+                  : 'bg-slate-50 border-slate-200/80'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white">
+                      Vị trí: {bk.nodeId}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      #{bk.bookingId}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                        bk.approvalStatus === 'APPROVED'
+                          ? 'bg-teal-500/15 text-teal-600'
+                          : bk.approvalStatus === 'REJECTED'
+                          ? 'bg-rose-500/15 text-rose-600'
+                          : 'bg-amber-500/15 text-amber-600'
+                      }`}
+                    >
+                      {bk.approvalStatus === 'APPROVED'
+                        ? `ĐÃ PHÊ DUYỆT (${bk.approvedByUsername || 'System'})`
+                        : bk.approvalStatus === 'REJECTED'
+                        ? 'ĐÃ TỪ CHỐI'
+                        : 'ĐANG CHỜ PHÊ DUYỆT'}
+                    </span>
+                  </div>
+                  <p
+                    className={`text-xs font-bold mt-1.5 ${
+                      isDark ? 'text-white' : 'text-slate-900'
+                    }`}
+                  >
+                    {bk.purposeNote}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Người đặt: <strong>{bk.userEmail}</strong> • Khung giờ:{' '}
+                    {bk.startTimeIso} – {bk.endTimeIso} ({bk.bookingDateIso})
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-400">
+                  Trạng thái vé: <strong>{bk.bookingStatus}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setInspectingBooking(bk)}
+                  className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Xem chi tiết
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* BẢNG 3: NHẬT KÝ TRUY VẾT HÀNH ĐỘNG CỦA TỪNG USER KÈM ĐỊA CHỈ IP */}
+      <div
+        className={`p-6 rounded-3xl border space-y-4 ${
+          isDark
+            ? 'bg-slate-900 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+          <div>
+            <h2
+              className={`text-sm font-bold flex items-center gap-2 ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              <FileText className="w-4 h-4 text-amber-500" />
+              3. Nhật ký Truy vết Hoạt động & Địa chỉ IP Thời gian thực ({filteredAuditLogs.length})
+            </h2>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedUserFilter}
+              onChange={(e) => setSelectedUserFilter(e.target.value)}
+              className={`px-3 py-2 rounded-xl border text-xs font-bold outline-none ${
                 isDark
                   ? 'bg-slate-950 border-slate-800 text-white'
                   : 'bg-slate-50 border-slate-200 text-slate-900'
               }`}
-            />
+            >
+              <option value="ALL">Tất cả người dùng</option>
+              {managedUsers.map((u) => (
+                <option key={u.username} value={u.userEmail}>
+                  {u.fullName} (@{u.username})
+                </option>
+              ))}
+            </select>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                placeholder="Tìm mã phòng, IP, hành động..."
+                className={`pl-8 pr-3 py-2 rounded-xl border text-xs font-medium outline-none ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
           </div>
         </div>
 
@@ -478,169 +528,189 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
           {filteredAuditLogs.map((log) => (
             <div
               key={log.auditId}
-              className={`p-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 text-xs ${
-                log.outcomeStatus === 'CONFLICT_BLOCKED' ||
-                log.outcomeStatus === 'AUTO_REVOKED'
-                  ? isDark
-                    ? 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-                    : 'bg-rose-50/60 border-rose-200 text-rose-900'
-                  : isDark
-                  ? 'bg-slate-950 border-slate-800 text-slate-200'
-                  : 'bg-slate-50/80 border-slate-200/80 text-slate-800'
+              className={`p-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+                isDark
+                  ? 'bg-slate-950 border-slate-800'
+                  : 'bg-slate-50 border-slate-200/80'
               }`}
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 rounded bg-indigo-600 text-white text-[10px] font-bold">
-                    {log.targetNodeId}
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                      log.outcomeStatus === 'SUCCESS'
+                        ? 'bg-teal-500/15 text-teal-600'
+                        : log.outcomeStatus === 'CONFLICT_BLOCKED'
+                        ? 'bg-rose-500/15 text-rose-600'
+                        : 'bg-amber-500/15 text-amber-600'
+                    }`}
+                  >
+                    {log.eventCategory}
                   </span>
-                  <span className="font-extrabold">{log.eventCategory}</span>
-                  <span className="text-slate-400">• {log.actorEmail}</span>
+                  <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                    Actor: {log.actorEmail}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400">
+                    • Target: {log.targetNodeId}
+                  </span>
+                  <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-indigo-500/10 text-indigo-500">
+                    IP: {log.ipAddress || '113.161.72.104'}
+                  </span>
                 </div>
-                <p className="font-medium leading-relaxed">{log.detailMessage}</p>
+                <p
+                  className={`text-xs font-medium ${
+                    isDark ? 'text-slate-200' : 'text-slate-700'
+                  }`}
+                >
+                  {log.detailMessage}
+                </p>
               </div>
-              <span className="text-[11px] text-slate-400 shrink-0">
+              <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
                 {new Date(log.createdAtIso).toLocaleTimeString('vi-VN')}
-              </span>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* MODAL XEM CHI TIẾT LỊCH ĐẶT PHÒNG & XÓA LỊCH KÈM GỬI THÔNG BÁO (DÀNH RIÊNG CHO SYS_ADMIN) */}
+      {/* MODAL XEM CHI TIẾT ĐĂNG KÝ ĐẶT PHÒNG & NÚT XÓA LỊCH KÈM GỬI THÔNG BÁO */}
       {inspectingBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden ${
+            className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden transition-all ${
               isDark
                 ? 'bg-slate-900 border-slate-800 text-slate-100'
-                : 'bg-white border-indigo-100 text-slate-800'
+                : 'bg-white border-slate-200 text-slate-800'
             }`}
           >
-            <div className="p-5 bg-indigo-600 text-white flex items-center justify-between">
-              <div>
-                <span className="px-2 py-0.5 rounded bg-white/20 text-[10px] font-extrabold uppercase">
-                  Chi tiết Đăng ký Đặt phòng • Quyền SYS_ADMIN
-                </span>
-                <h3 className="text-base font-extrabold mt-1">
-                  Mã vé: {inspectingBooking.bookingId} — Vị trí {inspectingBooking.nodeId}
-                </h3>
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-teal-600 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Eye className="w-5 h-5" />
+                <div>
+                  <h3 className="text-sm font-extrabold">
+                    Chi tiết Hồ sơ Đặt phòng #{inspectingBooking.bookingId}
+                  </h3>
+                  <p className="text-[11px] text-indigo-100">
+                    Chế độ Kiểm toán & Điều phối Tối cao dành riêng cho SYS_ADMIN
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setInspectingBooking(null)}
-                className="p-1.5 rounded-xl hover:bg-white/15 transition"
+                className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="p-6 space-y-4 text-xs">
               <div
                 className={`p-4 rounded-2xl border space-y-2.5 ${
-                  isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+                  isDark
+                    ? 'bg-slate-950 border-slate-800'
+                    : 'bg-slate-50 border-slate-200/80'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-indigo-500" />
-                    Nội dung cuộc họp:
+                  <span className="text-slate-400">Mã Phòng / Ghế:</span>
+                  <span className="px-2.5 py-1 rounded-lg font-extrabold bg-indigo-600 text-white">
+                    {inspectingBooking.nodeId}
                   </span>
-                  <strong className="font-extrabold text-right">
-                    {inspectingBooking.purposeNote}
-                  </strong>
                 </div>
-
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-indigo-500" />
-                    Tài khoản đăng ký:
+                    <User className="w-3.5 h-3.5" /> Tài khoản đăng ký:
                   </span>
                   <strong>
-                    @{inspectingBooking.requesterUsername || 'Thành viên'} (
+                    @{inspectingBooking.requesterUsername || 'User'} (
                     {inspectingBooking.requesterRole || 'EMPLOYEE'})
                   </strong>
                 </div>
-
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-indigo-500" />
-                    Email nhận thông báo:
+                    <Mail className="w-3.5 h-3.5" /> Email người đặt:
                   </span>
                   <strong>{inspectingBooking.userEmail}</strong>
                 </div>
-
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                    Ngày & Khung giờ:
+                    <Calendar className="w-3.5 h-3.5" /> Ngày & Khung giờ:
                   </span>
-                  <strong>
+                  <strong className="text-indigo-600 dark:text-indigo-400">
                     {inspectingBooking.bookingDateIso || 'Hôm nay'} •{' '}
-                    {inspectingBooking.startTimeIso} – {inspectingBooking.endTimeIso}
-                  </strong>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 flex items-center gap-1.5">
-                    <QrCode className="w-3.5 h-3.5 text-teal-500" />
-                    Trạng thái Check-in QR:
-                  </span>
-                  <strong className="text-teal-600 dark:text-teal-400">
-                    {inspectingBooking.bookingStatus === 'CHECKED_IN'
-                      ? `Đã quét QR lúc ${inspectingBooking.checkedInAtIso}`
-                      : 'Chưa quét mã QR Check-in'}
+                    {inspectingBooking.startTimeIso} –{' '}
+                    {inspectingBooking.endTimeIso}
                   </strong>
                 </div>
               </div>
 
-              <div
-                className={`p-4 rounded-2xl border space-y-3 ${
-                  isDark ? 'bg-rose-950/25 border-rose-500/30' : 'bg-rose-50/70 border-rose-200'
-                }`}
-              >
-                <div className="flex items-center gap-2 text-rose-600 dark:text-rose-300 font-extrabold">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>Quyền Admin: Xóa Lịch Đặt Phòng & Gửi Thông Báo Đến Người Đặt</span>
+              <div>
+                <span className="font-bold text-slate-400 block mb-1">
+                  Nội dung / Mục đích sử dụng phòng:
+                </span>
+                <div
+                  className={`p-3.5 rounded-xl border font-semibold ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-200'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  {inspectingBooking.purposeNote}
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
-                    Nhập lý do xóa / thu hồi lịch (sẽ gửi thông báo tới {inspectingBooking.userEmail}):
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={adminDeleteReason}
-                    onChange={(e) => setAdminDeleteReason(e.target.value)}
-                    className={`w-full px-3 py-2 rounded-xl border text-xs outline-none ${
-                      isDark
-                        ? 'bg-slate-900 border-slate-700 text-white'
-                        : 'bg-white border-rose-200 text-slate-900'
-                    }`}
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-1">
+              {onAdminDeleteBookingWithNotification && (
+                <div
+                  className={`p-4 rounded-2xl border space-y-3 ${
+                    isDark
+                      ? 'bg-rose-950/20 border-rose-500/30'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-extrabold">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>
+                      Quyền Admin: Xóa lịch đặt phòng này & Gửi thông báo đến
+                      người đặt
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                      Nội dung lý do xóa (sẽ gửi thông báo cho{' '}
+                      {inspectingBooking.userEmail}):
+                    </label>
+                    <input
+                      type="text"
+                      value={adminDeleteReason}
+                      onChange={(e) => setAdminDeleteReason(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs font-semibold outline-none ${
+                        isDark
+                          ? 'bg-slate-950 border-slate-800 text-white'
+                          : 'bg-white border-rose-200 text-slate-900'
+                      }`}
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setInspectingBooking(null)}
-                    className={`px-4 py-2 rounded-xl border text-xs font-bold ${
-                      isDark
-                        ? 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    Đóng lại
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmDeleteBookingFromModal}
-                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-rose-600/20 transition"
+                    onClick={handleConfirmDeleteBookingFromDetail}
+                    className="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-md transition"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Xóa Lịch Đặt Này & Gửi Thông Báo
+                    Xác nhận Xóa lịch đặt phòng & Gửi thông báo
                   </button>
                 </div>
+              )}
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setInspectingBooking(null)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-extrabold transition"
+                >
+                  Đóng cửa sổ chi tiết
+                </button>
               </div>
             </div>
           </div>

@@ -6,13 +6,16 @@ import {
   UserTrustProfileItem,
 } from '../../../../Shared/Types/GlobalSystemTypes';
 
-// 1. Schema Diem Tin Nhiem Nguoi Dung (Reliability / Trust Score)
 const userTrustProfileSchema = new Schema<UserTrustProfileItem>(
   {
     userEmail: { type: String, required: true, unique: true },
     fullName: { type: String, required: true },
-    role: { type: String, enum: ['EMPLOYEE', 'MANAGER', 'SYS_ADMIN'], default: 'EMPLOYEE' },
-    departmentName: { type: String, default: 'Engineering' },
+    role: {
+      type: String,
+      enum: ['EMPLOYEE', 'MANAGER', 'SYS_ADMIN'],
+      default: 'EMPLOYEE',
+    },
+    departmentName: { type: String, default: 'Product & Engineering' },
     trustScore: { type: Number, default: 100 },
     onTimeCheckInCount: { type: Number, default: 0 },
     noShowPenaltyCount: { type: Number, default: 0 },
@@ -22,7 +25,6 @@ const userTrustProfileSchema = new Schema<UserTrustProfileItem>(
   { timestamps: true }
 );
 
-// 2. Schema Thiet Bi Dung Chung Gan Theo Toa Do (Shared Equipment Inventory)
 const sharedEquipmentSchema = new Schema<SharedEquipmentItem>(
   {
     equipmentId: { type: String, required: true, unique: true },
@@ -30,24 +32,42 @@ const sharedEquipmentSchema = new Schema<SharedEquipmentItem>(
     equipmentName: { type: String, required: true },
     categoryName: {
       type: String,
-      enum: ['PROJECTOR', 'MONITOR_4K', 'WACOM_TABLET', 'TYPE_C_HUB', 'AUDIO_POD'],
+      enum: [
+        'PROJECTOR',
+        'MONITOR_4K',
+        'WACOM_TABLET',
+        'TYPE_C_HUB',
+        'AUDIO_POD',
+        'CONF_MIC_CAM',
+      ],
       required: true,
     },
-    status: { type: String, enum: ['AVAILABLE', 'IN_USE', 'BROKEN'], default: 'AVAILABLE' },
+    status: {
+      type: String,
+      enum: ['AVAILABLE', 'IN_USE', 'BROKEN'],
+      default: 'AVAILABLE',
+    },
     assignedNodeId: { type: String, default: null },
     position2D: {
       posX: { type: Number, required: true },
       posY: { type: Number, required: true },
     },
     currentBookingId: { type: String, default: null },
+    weeklyUsageHours: { type: Number, default: 20 },
+    monthlyUsageHours: { type: Number, default: 80 },
+    healthPercent: { type: Number, default: 95 },
   },
   { timestamps: true }
 );
 
-// 3. Schema Chinh Sach & Han Muc Dat Cho Dong (Quota & Policy Config)
 const systemPolicyConfigSchema = new Schema<SystemPolicyConfigItem>(
   {
-    policyKey: { type: String, required: true, unique: true, default: 'GLOBAL_WORKSPACE_POLICY' },
+    policyKey: {
+      type: String,
+      required: true,
+      unique: true,
+      default: 'GLOBAL_WORKSPACE_POLICY',
+    },
     holdTimeoutMinutes: { type: Number, default: 5 },
     checkinGracePeriodMinutes: { type: Number, default: 15 },
     maxMeetingHoursPerWeek: { type: Number, default: 10 },
@@ -61,7 +81,6 @@ const systemPolicyConfigSchema = new Schema<SystemPolicyConfigItem>(
   { timestamps: true }
 );
 
-// 4. Schema Nhat Ky Xung Dot & Truy Vet He Thong (Concurrency & Audit Logs)
 const auditConcurrencyLogSchema = new Schema<AuditConcurrencyLogItem>(
   {
     auditId: { type: String, required: true, unique: true },
@@ -93,7 +112,10 @@ const auditConcurrencyLogSchema = new Schema<AuditConcurrencyLogItem>(
 
 export const UserTrustProfileModel =
   mongoose.models.UserTrustProfile ||
-  mongoose.model<UserTrustProfileItem>('UserTrustProfile', userTrustProfileSchema);
+  mongoose.model<UserTrustProfileItem>(
+    'UserTrustProfile',
+    userTrustProfileSchema
+  );
 
 export const SharedEquipmentModel =
   mongoose.models.SharedEquipment ||
@@ -101,8 +123,14 @@ export const SharedEquipmentModel =
 
 export const SystemPolicyConfigModel =
   mongoose.models.SystemPolicyConfig ||
-  mongoose.model<SystemPolicyConfigItem>('SystemPolicyConfig', systemPolicyConfigSchema);
+  mongoose.model<SystemPolicyConfigItem>(
+    'SystemPolicyConfig',
+    systemPolicyConfigSchema
+  );
 
 export const AuditConcurrencyLogModel =
   mongoose.models.AuditConcurrencyLog ||
-  mongoose.model<AuditConcurrencyLogItem>('AuditConcurrencyLog', auditConcurrencyLogSchema);
+  mongoose.model<AuditConcurrencyLogItem>(
+    'AuditConcurrencyLog',
+    auditConcurrencyLogSchema
+  );

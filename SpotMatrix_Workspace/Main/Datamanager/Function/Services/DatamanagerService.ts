@@ -17,9 +17,6 @@ import {
 
 const envConfig = loadSystemEnvConfig();
 
-// ============================================================================
-// KHO DU LIEU IN-MEMORY DU PHONG (Dam bao chay muot ngay ca khi chua bat Mongo)
-// ============================================================================
 let memoryPolicyConfig: SystemPolicyConfigItem = {
   policyKey: 'GLOBAL_WORKSPACE_POLICY',
   holdTimeoutMinutes: envConfig.holdTimeoutMinutes,
@@ -35,110 +32,215 @@ let memoryPolicyConfig: SystemPolicyConfigItem = {
 
 const memoryTrustProfiles: UserTrustProfileItem[] = [
   {
-    userEmail: 'employee.dev@spotmatrix.vn',
-    fullName: 'Nguyễn Minh Quân (Backend Dev)',
-    role: 'EMPLOYEE',
-    departmentName: 'Platform Engineering',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    role: 'SYS_ADMIN',
+    departmentName: 'System Governance',
     trustScore: 100,
-    onTimeCheckInCount: 14,
+    onTimeCheckInCount: 32,
     noShowPenaltyCount: 0,
     isRestrictedMode: false,
     updatedAtIso: new Date().toISOString(),
   },
   {
-    userEmail: 'member.warning@spotmatrix.vn',
-    fullName: 'Trần Hoàng Nam (UI Designer)',
-    role: 'EMPLOYEE',
-    departmentName: 'Product Design',
-    trustScore: 55,
-    onTimeCheckInCount: 3,
-    noShowPenaltyCount: 5,
-    isRestrictedMode: true,
-    updatedAtIso: new Date().toISOString(),
-  },
-  {
     userEmail: 'manager.lead@spotmatrix.vn',
-    fullName: 'Lê Thu Hà (Engineering Manager)',
+    fullName: 'Lê Thu Hà (Quản lý)',
     role: 'MANAGER',
-    departmentName: 'Platform Engineering',
+    departmentName: 'Product & Engineering',
     trustScore: 100,
     onTimeCheckInCount: 28,
     noShowPenaltyCount: 0,
     isRestrictedMode: false,
     updatedAtIso: new Date().toISOString(),
   },
+  {
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    role: 'EMPLOYEE',
+    departmentName: 'Product & Engineering',
+    trustScore: 96,
+    onTimeCheckInCount: 18,
+    noShowPenaltyCount: 1,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
 ];
 
-const memoryEquipmentList: SharedEquipmentItem[] = [
-  {
-    equipmentId: 'EQ-4K-01',
-    equipmentCode: 'MON-4K-01',
-    equipmentName: 'Màn hình phụ Dell UltraSharp 4K 27"',
-    categoryName: 'MONITOR_4K',
-    status: 'AVAILABLE',
-    assignedNodeId: 'NODE-A01',
-    position2D: { posX: 95, posY: 105 },
-    currentBookingId: null,
-  },
-  {
-    equipmentId: 'EQ-WACOM-02',
-    equipmentCode: 'WAC-PRO-02',
-    equipmentName: 'Bảng vẽ Wacom Cintiq Pro 16',
-    categoryName: 'WACOM_TABLET',
-    status: 'IN_USE',
-    assignedNodeId: 'NODE-A02',
-    position2D: { posX: 225, posY: 105 },
-    currentBookingId: 'BK-2026-001',
-  },
-  {
-    equipmentId: 'EQ-PROJ-03',
-    equipmentCode: 'PRJ-LASER-03',
-    equipmentName: 'Máy chiếu di động Sony Laser 4K',
-    categoryName: 'PROJECTOR',
-    status: 'AVAILABLE',
-    assignedNodeId: 'NODE-M01',
-    position2D: { posX: 375, posY: 125 },
-    currentBookingId: null,
-  },
-  {
-    equipmentId: 'EQ-HUB-04',
-    equipmentCode: 'HUB-TB4-04',
-    equipmentName: 'Bộ chuyển đổi Thunderbolt 4 Dock 12-in-1',
-    categoryName: 'TYPE_C_HUB',
-    status: 'BROKEN',
-    assignedNodeId: 'NODE-C01',
-    position2D: { posX: 310, posY: 255 },
-    currentBookingId: null,
-  },
-];
+// Hàm khởi tạo Thiết bị đầy đủ cho toàn bộ 25/25 phòng (Tầng 1-4: 24 phòng + Tầng 5: Hội trường H-01)
+export function buildAllTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
+  const list: SharedEquipmentItem[] = [];
+  const roomSpecs: Array<{
+    suffix: string;
+    primaryName: string;
+    category: SharedEquipmentItem['categoryName'];
+    posX: number;
+    posY: number;
+    secondaryName?: string;
+    secondaryCat?: SharedEquipmentItem['categoryName'];
+  }> = [
+    {
+      suffix: '01',
+      primaryName: 'Màn hình Hội nghị 4K Samsung 75"',
+      category: 'MONITOR_4K',
+      posX: 150,
+      posY: 115,
+      secondaryName: 'Camera AI 360° Poly Studio E70',
+      secondaryCat: 'AUDIO_POD',
+    },
+    {
+      suffix: '02',
+      primaryName: 'Máy chiếu Laser Epson 4K Pro',
+      category: 'PROJECTOR',
+      posX: 400,
+      posY: 115,
+    },
+    {
+      suffix: '03',
+      primaryName: 'Hệ thống Âm thanh Hội trường Bose Videobar VB1',
+      category: 'AUDIO_POD',
+      posX: 650,
+      posY: 115,
+      secondaryName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
+      secondaryCat: 'TYPE_C_HUB',
+    },
+    {
+      suffix: '04',
+      primaryName: 'Bảng Tương tác Cảm ứng KTS Wacom Cintiq 24"',
+      category: 'WACOM_TABLET',
+      posX: 150,
+      posY: 345,
+    },
+    {
+      suffix: '05',
+      primaryName: 'Màn hình Cảm ứng Đa điểm LG One:Quick Works 55"',
+      category: 'MONITOR_4K',
+      posX: 400,
+      posY: 345,
+    },
+    {
+      suffix: '06',
+      primaryName: 'Tổ hợp Micro Đa hướng & Camera PTZ 4K Logitech Rally',
+      category: 'CONF_MIC_CAM',
+      posX: 650,
+      posY: 345,
+    },
+  ];
+
+  let seq = 1;
+  for (let floor = 1; floor <= 4; floor++) {
+    roomSpecs.forEach((spec, idx) => {
+      const roomCode = `M${floor}-${spec.suffix}`;
+      const isInUse = floor === 1 && spec.suffix === '02';
+      list.push({
+        equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+        equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-01`,
+        equipmentName: `${spec.primaryName} (${roomCode})`,
+        categoryName: spec.category,
+        status: isInUse ? 'IN_USE' : 'AVAILABLE',
+        assignedNodeId: roomCode,
+        position2D: { posX: spec.posX, posY: spec.posY },
+        currentBookingId: isInUse ? 'BK-2026-001' : null,
+        weeklyUsageHours: 16 + ((floor * 3 + idx * 4) % 18),
+        monthlyUsageHours: 64 + ((floor * 12 + idx * 15) % 68),
+        healthPercent: 92 + ((floor + idx) % 8),
+      });
+      seq += 1;
+
+      if (floor === 1 && spec.secondaryName && spec.secondaryCat) {
+        const isBroken = spec.suffix === '03';
+        list.push({
+          equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+          equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-02`,
+          equipmentName: `${spec.secondaryName} (${roomCode})`,
+          categoryName: spec.secondaryCat,
+          status: isBroken ? 'BROKEN' : 'AVAILABLE',
+          assignedNodeId: roomCode,
+          position2D: { posX: spec.posX, posY: spec.posY },
+          currentBookingId: null,
+          weeklyUsageHours: 14,
+          monthlyUsageHours: 58,
+          healthPercent: isBroken ? 45 : 95,
+        });
+        seq += 1;
+      }
+    });
+  }
+
+  list.push(
+    {
+      equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-PANO-01',
+      equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường (H-01)',
+      categoryName: 'PROJECTOR',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 28,
+      monthlyUsageHours: 112,
+      healthPercent: 99,
+    },
+    {
+      equipmentId: `EQ-${String(seq + 1).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-AUDIO-02',
+      equipmentName: 'Hệ thống Loa Line-Array & Micro Không dây Sân khấu (H-01)',
+      categoryName: 'AUDIO_POD',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 26,
+      monthlyUsageHours: 104,
+      healthPercent: 98,
+    }
+  );
+
+  return list;
+}
+
+const memoryEquipmentList: SharedEquipmentItem[] =
+  buildAllTwentyFiveRoomEquipments();
 
 const memoryAuditLogs: AuditConcurrencyLogItem[] = [
   {
     auditId: 'AUD-2026-9001',
     eventCategory: 'OPTIMISTIC_LOCK_REJECTED',
-    actorEmail: 'member.warning@spotmatrix.vn',
-    targetNodeId: 'NODE-A01',
+    actorEmail: 'employee.dev@spotmatrix.vn',
+    targetNodeId: 'M1-01',
     lockVersionAttempted: 1,
     outcomeStatus: 'CONFLICT_BLOCKED',
     detailMessage:
-      'Tu choi giu cho do xung dot Optimistic Lock (Version 1 da bi user employee.dev@spotmatrix.vn chiem truoc 18ms).',
+      'Từ chối giữ chỗ do xung đột Optimistic Lock (Version 1 đã được nâng lên Version 2 trước 18ms).',
+    ipAddress: '113.161.72.104',
+    locationLabel: 'TP. Hồ Chí Minh, VN',
     createdAtIso: new Date().toISOString(),
   },
   {
     auditId: 'AUD-2026-9002',
     eventCategory: 'AUTO_RELEASE_NO_SHOW',
     actorEmail: 'SYSTEM_CRON_WORKER',
-    targetNodeId: 'NODE-F01',
+    targetNodeId: 'M2-03',
     outcomeStatus: 'AUTO_REVOKED',
     detailMessage:
-      'Cronjob tu dong thu hoi ghe NODE-F01 sau 15 phut qua han Check-in QR va tru 10 diem tin nhiem.',
+      'Cronjob tự động thu hồi phòng M2-03 sau 15 phút quá hạn Check-in QR và trừ 10 điểm tín nhiệm.',
+    ipAddress: '127.0.0.1 (System Worker)',
+    locationLabel: 'SpotMatrix Cloud Core',
     createdAtIso: new Date().toISOString(),
   },
 ];
 
-// ============================================================================
-// MODULE 1: QUAN LY DIEM TIN NHIEM (RELIABILITY / TRUST SCORE)
-// ============================================================================
+export function syncMemoryTrustProfileDepartment(
+  cleanEmail: string,
+  targetDepartmentName: string
+): void {
+  const memProfile = memoryTrustProfiles.find(
+    (p) => p.userEmail.toLowerCase() === cleanEmail.toLowerCase()
+  );
+  if (memProfile) {
+    memProfile.departmentName = targetDepartmentName;
+  }
+}
+
 export async function listUserTrustProfiles(): Promise<UserTrustProfileItem[]> {
   if (getMongoConnectionState()) {
     const docs = await UserTrustProfileModel.find().lean();
@@ -150,7 +252,7 @@ export async function listUserTrustProfiles(): Promise<UserTrustProfileItem[]> {
 export async function adjustUserTrustScore(
   userEmail: string,
   eventType: 'QR_CHECKIN_ONTIME' | 'NO_SHOW_EXPIRED',
-  targetNodeId = 'NODE-A01'
+  targetNodeId = 'M1-01'
 ): Promise<UserTrustProfileItem> {
   const policy = await getActivePolicyConfig();
   const deltaPoints =
@@ -158,13 +260,15 @@ export async function adjustUserTrustScore(
       ? policy.trustScoreCheckinReward
       : -policy.trustScoreNoshowPenalty;
 
-  let targetProfile = memoryTrustProfiles.find((item) => item.userEmail === userEmail);
+  let targetProfile = memoryTrustProfiles.find(
+    (item) => item.userEmail.toLowerCase() === userEmail.toLowerCase()
+  );
   if (!targetProfile) {
     targetProfile = {
       userEmail,
       fullName: userEmail.split('@')[0],
       role: 'EMPLOYEE',
-      departmentName: 'General Workspace',
+      departmentName: 'Product & Engineering',
       trustScore: envConfig.defaultInitialTrustScore,
       onTimeCheckInCount: 0,
       noShowPenaltyCount: 0,
@@ -174,29 +278,38 @@ export async function adjustUserTrustScore(
     memoryTrustProfiles.push(targetProfile);
   }
 
-  targetProfile.trustScore = Math.max(0, Math.min(120, targetProfile.trustScore + deltaPoints));
+  targetProfile.trustScore = Math.max(
+    0,
+    Math.min(100, targetProfile.trustScore + deltaPoints)
+  );
   if (eventType === 'QR_CHECKIN_ONTIME') {
     targetProfile.onTimeCheckInCount += 1;
   } else {
     targetProfile.noShowPenaltyCount += 1;
   }
-  targetProfile.isRestrictedMode = targetProfile.trustScore < policy.minTrustScoreForRecurring;
+  targetProfile.isRestrictedMode =
+    targetProfile.trustScore < policy.minTrustScoreForRecurring;
   targetProfile.updatedAtIso = new Date().toISOString();
 
   if (getMongoConnectionState()) {
-    await UserTrustProfileModel.findOneAndUpdate({ userEmail }, targetProfile, { upsert: true });
+    await UserTrustProfileModel.findOneAndUpdate({ userEmail }, targetProfile, {
+      upsert: true,
+    });
   }
 
   await recordAuditConcurrencyLog({
     eventCategory:
-      eventType === 'QR_CHECKIN_ONTIME' ? 'QR_CHECKIN_SUCCESS' : 'AUTO_RELEASE_NO_SHOW',
+      eventType === 'QR_CHECKIN_ONTIME'
+        ? 'QR_CHECKIN_SUCCESS'
+        : 'AUTO_RELEASE_NO_SHOW',
     actorEmail: userEmail,
     targetNodeId,
-    outcomeStatus: eventType === 'QR_CHECKIN_ONTIME' ? 'SUCCESS' : 'AUTO_REVOKED',
+    outcomeStatus:
+      eventType === 'QR_CHECKIN_ONTIME' ? 'SUCCESS' : 'AUTO_REVOKED',
     detailMessage:
       eventType === 'QR_CHECKIN_ONTIME'
-        ? `Check-in QR dung gio tai ${targetNodeId}: +${policy.trustScoreCheckinReward} diem (Tong: ${targetProfile.trustScore}).`
-        : `Qua han ${policy.checkinGracePeriodMinutes} phut khong Check-in tai ${targetNodeId}: -${policy.trustScoreNoshowPenalty} diem (Con: ${targetProfile.trustScore}).`,
+        ? `Check-in QR đúng giờ tại ${targetNodeId}: +${policy.trustScoreCheckinReward} điểm (Tổng: ${targetProfile.trustScore}).`
+        : `Quá hạn ${policy.checkinGracePeriodMinutes} phút không Check-in tại ${targetNodeId}: -${policy.trustScoreNoshowPenalty} điểm (Còn: ${targetProfile.trustScore}).`,
   });
 
   return targetProfile;
@@ -213,22 +326,26 @@ export async function evaluateUserBookingEligibility(
 }> {
   const policy = await getActivePolicyConfig();
   const profiles = await listUserTrustProfiles();
-  const foundUser = profiles.find((u) => u.userEmail === userEmail);
-  const currentScore = foundUser ? foundUser.trustScore : envConfig.defaultInitialTrustScore;
+  const foundUser = profiles.find(
+    (u) => u.userEmail.toLowerCase() === userEmail.toLowerCase()
+  );
+  const currentScore = foundUser
+    ? foundUser.trustScore
+    : envConfig.defaultInitialTrustScore;
 
   if (currentScore < policy.minTrustScoreForRecurring) {
     if (isRecurringRequest) {
       return {
         allowed: false,
         trustScore: currentScore,
-        restrictionReason: `Diem tin nhiem (${currentScore}) duoi muc toi thieu (${policy.minTrustScoreForRecurring}). He thong tam khoa quyen dat lich dinh ky hang tuan/thang.`,
+        restrictionReason: `Điểm tín nhiệm (${currentScore}) dưới mức tối thiểu (${policy.minTrustScoreForRecurring}). Hệ thống tạm khóa quyền đặt lịch định kỳ.`,
       };
     }
     if (requestedAdvanceDays > policy.restrictedMaxAdvanceDays) {
       return {
         allowed: false,
         trustScore: currentScore,
-        restrictionReason: `Diem tin nhiem (${currentScore} < ${policy.minTrustScoreForRecurring}) chi cho phep giu cho truoc toi da ${policy.restrictedMaxAdvanceDays} ngay.`,
+        restrictionReason: `Điểm tín nhiệm (${currentScore} < ${policy.minTrustScoreForRecurring}) chỉ cho phép giữ chỗ trước tối đa ${policy.restrictedMaxAdvanceDays} ngày.`,
       };
     }
   }
@@ -240,16 +357,13 @@ export async function evaluateUserBookingEligibility(
   };
 }
 
-// ============================================================================
-// MODULE 2: QUAN LY DANH MUC THIET BI DUNG CHUNG GAN TOA DO (EQUIPMENT)
-// ============================================================================
 export async function listSharedEquipments(
   statusFilter?: EquipmentStatusType
 ): Promise<SharedEquipmentItem[]> {
   if (getMongoConnectionState()) {
     const query = statusFilter ? { status: statusFilter } : {};
     const dbItems = await SharedEquipmentModel.find(query).lean();
-    if (dbItems.length > 0) return dbItems as unknown as SharedEquipmentItem[];
+    if (dbItems.length >= 25) return dbItems as unknown as SharedEquipmentItem[];
   }
   if (statusFilter) {
     return memoryEquipmentList.filter((item) => item.status === statusFilter);
@@ -263,7 +377,9 @@ export async function updateEquipmentAttachmentStatus(
   bookingId: string | null = null,
   assignedNodeId?: string
 ): Promise<SharedEquipmentItem | null> {
-  const targetEq = memoryEquipmentList.find((item) => item.equipmentId === equipmentId);
+  const targetEq = memoryEquipmentList.find(
+    (item) => item.equipmentId === equipmentId
+  );
   if (targetEq) {
     targetEq.status = nextStatus;
     targetEq.currentBookingId = bookingId;
@@ -272,14 +388,13 @@ export async function updateEquipmentAttachmentStatus(
     }
   }
   if (getMongoConnectionState() && targetEq) {
-    await SharedEquipmentModel.findOneAndUpdate({ equipmentId }, targetEq, { upsert: true });
+    await SharedEquipmentModel.findOneAndUpdate({ equipmentId }, targetEq, {
+      upsert: true,
+    });
   }
   return targetEq || null;
 }
 
-// ============================================================================
-// MODULE 3: QUAN LY CHINH SACH & HAN MUC DAT CHO DONG (POLICY & QUOTA)
-// ============================================================================
 export async function getActivePolicyConfig(): Promise<SystemPolicyConfigItem> {
   if (getMongoConnectionState()) {
     const dbPolicy = await SystemPolicyConfigModel.findOne({
@@ -314,18 +429,20 @@ export async function updateActivePolicyConfig(
     actorEmail: adminEmail,
     targetNodeId: 'GLOBAL_POLICY',
     outcomeStatus: 'SUCCESS',
-    detailMessage: `Admin cap nhat chinh sach: Hold=${memoryPolicyConfig.holdTimeoutMinutes}p, GraceCheckIn=${memoryPolicyConfig.checkinGracePeriodMinutes}p, MinTrust=${memoryPolicyConfig.minTrustScoreForRecurring}.`,
+    detailMessage: `Admin cập nhật chính sách: Hold=${memoryPolicyConfig.holdTimeoutMinutes}p, GraceCheckIn=${memoryPolicyConfig.checkinGracePeriodMinutes}p, MinTrust=${memoryPolicyConfig.minTrustScoreForRecurring}.`,
   });
 
   return memoryPolicyConfig;
 }
 
-// ============================================================================
-// MODULE 4: NHAT KY XUNG DOT & TRUY VET (CONCURRENCY & AUDIT LOGS)
-// ============================================================================
-export async function listAuditConcurrencyLogs(): Promise<AuditConcurrencyLogItem[]> {
+export async function listAuditConcurrencyLogs(): Promise<
+  AuditConcurrencyLogItem[]
+> {
   if (getMongoConnectionState()) {
-    const logs = await AuditConcurrencyLogModel.find().sort({ createdAt: -1 }).limit(50).lean();
+    const logs = await AuditConcurrencyLogModel.find()
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
     if (logs.length > 0) return logs as unknown as AuditConcurrencyLogItem[];
   }
   return memoryAuditLogs;
@@ -338,6 +455,8 @@ export async function recordAuditConcurrencyLog(params: {
   lockVersionAttempted?: number;
   outcomeStatus: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED';
   detailMessage: string;
+  ipAddress?: string;
+  locationLabel?: string;
 }): Promise<AuditConcurrencyLogItem> {
   const newLogEntry: AuditConcurrencyLogItem = {
     auditId: `AUD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
@@ -347,6 +466,8 @@ export async function recordAuditConcurrencyLog(params: {
     lockVersionAttempted: params.lockVersionAttempted,
     outcomeStatus: params.outcomeStatus,
     detailMessage: params.detailMessage,
+    ipAddress: params.ipAddress || '113.161.72.104',
+    locationLabel: params.locationLabel || 'TP. Hồ Chí Minh, VN',
     createdAtIso: new Date().toISOString(),
   };
 
@@ -357,7 +478,10 @@ export async function recordAuditConcurrencyLog(params: {
   return newLogEntry;
 }
 
-export function calculateZoneOccupancyRate(occupiedCount: number, totalCount: number): number {
+export function calculateZoneOccupancyRate(
+  occupiedCount: number,
+  totalCount: number
+): number {
   if (totalCount <= 0) return 0;
   return Math.round((occupiedCount / totalCount) * 100);
 }

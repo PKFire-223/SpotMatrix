@@ -2,11 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import {
   confirmPasswordResetWithOtp,
   ensureDefaultAccountsSeeded,
+  hashPasswordWithScrypt,
   loginUserAccount,
   registerUserAccount,
   requestPasswordResetOtp,
+  validateStrongPasswordPolicy,
+  verifyPasswordWithScrypt,
 } from '../Services/AuthService';
-import { UserAccountDocument, UserAccountModel } from '../Models/UserAccountModel';
+import {
+  UserAccountDocument,
+  UserAccountModel,
+} from '../Models/UserAccountModel';
 import { getMongoConnectionState } from '../../../../Shared/Database/MongoConnection';
 
 const memoryProfileCustomizationStore = new Map<
@@ -83,15 +89,99 @@ export async function handleConfirmPasswordReset(
   }
 }
 
+// Đổi mật khẩu trực tiếp từ trang Cài đặt & Lưu lên MongoDB Atlas
+export async function handleChangeUserPassword(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    await ensureDefaultAccountsSeeded();
+    const { username, userEmail, currentPassword, newPassword } = req.body;
+    const rawKey = String(username || userEmail || '')
+      .trim()
+      .toLowerCase();
+
+    if (!rawKey || !currentPassword || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.',
+      });
+      return;
+    }
+
+    const pwdCheck = validateStrongPasswordPolicy(String(newPassword));
+    if (!pwdCheck.valid) {
+      res.status(400).json({
+        success: false,
+        message: pwdCheck.reason || 'Mật khẩu mới chưa đủ mạnh.',
+      });
+      return;
+    }
+
+    if (getMongoConnectionState()) {
+      const accountDoc = await UserAccountModel.findOne({
+        $or: [{ usernameNormalized: rawKey }, { userEmail: rawKey }],
+      });
+
+      if (!accountDoc) {
+        res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy tài khoản trên hệ thống.',
+        });
+        return;
+      }
+
+      const isCurrentValid = verifyPasswordWithScrypt(
+        String(currentPassword),
+        accountDoc.passwordSalt,
+        accountDoc.passwordHash
+      );
+
+      if (!isCurrentValid) {
+        res.status(401).json({
+          success: false,
+          message: 'Mật khẩu hiện tại không chính xác!',
+        });
+        return;
+      }
+
+      const { salt, hash } = hashPasswordWithScrypt(String(newPassword));
+      accountDoc.passwordSalt = salt;
+      accountDoc.passwordHash = hash;
+      accountDoc.passwordChangedAt = new Date();
+      accountDoc.failedLoginAttempts = 0;
+      accountDoc.lockUntilDate = null;
+      await accountDoc.save();
+
+      res.json({
+        success: true,
+        message:
+          'Đã đổi mật khẩu và đồng bộ mã hóa Scrypt + Pepper lên MongoDB Atlas thành công!',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật mật khẩu mới thành công (Chế độ Bộ nhớ Tạm)!',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function handleGetUserProfileFromMongo(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const rawUsername = String(req.params.username || '').trim().toLowerCase();
+    const rawUsername = String(req.params.username || '')
+      .trim()
+      .toLowerCase();
     if (!rawUsername) {
-      res.status(400).json({ success: false, message: 'Thieu username.' });
+      res.status(400).json({ success: false, message: 'Thiếu username.' });
       return;
     }
 
@@ -160,9 +250,13 @@ export async function handleUpdateUserProfileInMongo(
       backgroundUrl,
     } = req.body;
 
-    const normalizedKey = String(username || '').trim().toLowerCase();
+    const normalizedKey = String(username || '')
+      .trim()
+      .toLowerCase();
     if (!normalizedKey) {
-      res.status(400).json({ success: false, message: 'Thieu username khi luu ho so.' });
+      res
+        .status(400)
+        .json({ success: false, message: 'Thiếu username khi lưu hồ sơ.' });
       return;
     }
 
@@ -183,7 +277,9 @@ export async function handleUpdateUserProfileInMongo(
         {
           $set: {
             ...(fullName ? { fullName } : {}),
-            ...(userEmail ? { userEmail: String(userEmail).toLowerCase().trim() } : {}),
+            ...(userEmail
+              ? { userEmail: String(userEmail).toLowerCase().trim() }
+              : {}),
             ...(departmentName ? { departmentName } : {}),
             ...(phoneNumber !== undefined ? { phoneNumber } : {}),
             ...(jobTitle !== undefined ? { jobTitle } : {}),
@@ -197,7 +293,8 @@ export async function handleUpdateUserProfileInMongo(
 
       res.json({
         success: true,
-        message: 'Da luu Ho so, Avatar va Background vao MongoDB Atlas thanh cong!',
+        message:
+          'Đã lưu Hồ sơ, Phòng ban, Avatar và Background vào MongoDB Atlas thành công!',
         data: updatedDoc,
       });
       return;
@@ -205,7 +302,7 @@ export async function handleUpdateUserProfileInMongo(
 
     res.json({
       success: true,
-      message: 'Da luu Ho so, Avatar va Background vao bo nho tam!',
+      message: 'Đã lưu Hồ sơ, Avatar và Background vào bộ nhớ tạm!',
       data: memoryProfileCustomizationStore.get(normalizedKey),
     });
   } catch (err) {
