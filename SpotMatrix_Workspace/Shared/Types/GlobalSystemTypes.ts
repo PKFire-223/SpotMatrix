@@ -2,16 +2,20 @@ export type SeatStatusType =
   | 'AVAILABLE'
   | 'HOLDING'
   | 'RESERVED'
-  | 'OCCUPIED';
+  | 'OCCUPIED'
+  | 'MAINTENANCE';
 
 export type WorkspaceZoneType =
   | 'MEETING_ROOM'
   | 'COLLAB_HUB'
-  | 'QUIET_POD';
+  | 'QUIET_POD'
+  | 'DESK_POD'
+  | 'FOCUS_BOOTH'
+  | 'AMPHITHEATER_HALL';
 
 export type UserRoleType = 'EMPLOYEE' | 'MANAGER' | 'SYS_ADMIN';
 
-export type RecurringOptionType = 'NONE' | 'DAILY' | 'WEEKLY';
+export type RecurringOptionType = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export type HallBookingModeType =
   | 'STANDARD_ROOM'
@@ -56,8 +60,12 @@ export interface BookingPayloadItem {
   endTimeIso: string;
   purposeNote: string;
   recurringOption?: RecurringOptionType;
+  recurringSeriesId?: string | null;
   occurrenceDates?: string[];
   lockVersion?: number;
+  holdExpiresAtIso?: string | null;
+  noShowDeadlineIso?: string | null;
+  autoReleasedReason?: string | null;
   bookingStatus:
     | 'HOLDING'
     | 'CONFIRMED'
@@ -79,7 +87,8 @@ export type NotificationCategoryType =
   | 'BOOKING_APPROVAL_REQUEST'
   | 'FLOORPLAN_UPDATE'
   | 'AI_SUGGESTION'
-  | 'SYSTEM_POLICY';
+  | 'SYSTEM_POLICY'
+  | 'TRUST_SCORE_ALERT';
 
 export interface NotificationRecordItem {
   notificationId: string;
@@ -168,6 +177,10 @@ export interface AuditConcurrencyLogItem {
   createdAtIso: string;
 }
 
+// ============================================================================
+// CẤU TRÚC TỔ CHỨC: PHÒNG BAN (1 NGƯỜI CHỈ 1 PHÒNG BAN) & NHÓM CON TRỰC THUỘC
+// ============================================================================
+
 export interface OrganizationDepartmentItem {
   departmentId: string;
   departmentCode: string;
@@ -193,6 +206,10 @@ export interface OrganizationGroupItem {
   memberEmails: string[];
   updatedAtIso: string;
 }
+
+// ============================================================================
+// NHẬT KÝ ĐĂNG NHẬP IP & CÀI ĐẶT BỀN VỮNG TOÀN HỆ THỐNG
+// ============================================================================
 
 export interface LoginIpRecordItem {
   logId: string;

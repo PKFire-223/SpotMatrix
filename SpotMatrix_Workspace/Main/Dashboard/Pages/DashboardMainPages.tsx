@@ -132,11 +132,12 @@ const DASHBOARD_I18N: Record<
     chart1Title: 'チャート1：時間帯別の会議室稼働率推移（全25室・0%〜100%）',
     chart1Sub:
       '縦軸(Y)：稼働率(0%〜100%) • 横軸(X)：6つの時間帯(08:00〜20:00) • 各バーに正確な％と使用室数(X/25室)を表示',
-    chart2Title:
-      'チャート2：リアルタイム状態内訳ドーナツ＆1階〜5階別稼働状況',
-    chart2Sub: '空室・承認待ち・使用中の割合と各フロア（1F〜5F）の利用状況を可視化',
+    chart2Title: 'チャート2：リアルタイム状態内訳ドーナツ＆1階〜5階別稼働状況',
+    chart2Sub:
+      '空室・承認待ち・使用中の割合と各フロア（1F〜5F）の利用状況を可視化',
     aiTitle: 'スマート空間分析＆即時Q&Aアシスタント',
-    aiSub: '選択された言語（日本語 ja-JP）で要約レポートを音声読み上げします',
+    aiSub:
+      '選択された言語（日本語 ja-JP）で要約レポートを音声読み上げします',
     ttsPlayBtn: 'AI要約を音声読み上げ (ja-JP)',
     ttsStopBtn: '停止する',
     askPlaceholder:
@@ -164,40 +165,46 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   const t = DASHBOARD_I18N[webLanguage] || DASHBOARD_I18N.vi;
 
+  // Thống kê số liệu thực tế từ 25 phòng (Tầng 1..5)
   const metrics = useMemo(() => {
     const totalRooms = workspaceNodes.length || 25;
     const availableRooms = workspaceNodes.filter(
-      (n) => n.status === 'AVAILABLE'
+      (n: WorkspaceNodeItem) => n.status === 'AVAILABLE'
     ).length;
     const holdingRooms = workspaceNodes.filter(
-      (n) => n.status === 'HOLDING'
+      (n: WorkspaceNodeItem) => n.status === 'HOLDING'
     ).length;
     const occupiedRooms = workspaceNodes.filter(
-      (n) => n.status === 'OCCUPIED' || n.status === 'RESERVED'
+      (n: WorkspaceNodeItem) =>
+        n.status === 'OCCUPIED' || n.status === 'RESERVED'
     ).length;
 
     const activeBookings = bookingsList.filter(
-      (b) => b.bookingStatus !== 'CANCELLED' && b.approvalStatus !== 'REJECTED'
+      (b: BookingPayloadItem) =>
+        b.bookingStatus !== 'CANCELLED' && b.approvalStatus !== 'REJECTED'
     );
     const pendingApprovals = bookingsList.filter(
-      (b) => b.approvalStatus === 'PENDING_APPROVAL'
+      (b: BookingPayloadItem) => b.approvalStatus === 'PENDING_APPROVAL'
     );
     const checkedInBookings = bookingsList.filter(
-      (b) => b.bookingStatus === 'CHECKED_IN'
+      (b: BookingPayloadItem) => b.bookingStatus === 'CHECKED_IN'
     );
 
     const healthyEquipments = equipmentsList.filter(
-      (e) => e.status !== 'BROKEN'
+      (e: SharedEquipmentItem) => e.status !== 'BROKEN'
     ).length;
     const brokenEquipments = equipmentsList.filter(
-      (e) => e.status === 'BROKEN'
+      (e: SharedEquipmentItem) => e.status === 'BROKEN'
     ).length;
 
     const avgTrust =
       trustProfiles.length > 0
         ? Math.round(
-            trustProfiles.reduce((acc, item) => acc + item.trustScore, 0) /
-              trustProfiles.length
+            trustProfiles.reduce(
+              (acc: number, item: UserTrustProfileItem) =>
+                acc + item.trustScore,
+              0
+            ) / trustProfiles.length
           )
         : 98;
 
@@ -230,6 +237,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     return `Báo cáo Tóm tắt Hệ thống 5 Tầng SpotMatrix: Hiện có ${metrics.availableRooms}/${metrics.totalRooms} phòng đang trống (${metrics.occupiedRooms} phòng đang họp/đặt chỗ, ${metrics.holdingRooms} phòng chờ duyệt). Hôm nay có ${metrics.activeBookingsCount} lịch hoạt động và ${metrics.healthyEquipments}/${metrics.totalEquipments} thiết bị vận hành tốt. Điểm tín nhiệm trung bình đạt ${metrics.avgTrust}/100 điểm.`;
   }, [webLanguage, metrics]);
 
+  // Dữ liệu Biểu đồ 1: Công suất lấp đầy theo 6 khung giờ trong ngày
   const hourlyOccupancyBars: HourlyBarSlot[] = useMemo(() => {
     const total = metrics.totalRooms || 25;
     const baseSlots = [
@@ -243,7 +251,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
     return baseSlots.map((slot) => {
       const realMatches = bookingsList.filter(
-        (b) =>
+        (b: BookingPayloadItem) =>
           b.bookingStatus !== 'CANCELLED' &&
           b.startTimeIso <= slot.range.slice(0, 5) &&
           b.endTimeIso > slot.range.slice(0, 5)
@@ -265,11 +273,16 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     });
   }, [bookingsList, metrics.totalRooms]);
 
+  // Dữ liệu Biểu đồ 2: Phân bổ công suất theo từng Tầng (Tầng 1 .. Tầng 5)
   const floorBreakdownList = useMemo(() => {
-    return [1, 2, 3, 4, 5].map((fl) => {
-      const nodesOnFloor = workspaceNodes.filter((n) => n.floorLevel === fl);
+    return [1, 2, 3, 4, 5].map((fl: number) => {
+      const nodesOnFloor = workspaceNodes.filter(
+        (n: WorkspaceNodeItem) => n.floorLevel === fl
+      );
       const total = nodesOnFloor.length || (fl === 5 ? 1 : 6);
-      const busy = nodesOnFloor.filter((n) => n.status !== 'AVAILABLE').length;
+      const busy = nodesOnFloor.filter(
+        (n: WorkspaceNodeItem) => n.status !== 'AVAILABLE'
+      ).length;
       const free = total - busy;
       const pct = Math.round((busy / total) * 100);
       return {
@@ -321,9 +334,9 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       minute: '2-digit',
     });
     const freeRooms = workspaceNodes
-      .filter((n) => n.status === 'AVAILABLE')
+      .filter((n: WorkspaceNodeItem) => n.status === 'AVAILABLE')
       .slice(0, 4)
-      .map((n) => n.nodeCode)
+      .map((n: WorkspaceNodeItem) => n.nodeCode)
       .join(', ');
 
     const replyText =
@@ -356,6 +369,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* 4 THẺ KPI TỔNG QUAN CÓ CHÚ THÍCH ĐẦY ĐỦ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           onClick={() => onNavigateSection('FLOORPLAN')}
@@ -469,6 +483,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       </div>
 
+      {/* KHU VỰC PHÊ DUYỆT NHANH CHO ADMIN & MANAGER */}
       {canApproveRequests && metrics.pendingApprovals.length > 0 && (
         <div
           className={`p-5 rounded-3xl border ${
@@ -480,11 +495,12 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-extrabold uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
-              Yêu cầu Đặt phòng / Thuê Hội trường Đang chờ Phê duyệt ({metrics.pendingApprovals.length})
+              Yêu cầu Đặt phòng / Thuê Hội trường Đang chờ Phê duyệt (
+              {metrics.pendingApprovals.length})
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {metrics.pendingApprovals.map((req) => (
+            {metrics.pendingApprovals.map((req: BookingPayloadItem) => (
               <div
                 key={req.bookingId}
                 className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
@@ -532,7 +548,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       )}
 
-      {/* BỘ 2 BIỂU ĐỒ CHUYÊN SÂU */}
+      {/* BỘ 2 BIỂU ĐỒ CHUYÊN SÂU: CÓ ĐẦY ĐỦ TRỤC TUNG Y (0%-100%), NHÃN SỐ PHÒNG & CHÚ GIẢI RÕ RÀNG */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-7 p-6 rounded-3xl border flex flex-col justify-between space-y-5 ${
@@ -580,15 +596,18 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               </div>
 
               <div className="flex-1 h-full grid grid-cols-6 gap-2.5 items-end relative">
-                {[0, 25, 50, 75, 100].map((linePct) => (
+                {[0, 25, 50, 75, 100].map((linePct: number) => (
                   <div
                     key={linePct}
                     style={{ bottom: `${linePct}%` }}
-                    className="absolute left-0 right-0 border-t border-dashed border-slate-200/70 dark:border-slate-800/80 pointer-events-none"
+                    className="
+                      absolute left-0 right-0 border-t border-dashed
+                      border-slate-200/70 dark:border-slate-800/80 pointer-events-none
+                    "
                   />
                 ))}
 
-                {hourlyOccupancyBars.map((bar) => {
+                {hourlyOccupancyBars.map((bar: HourlyBarSlot) => {
                   const barColor =
                     bar.levelTag === 'HIGH'
                       ? 'bg-gradient-to-t from-amber-600 to-amber-400'
@@ -640,7 +659,8 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             }`}
           >
             <span>
-              <strong>Nhận định dữ liệu biểu đồ:</strong> Khung giờ cao điểm nhất là{' '}
+              <strong>Nhận định dữ liệu biểu đồ:</strong> Khung giờ cao điểm
+              nhất là{' '}
               <strong className="text-amber-500">
                 Ca 3 (13:00–15:00) đạt 84% (21/25 phòng)
               </strong>
@@ -744,8 +764,8 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold">{fl.label}</span>
                   <span className="text-slate-400 font-semibold">
-                    Đang dùng <strong>{fl.busy}</strong>/{fl.total} ({fl.pct}%) •
-                    Trống <strong className="text-teal-500">{fl.free}</strong>
+                    Đang dùng <strong>{fl.busy}</strong>/{fl.total} ({fl.pct}%)
+                    • Trống <strong className="text-teal-500">{fl.free}</strong>
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
@@ -802,6 +822,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           </button>
         </div>
 
+        {/* Bản tóm tắt AI tự động đổi ngôn ngữ theo Cài đặt */}
         <div
           className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-start gap-2.5 ${
             isDark

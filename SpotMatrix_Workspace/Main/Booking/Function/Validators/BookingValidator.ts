@@ -1,5 +1,6 @@
 import {
   BookingPayloadItem,
+  HallBookingModeType,
   RecurringOptionType,
   UserRoleType,
 } from '../../../../Shared/Types/GlobalSystemTypes';
@@ -33,12 +34,32 @@ export interface RoleWeeklyBookingQuotaResult {
   weekRangeLabel: string;
 }
 
+export interface RoleWeeklyQuotaConfig {
+  role: UserRoleType;
+  roleLabelVi: string;
+  maxBookingsPerWeek: number;
+}
+
+export interface QrCheckinTimeWindowCheckResult {
+  canScan: boolean;
+  statusCode:
+    | 'OPEN_WINDOW'
+    | 'TOO_EARLY'
+    | 'TOO_LATE_EXPIRED'
+    | 'PENDING_APPROVAL'
+    | 'ALREADY_CHECKED_IN';
+  reasonText: string;
+  earliestCheckinTime: Date;
+  latestCheckinTime: Date;
+}
+
 export interface ScheduleCollisionValidationResult {
   isValid: boolean;
   hasCollision: boolean;
   occurrenceDates: string[];
   occurrenceChecks: OccurrenceCollisionCheckItem[];
   firstConflictMessage: string | null;
+  errorMessage?: string;
   allConflictMessages: string[];
   weeklyQuotaCheck?: RoleWeeklyBookingQuotaResult;
   matchedHallEvent?: BookingPayloadItem | null;
@@ -49,6 +70,30 @@ export const ROLE_WEEKLY_BOOKING_LIMITS: Record<UserRoleType, number> = {
   MANAGER: 8,
   SYS_ADMIN: 25,
 };
+
+export function getRoleWeeklyQuotaConfig(
+  userRole: UserRoleType = 'EMPLOYEE'
+): RoleWeeklyQuotaConfig {
+  if (userRole === 'SYS_ADMIN') {
+    return {
+      role: 'SYS_ADMIN',
+      roleLabelVi: 'System Admin (Toàn quyền • 25 lần/tuần)',
+      maxBookingsPerWeek: ROLE_WEEKLY_BOOKING_LIMITS.SYS_ADMIN,
+    };
+  }
+  if (userRole === 'MANAGER') {
+    return {
+      role: 'MANAGER',
+      roleLabelVi: 'Quản lý (Tối đa 8 lần/tuần)',
+      maxBookingsPerWeek: ROLE_WEEKLY_BOOKING_LIMITS.MANAGER,
+    };
+  }
+  return {
+    role: 'EMPLOYEE',
+    roleLabelVi: 'Nhân viên (Tối đa 3 lần/tuần)',
+    maxBookingsPerWeek: ROLE_WEEKLY_BOOKING_LIMITS.EMPLOYEE,
+  };
+}
 
 export function formatIsoDateString(dateObj: Date): string {
   const year = dateObj.getFullYear();
@@ -115,7 +160,9 @@ export function validateWeeklyRoleBookingQuota(
     ) {
       continue;
     }
-    if ((existing.userEmail || '').trim().toLowerCase() !== normalizedUserEmail) {
+    if (
+      (existing.userEmail || '').trim().toLowerCase() !== normalizedUserEmail
+    ) {
       continue;
     }
 
@@ -132,7 +179,7 @@ export function validateWeeklyRoleBookingQuota(
   }
 
   const requestedOccurrencesInWeekCount = candidateOccurrenceDates.filter(
-    (d) => d >= mondayIso && d <= sundayIso
+    (d: string) => d >= mondayIso && d <= sundayIso
   ).length;
 
   const remainingBookingsInWeekCount = Math.max(
@@ -286,6 +333,85 @@ export function buildNormalizedMeetingDateRange(
   };
 }
 
+// Kiểm tra cửa sổ thời gian quét mã QR Check-in: Trước 30 phút đến Trễ 30 phút so với giờ bắt đầu
+export function validateQrCheckinTimeWindow(
+  booking: BookingPayloadItem,
+  referenceNow: Date = new Date()
+): QrCheckinTimeWindowCheckResult {
+  const dateStr = booking.bookingDateIso || formatIsoDateString(referenceNow);
+  const { earliestCheckinTime, latestCheckinTime } =
+    buildNormalizedMeetingDateRange(
+      dateStr,
+      booking.startTimeIso,
+      booking.endTimeIso
+    );
+
+  if (booking.bookingStatus === 'CHECKED_IN') {
+    return {
+      canScan: false,
+      statusCode: 'ALREADY_CHECKED_IN',
+      reasonText: `Vé ${booking.bookingId} (${booking.nodeId}) đã được quét QR Check-in trước đó.`,
+      earliestCheckinTime,
+      latestCheckinTime,
+    };
+  }
+
+  if (booking.approvalStatus === 'PENDING_APPROVAL') {
+    return {
+      canScan: false,
+      statusCode: 'PENDING_APPROVAL',
+      reasonText: `Yêu cầu đặt vị trí ${booking.nodeId} đang chờ System Admin phê duyệt, chưa thể quét mã QR Check-in!`,
+      earliestCheckinTime,
+      latestCheckinTime,
+    };
+  }
+
+  const nowMs = referenceNow.getTime();
+  const earliestMs = earliestCheckinTime.getTime();
+  const latestMs = latestCheckinTime.getTime();
+
+  const earliestTimeFormatted = earliestCheckinTime.toLocaleTimeString(
+    'vi-VN',
+    {
+      hour: '2-digit',
+      minute: '2-digit',
+    }
+  );
+  const latestTimeFormatted = latestCheckinTime.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  if (nowMs < earliestMs) {
+    const waitMinutes = Math.ceil((earliestMs - nowMs) / 60000);
+    return {
+      canScan: false,
+      statusCode: 'TOO_EARLY',
+      reasonText: `Chưa tới giờ mở quét QR cho vị trí ${booking.nodeId}! Chỉ được quét mã QR từ trước 30 phút (${earliestTimeFormatted}) đến trễ 30 phút (${latestTimeFormatted}) so với giờ bắt đầu (${booking.startTimeIso}). Vui lòng đợi thêm ${waitMinutes} phút.`,
+      earliestCheckinTime,
+      latestCheckinTime,
+    };
+  }
+
+  if (nowMs > latestMs) {
+    return {
+      canScan: false,
+      statusCode: 'TOO_LATE_EXPIRED',
+      reasonText: `Đã quá hạn 30 phút quét mã QR cho vị trí ${booking.nodeId}! Khung giờ cho phép quét QR là từ ${earliestTimeFormatted} đến ${latestTimeFormatted} (giờ bắt đầu: ${booking.startTimeIso}).`,
+      earliestCheckinTime,
+      latestCheckinTime,
+    };
+  }
+
+  return {
+    canScan: true,
+    statusCode: 'OPEN_WINDOW',
+    reasonText: `Đã xác thực Check-in đúng khung giờ quy định (${earliestTimeFormatted} – ${latestTimeFormatted}) và cộng +2 điểm Tín nhiệm!`,
+    earliestCheckinTime,
+    latestCheckinTime,
+  };
+}
+
 // Tìm sự kiện thuê cả Hội trường Tầng 5 (H-01) đã được phê duyệt (APPROVED) trong khung giờ
 export function findApprovedHallEventInSlot(
   candidateDateIso: string,
@@ -348,7 +474,19 @@ export function findApprovedHallEventInSlot(
   return { approvedEvent, pendingEvent };
 }
 
-// Kiểm tra va chạm lịch toàn diện + Quy tắc 2 chế độ Hội trường Tầng 5 + Kiểm tra Phòng ban được phép tham gia
+export function generateQrCheckinToken(
+  roomCode: string,
+  userOrMode: string = 'QR'
+): string {
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  const cleanTag = String(userOrMode)
+    .replace(/[^A-Z0-9-]/gi, '')
+    .slice(0, 8)
+    .toUpperCase();
+  return `QR-SMX-${roomCode.toUpperCase()}-${cleanTag}-${rand}`;
+}
+
+// Overload 1 (9 tham số): Dùng trong BookingService.ts
 export function validateSingleAndRecurringCollision(
   targetNodeId: string,
   baseDateIso: string,
@@ -356,10 +494,64 @@ export function validateSingleAndRecurringCollision(
   endTimeIso: string,
   recurringOption: RecurringOptionType,
   existingBookings: BookingPayloadItem[],
-  currentUserEmail = '',
-  currentUserRole: UserRoleType = 'EMPLOYEE',
-  currentUserDepartment = 'Product & Engineering'
+  currentUserEmail?: string,
+  currentUserRole?: UserRoleType,
+  currentUserDepartment?: string
+): ScheduleCollisionValidationResult;
+
+// Overload 2 (10 tham số): Dùng trong BookingCalendarPages.tsx
+export function validateSingleAndRecurringCollision(
+  targetNodeId: string,
+  userEmail: string,
+  baseDateIso: string,
+  startTimeIso: string,
+  endTimeIso: string,
+  recurringOption: RecurringOptionType,
+  existingBookings: BookingPayloadItem[],
+  currentUserRole?: UserRoleType,
+  bookingMode?: HallBookingModeType,
+  currentUserDepartment?: string
+): ScheduleCollisionValidationResult;
+
+// Hàm thực thi chung xử lý cả 2 dạng gọi 9 hoặc 10 tham số mà không dùng kiểu any
+export function validateSingleAndRecurringCollision(
+  targetNodeId: string,
+  arg2: string,
+  arg3: string,
+  arg4: string,
+  arg5: RecurringOptionType | string,
+  arg6: BookingPayloadItem[] | RecurringOptionType,
+  arg7?: string | BookingPayloadItem[],
+  arg8: UserRoleType = 'EMPLOYEE',
+  arg9?: string,
+  arg10?: string
 ): ScheduleCollisionValidationResult {
+  const isNineArgSignature = Array.isArray(arg6);
+
+  const baseDateIso: string = isNineArgSignature ? arg2 : arg3;
+  const startTimeIso: string = isNineArgSignature ? arg3 : arg4;
+  const endTimeIso: string = isNineArgSignature ? arg4 : String(arg5);
+  const recurringOption: RecurringOptionType = isNineArgSignature
+    ? (arg5 as RecurringOptionType)
+    : (arg6 as RecurringOptionType);
+  const existingBookings: BookingPayloadItem[] = isNineArgSignature
+    ? (arg6 as BookingPayloadItem[])
+    : Array.isArray(arg7)
+    ? arg7
+    : [];
+  const currentUserEmail: string = isNineArgSignature
+    ? typeof arg7 === 'string'
+      ? arg7
+      : ''
+    : arg2;
+  const currentUserRole: UserRoleType = arg8 || 'EMPLOYEE';
+  const explicitMode: HallBookingModeType | undefined = !isNineArgSignature
+    ? (arg9 as HallBookingModeType | undefined)
+    : undefined;
+  const currentUserDepartment: string = isNineArgSignature
+    ? arg9 || 'Product & Engineering'
+    : arg10 || 'Product & Engineering';
+
   const occurrenceDates = generateRecurringOccurrenceDates(
     baseDateIso,
     recurringOption
@@ -369,8 +561,11 @@ export function validateSingleAndRecurringCollision(
   let firstConflictMessage: string | null = null;
   const normalizedCurrentEmail = (currentUserEmail || '').trim().toLowerCase();
 
-  const isHallWholeRoomRental = targetNodeId === 'H-01';
-  const isHallSeatBooking = /^H01-[A-C]\d+$/i.test(targetNodeId);
+  const isHallWholeRoomRental =
+    targetNodeId === 'H-01' || explicitMode === 'HALL_EVENT_RENTAL';
+  const isHallSeatBooking =
+    /^H01-[A-C]\d+$/i.test(targetNodeId) ||
+    explicitMode === 'HALL_SEAT_BOOKING';
 
   let matchedHallEventForFirstDate: BookingPayloadItem | null = null;
 
@@ -381,7 +576,7 @@ export function validateSingleAndRecurringCollision(
     firstConflictMessage = msg;
   }
 
-  occurrenceDates.forEach((candidateDate, idx) => {
+  occurrenceDates.forEach((candidateDate: string, idx: number) => {
     const candidateRange = buildNormalizedMeetingDateRange(
       candidateDate,
       startTimeIso,
@@ -406,7 +601,9 @@ export function validateSingleAndRecurringCollision(
       if (!approvedEvent) {
         conflictCategory = 'HALL_NO_APPROVED_EVENT';
         conflictReasonText = pendingEvent
-          ? `Kỳ #${idx + 1} (${candidateDate}): Hội trường Tầng 5 đang có yêu cầu thuê sự kiện "${pendingEvent.purposeNote}" của Quản lý @${
+          ? `Kỳ #${idx + 1} (${candidateDate}): Hội trường Tầng 5 đang có yêu cầu thuê sự kiện "${
+              pendingEvent.purposeNote
+            }" của Quản lý @${
               pendingEvent.requesterUsername || pendingEvent.userEmail
             } nhưng CHƯA ĐƯỢC ADMIN CHẤP NHẬN. Chỉ khi Admin phê duyệt thuê Hội trường thì mới có thể đặt ghế ngồi!`
           : `Kỳ #${idx + 1} (${candidateDate}): Phòng Hội trường hiện đang không có sự kiện gì để tham gia trong khung giờ (${startTimeIso} – ${endTimeIso})! Chỉ có thể đặt ghế ngồi khi Hội trường đã được Admin hoặc Quản lý thuê tổ chức hoạt động thành công.`;
@@ -417,14 +614,16 @@ export function validateSingleAndRecurringCollision(
           allowedDepts.length === 0 ||
           allowedDepts.includes('ALL') ||
           allowedDepts.some(
-            (d) =>
+            (d: string) =>
               d.trim().toLowerCase() ===
               (currentUserDepartment || '').trim().toLowerCase()
           );
 
         if (!isDeptAllowed) {
           conflictCategory = 'HALL_DEPARTMENT_NOT_ALLOWED';
-          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Sự kiện Hội trường "${approvedEvent.purposeNote}" chỉ dành cho các phòng ban: [${allowedDepts.join(
+          conflictReasonText = `Kỳ #${idx + 1} (${candidateDate}): Sự kiện Hội trường "${
+            approvedEvent.purposeNote
+          }" chỉ dành cho các phòng ban: [${allowedDepts.join(
             ', '
           )}]. Phòng ban hiện tại của bạn (${currentUserDepartment}) không nằm trong danh sách được tham gia sự kiện này!`;
         }
@@ -480,9 +679,7 @@ export function validateSingleAndRecurringCollision(
         }
 
         const isOrganizerBookingSeatInOwnHallEvent =
-          isHallSeatBooking &&
-          existing.nodeId === 'H-01' &&
-          isSameUser;
+          isHallSeatBooking && existing.nodeId === 'H-01' && isSameUser;
 
         if (!isSameRoom && isSameUser && !isOrganizerBookingSeatInOwnHallEvent) {
           matchedConflict = existing;
@@ -530,7 +727,9 @@ export function validateSingleAndRecurringCollision(
 
   const hasCollision =
     (isHallWholeRoomRental && currentUserRole === 'EMPLOYEE') ||
-    occurrenceChecks.some((item) => item.hasConflict) ||
+    occurrenceChecks.some(
+      (item: OccurrenceCollisionCheckItem) => item.hasConflict
+    ) ||
     weeklyQuotaCheck.isQuotaExceeded;
 
   return {
@@ -539,6 +738,7 @@ export function validateSingleAndRecurringCollision(
     occurrenceDates,
     occurrenceChecks,
     firstConflictMessage,
+    errorMessage: firstConflictMessage || undefined,
     allConflictMessages,
     weeklyQuotaCheck,
     matchedHallEvent: matchedHallEventForFirstDate,

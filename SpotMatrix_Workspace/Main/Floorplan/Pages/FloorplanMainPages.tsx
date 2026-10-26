@@ -1611,7 +1611,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                     onNavigateToBookingWithSlot(activeRightPanelNode, {
                       start: selectedSlot.start,
                       end: selectedSlot.end,
-                      hallMode: 'STANDARD_ROOM',
+                      hallMode: 'HALL_EVENT_RENTAL',
                     });
                   }
                 }}

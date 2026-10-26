@@ -88,9 +88,34 @@ export interface BookingCalendarPagesProps {
 }
 
 const HALL_SEAT_CODES = [
-  'H01-A1', 'H01-A2', 'H01-A3', 'H01-A4', 'H01-A5', 'H01-A6', 'H01-A7',
-  'H01-B1', 'H01-B2', 'H01-B3', 'H01-B4', 'H01-B5', 'H01-B6', 'H01-B7', 'H01-B8', 'H01-B9',
-  'H01-C1', 'H01-C2', 'H01-C3', 'H01-C4', 'H01-C5', 'H01-C6', 'H01-C7', 'H01-C8', 'H01-C9', 'H01-C10', 'H01-C11', 'H01-C12',
+  'H01-A1',
+  'H01-A2',
+  'H01-A3',
+  'H01-A4',
+  'H01-A5',
+  'H01-A6',
+  'H01-A7',
+  'H01-B1',
+  'H01-B2',
+  'H01-B3',
+  'H01-B4',
+  'H01-B5',
+  'H01-B6',
+  'H01-B7',
+  'H01-B8',
+  'H01-B9',
+  'H01-C1',
+  'H01-C2',
+  'H01-C3',
+  'H01-C4',
+  'H01-C5',
+  'H01-C6',
+  'H01-C7',
+  'H01-C8',
+  'H01-C9',
+  'H01-C10',
+  'H01-C11',
+  'H01-C12',
 ];
 
 export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
@@ -140,7 +165,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
   const allDepartmentNames = useMemo(() => {
     if (departmentsList.length > 0) {
-      return departmentsList.map((d) => d.departmentName);
+      return departmentsList.map(
+        (d: OrganizationDepartmentItem) => d.departmentName
+      );
     }
     return [
       'System Governance',
@@ -173,7 +200,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const quotaInfo = useMemo(() => {
     const config = getRoleWeeklyQuotaConfig(userRole);
     const activeMyBookings = bookingsList.filter(
-      (b) =>
+      (b: BookingPayloadItem) =>
         b.userEmail.toLowerCase() === userEmail.toLowerCase() &&
         b.bookingStatus !== 'CANCELLED' &&
         b.approvalStatus !== 'REJECTED'
@@ -185,9 +212,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   }, [userRole, userEmail, bookingsList]);
 
   const handleToggleAllowedDepartment = (deptName: string) => {
-    setAllowedDepartments((prev) =>
+    setAllowedDepartments((prev: string[]) =>
       prev.includes(deptName)
-        ? prev.filter((d) => d !== deptName)
+        ? prev.filter((d: string) => d !== deptName)
         : [...prev, deptName]
     );
   };
@@ -195,7 +222,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const handleScrollBookingList = (direction: 'DOWN' | 'TOP') => {
     if (!bookingScrollContainerRef.current) return;
     if (direction === 'TOP') {
-      bookingScrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      bookingScrollContainerRef.current.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
     } else {
       bookingScrollContainerRef.current.scrollBy({
         top: 180,
@@ -317,8 +347,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Phòng ban của bạn: <strong className="text-indigo-500">{userDepartment}</strong> •
-            Khung giờ cho phép quét mã QR Check-in: <strong>Trước 30 phút đến Trễ tối đa 30 phút</strong> so với giờ bắt đầu.
+            Phòng ban của bạn:{' '}
+            <strong className="text-indigo-500">{userDepartment}</strong> • Khung
+            giờ cho phép quét mã QR Check-in:{' '}
+            <strong>Trước 30 phút đến Trễ tối đa 30 phút</strong> so với giờ bắt
+            đầu.
           </p>
         </div>
 
@@ -410,13 +443,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     H-01 — Hội trường Lớn Đấu Trường La Mã (Tầng 5 • 30 chỗ)
                   </option>
                 </optgroup>
-                {[1, 2, 3, 4].map((fl) => (
+                {[1, 2, 3, 4].map((fl: number) => (
                   <optgroup key={fl} label={`Tầng ${fl} — 6 Phòng Họp Chuẩn`}>
                     {workspaceNodes
-                      .filter((n) => n.floorLevel === fl)
-                      .map((room) => (
+                      .filter((n: WorkspaceNodeItem) => n.floorLevel === fl)
+                      .map((room: WorkspaceNodeItem) => (
                         <option key={room.nodeCode} value={room.nodeCode}>
-                          [{`Tầng ${fl}`}] {room.nodeCode} — {room.nodeLabel} ({room.capacityCount}P)
+                          [{`Tầng ${fl}`}] {room.nodeCode} — {room.nodeLabel} (
+                          {room.capacityCount}P)
                         </option>
                       ))}
                   </optgroup>
@@ -452,7 +486,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
-                  Chế độ Sử dụng Hội trường Tầng 5 (Phân quyền theo Role: {userRole})
+                  Chế độ Sử dụng Hội trường Tầng 5 (Phân quyền theo Role:{' '}
+                  {userRole})
                 </span>
               </div>
 
@@ -475,7 +510,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     <span className="text-xs font-extrabold">
                       Dạng 1: Thuê Cả Hội Trường (H-01)
                     </span>
-                    {userRole === 'EMPLOYEE' && <Lock className="w-3.5 h-3.5" />}
+                    {userRole === 'EMPLOYEE' && (
+                      <Lock className="w-3.5 h-3.5" />
+                    )}
                   </div>
                   <p
                     className={`text-[11px] mt-1 ${
@@ -516,7 +553,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         : 'text-slate-400'
                     }`}
                   >
-                    Chỉ mở đặt ghế khi Hội trường đã có sự kiện được duyệt & đúng phòng ban
+                    Chỉ mở đặt ghế khi Hội trường đã có sự kiện được duyệt &
+                    đúng phòng ban
                   </p>
                 </button>
               </div>
@@ -525,10 +563,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <div className="space-y-2 pt-2 border-t border-indigo-200/50 dark:border-slate-800">
                   <label className="text-xs font-extrabold flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                    Chọn các Phòng ban được phép tham gia & đặt ghế tại sự kiện này:
+                    Chọn các Phòng ban được phép tham gia & đặt ghế tại sự kiện
+                    này:
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {allDepartmentNames.map((dept) => {
+                    {allDepartmentNames.map((dept: string) => {
                       const checked = allowedDepartments.includes(dept);
                       return (
                         <button
@@ -550,7 +589,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     })}
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    * Nhân sự thuộc phòng ban được tick mới có thể đặt ghế ngồi; các phòng ban không được chọn sẽ bị chặn đặt ghế (System Admin luôn có toàn quyền).
+                    * Nhân sự thuộc phòng ban được tick mới có thể đặt ghế ngồi;
+                    các phòng ban không được chọn sẽ bị chặn đặt ghế (System
+                    Admin luôn có toàn quyền).
                   </p>
                 </div>
               ) : (
@@ -568,7 +609,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                           : 'bg-white border-slate-300 text-teal-700'
                       }`}
                     >
-                      {HALL_SEAT_CODES.map((sc) => (
+                      {HALL_SEAT_CODES.map((sc: string) => (
                         <option key={sc} value={sc}>
                           Ghế {sc}
                         </option>
@@ -579,7 +620,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                   {activeHallEventLookup.approvedEvent ? (
                     <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-xs">
                       <p className="font-extrabold text-teal-700 dark:text-teal-300">
-                        Sự kiện đang mở: “{activeHallEventLookup.approvedEvent.purposeNote}”
+                        Sự kiện đang mở: “
+                        {activeHallEventLookup.approvedEvent.purposeNote}”
                       </p>
                       <p className="text-[11px] text-slate-500 mt-0.5">
                         Phòng ban được tham gia:{' '}
@@ -592,8 +634,10 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     </div>
                   ) : (
                     <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-600 dark:text-rose-300 font-bold">
-                      Hiện khung giờ ({startTimeIso} – {endTimeIso}) ngày {bookingDateIso}{' '}
-                      KHÔNG CÓ SỰ KIỆN NÀO ĐƯỢC DUYỆT tại Hội trường! Nếu bấm đặt ghế, hệ thống sẽ chặn và thông báo phòng hiện không có sự kiện để tham gia.
+                      Hiện khung giờ ({startTimeIso} – {endTimeIso}) ngày{' '}
+                      {bookingDateIso} KHÔNG CÓ SỰ KIỆN NÀO ĐƯỢC DUYỆT tại Hội
+                      trường! Nếu bấm đặt ghế, hệ thống sẽ chặn và thông báo
+                      phòng hiện không có sự kiện để tham gia.
                     </div>
                   )}
                 </div>
@@ -717,8 +761,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 ref={bookingScrollContainerRef}
                 className="space-y-3 max-h-[390px] overflow-y-auto pr-1 pb-12 scroll-smooth"
               >
-                {bookingsList.map((bk) => {
-                  const qrWindowStatus = validateQrCheckinTimeWindow(bk, new Date());
+                {bookingsList.map((bk: BookingPayloadItem) => {
+                  const qrWindowStatus = validateQrCheckinTimeWindow(
+                    bk,
+                    new Date()
+                  );
                   const isCheckedIn = bk.bookingStatus === 'CHECKED_IN';
                   const isPending = bk.approvalStatus === 'PENDING_APPROVAL';
 
@@ -754,7 +801,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                                 {bk.startTimeIso} – {bk.endTimeIso}
                               </strong>
                             </span>
-                            <span>• {bk.departmentName || 'Product & Engineering'}</span>
+                            <span>
+                              • {bk.departmentName || 'Product & Engineering'}
+                            </span>
                           </p>
                         </div>
 

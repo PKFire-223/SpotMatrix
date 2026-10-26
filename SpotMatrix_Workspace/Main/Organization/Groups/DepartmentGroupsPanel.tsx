@@ -16,7 +16,7 @@ import {
   OrganizationGroupItem,
   UserRoleType,
   UserTrustProfileItem,
-} from '../../../../Shared/Types/GlobalSystemTypes';
+} from '../../../Shared/Types/GlobalSystemTypes';
 
 export interface DepartmentGroupsPanelProps {
   parentDepartment: OrganizationDepartmentItem;
@@ -53,7 +53,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
   // Lọc danh sách nhóm con thuộc đúng Phòng ban đang chọn + quyền hiển thị theo Role
   const departmentGroups = useMemo(() => {
     const q = groupSearchQuery.trim().toLowerCase();
-    return groupsList.filter((g) => {
+    return groupsList.filter((g: OrganizationGroupItem) => {
       const sameDept =
         g.departmentName.trim().toLowerCase() ===
         parentDepartment.departmentName.trim().toLowerCase();
@@ -63,7 +63,8 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
       if (!isSysAdmin) {
         const isMyGroup =
           g.memberEmails.some(
-            (em) => em.trim().toLowerCase() === userEmail.trim().toLowerCase()
+            (em: string) =>
+              em.trim().toLowerCase() === userEmail.trim().toLowerCase()
           ) ||
           g.leaderEmail.trim().toLowerCase() === userEmail.trim().toLowerCase();
         if (!isMyGroup) return false;
@@ -87,17 +88,23 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
 
   // Quy tắc ẩn Admin: Role khác không nhìn thấy tài khoản SYS_ADMIN trong danh sách
   const visibleMembersForRole = useMemo(() => {
-    return allMembers.filter((m) => isSysAdmin || m.role !== 'SYS_ADMIN');
+    return allMembers.filter(
+      (m: UserTrustProfileItem) => isSysAdmin || m.role !== 'SYS_ADMIN'
+    );
   }, [allMembers, isSysAdmin]);
 
   const activeModalGroup = useMemo(() => {
     if (!activeAddMemberGroupId) return null;
-    return groupsList.find((g) => g.groupId === activeAddMemberGroupId) || null;
+    return (
+      groupsList.find(
+        (g: OrganizationGroupItem) => g.groupId === activeAddMemberGroupId
+      ) || null
+    );
   }, [groupsList, activeAddMemberGroupId]);
 
   const filteredModalCandidates = useMemo(() => {
     const q = memberModalSearch.trim().toLowerCase();
-    return visibleMembersForRole.filter((m) => {
+    return visibleMembersForRole.filter((m: UserTrustProfileItem) => {
       if (!q) return true;
       return (
         m.fullName.toLowerCase().includes(q) ||
@@ -113,7 +120,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
         <div>
           <h4 className="text-xs font-extrabold uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
             <Layers className="w-4 h-4" />
-            2. Các Nhóm Chuyên biệt trực thuộc Phòng ban “
+            Các Nhóm Chuyên biệt trực thuộc Phòng ban “
             {parentDepartment.departmentName}” ({departmentGroups.length})
           </h4>
           <p className="text-[11px] text-slate-400 mt-0.5">
@@ -176,12 +183,14 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {departmentGroups.map((grp) => {
-            const groupMembers = visibleMembersForRole.filter((m) =>
-              grp.memberEmails.some(
-                (em) =>
-                  em.trim().toLowerCase() === m.userEmail.trim().toLowerCase()
-              )
+          {departmentGroups.map((grp: OrganizationGroupItem) => {
+            // Lọc thành viên trong nhóm thuộc đúng phòng ban và tuân thủ quy tắc ẩn Admin với role khác
+            const groupMembers = visibleMembersForRole.filter(
+              (m: UserTrustProfileItem) =>
+                grp.memberEmails.some(
+                  (em: string) =>
+                    em.trim().toLowerCase() === m.userEmail.trim().toLowerCase()
+                )
             );
 
             return (
@@ -255,7 +264,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                           Chưa có thành viên
                         </span>
                       ) : (
-                        groupMembers.map((mem) => (
+                        groupMembers.map((mem: UserTrustProfileItem) => (
                           <span
                             key={mem.userEmail}
                             className={`px-2.5 py-1 rounded-full text-[11px] font-bold border inline-flex items-center gap-1.5 ${
@@ -273,7 +282,10 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                               <button
                                 type="button"
                                 onClick={() =>
-                                  onToggleGroupMember(grp.groupId, mem.userEmail)
+                                  onToggleGroupMember(
+                                    grp.groupId,
+                                    mem.userEmail
+                                  )
                                 }
                                 className="ml-0.5 text-slate-400 hover:text-rose-500"
                                 title="Gỡ khỏi nhóm"
@@ -357,12 +369,12 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {filteredModalCandidates.map((candidate) => {
+              {filteredModalCandidates.map((candidate: UserTrustProfileItem) => {
                 const isSameDept =
                   candidate.departmentName.trim().toLowerCase() ===
                   activeModalGroup.departmentName.trim().toLowerCase();
                 const isAlreadyInGroup = activeModalGroup.memberEmails.some(
-                  (em) =>
+                  (em: string) =>
                     em.trim().toLowerCase() ===
                     candidate.userEmail.trim().toLowerCase()
                 );
