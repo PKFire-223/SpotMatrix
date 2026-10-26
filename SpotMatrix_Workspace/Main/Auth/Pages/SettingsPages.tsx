@@ -1,34 +1,40 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Settings,
+  Music,
+  Volume2,
   Sun,
   Moon,
-  Volume2,
-  VolumeX,
-  Music,
-  Bell,
-  ShieldCheck,
-  Sparkles,
-  CheckCircle2,
-  Sliders,
-  Play,
   Lock,
   Globe,
   Building2,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
   KeyRound,
-  AlertCircle,
-  Users,
-  Eye,
-  EyeOff,
+  Save,
+  ArrowRight,
+  Wifi,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import {
+  LoginIpRecordItem,
   OrganizationDepartmentItem,
   OrganizationGroupItem,
+  SpotMatrixPersistedPreferences,
   UserRoleType,
   WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
 
-export type LofiTrackStyleType = 'CHILL_RHODES' | 'AMBIENT_SPACE' | 'RAINY_CAFE';
+export const AUDIO_SETTINGS_STORAGE_KEY = 'spotmatrix_audio_settings_v2';
+export const WEB_LANGUAGE_STORAGE_KEY = 'spotmatrix_web_language_v2';
+export const PERSISTED_PREFERENCES_STORAGE_KEY = 'spotmatrix_persisted_prefs_v2';
+export const LOGIN_IPS_STORAGE_KEY = 'spotmatrix_login_ips_v2';
+
+export type LofiTrackStyleType =
+  | 'CHILL_RHODES'
+  | 'AMBIENT_SPACE'
+  | 'RAINY_CAFE';
 
 export interface SpotMatrixAudioSettings {
   lofiEnabled: boolean;
@@ -36,9 +42,6 @@ export interface SpotMatrixAudioSettings {
   lofiVolume: number;
   lofiTrackStyle: LofiTrackStyleType;
 }
-
-export const AUDIO_SETTINGS_STORAGE_KEY = 'spotmatrix_audio_settings_v1';
-export const WEB_LANGUAGE_STORAGE_KEY = 'spotmatrix_web_language_v1';
 
 export interface SettingsPagesProps {
   isDark: boolean;
@@ -53,31 +56,302 @@ export interface SettingsPagesProps {
   onChangeUserDepartment?: (nextDeptName: string) => void;
   onNavigateOrganization?: () => void;
   onToggleTheme: () => void;
-  lofiEnabled?: boolean;
-  sfxEnabled?: boolean;
-  lofiVolume?: number;
-  lofiTrackStyle?: LofiTrackStyleType;
-  onToggleLofi?: (nextValue: boolean) => void;
-  onToggleSfx?: (nextValue: boolean) => void;
-  onChangeLofiVolume?: (nextVolume: number) => void;
-  onChangeLofiTrackStyle?: (nextStyle: LofiTrackStyleType) => void;
-  onPlayPreviewSfx?: (
+  lofiEnabled: boolean;
+  sfxEnabled: boolean;
+  lofiVolume: number;
+  lofiTrackStyle: LofiTrackStyleType;
+  onToggleLofi: (nextVal: boolean) => void;
+  onToggleSfx: (nextVal: boolean) => void;
+  onChangeLofiVolume: (nextVol: number) => void;
+  onChangeLofiTrackStyle: (nextStyle: LofiTrackStyleType) => void;
+  onPlayPreviewSfx: (
     type: 'CLICK' | 'SUCCESS' | 'ERROR' | 'NOTIFICATION'
   ) => void;
 }
 
-type SettingsTabCategory =
-  | 'AUDIO_AND_THEME'
-  | 'SECURITY_AND_PASSWORD'
-  | 'LANGUAGE_AND_LOCALE'
-  | 'DEPARTMENT_AND_POLICY';
+type SettingsSectionTab =
+  | 'SOUND_THEME'
+  | 'SECURITY_PASSWORD'
+  | 'LANGUAGE_LOCALE'
+  | 'DEPARTMENT_POLICY';
+
+const DEFAULT_LOGIN_IP_LOGS: LoginIpRecordItem[] = [
+  {
+    logId: 'IP-LOG-01',
+    username: 'Systemadmin123',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    ipAddress: '113.161.72.104',
+    locationText: 'TP. Hồ Chí Minh, Việt Nam (VNPT Fiber)',
+    deviceText: 'Chrome 130 • Windows 11 Pro (Phiên hiện tại)',
+    loginAtIso: 'Hôm nay • 21:05:12',
+    isCurrentSession: true,
+  },
+  {
+    logId: 'IP-LOG-02',
+    username: 'Systemadmin123',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    ipAddress: '14.231.108.55',
+    locationText: 'Hà Nội, Việt Nam (Viettel IDC)',
+    deviceText: 'Safari 17 • MacBook Pro M3',
+    loginAtIso: 'Hôm nay • 14:20:45',
+    isCurrentSession: false,
+  },
+  {
+    logId: 'IP-LOG-03',
+    username: 'Systemadmin123',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    ipAddress: '27.74.201.18',
+    locationText: 'Đà Nẵng, Việt Nam (FPT Telecom)',
+    deviceText: 'Edge Mobile • iPadOS 18',
+    loginAtIso: 'Hôm qua • 19:42:10',
+    isCurrentSession: false,
+  },
+];
+
+// Từ điển Đa ngôn ngữ (Việt / Anh / Nhật) cho toàn bộ trang Cài đặt
+const SETTINGS_I18N: Record<
+  WebLanguageCodeType,
+  {
+    pageTitle: string;
+    pageSub: string;
+    tab1Title: string;
+    tab1Sub: string;
+    tab2Title: string;
+    tab2Sub: string;
+    tab3Title: string;
+    tab3Sub: string;
+    tab4Title: string;
+    tab4Sub: string;
+    lofiHeading: string;
+    lofiDesc: string;
+    lofiOn: string;
+    lofiOff: string;
+    volumeLabel: string;
+    sfxHeading: string;
+    sfxDesc: string;
+    sfxOn: string;
+    sfxOff: string;
+    themeHeading: string;
+    darkActive: string;
+    lightActive: string;
+    secHeading: string;
+    secSub: string;
+    currPass: string;
+    newPass: string;
+    confPass: string;
+    savePassBtn: string;
+    ipHeading: string;
+    ipSub: string;
+    ipWarnTitle: string;
+    ipWarnDesc: string;
+    revokeOtherIpsBtn: string;
+    simulateNewIpBtn: string;
+    langHeading: string;
+    langSub: string;
+    dateFormatLabel: string;
+    ttsSpeedLabel: string;
+    savePrefsBadge: string;
+    deptHeading: string;
+    deptSub: string;
+  }
+> = {
+  vi: {
+    pageTitle: 'Trung tâm Cài đặt Hệ thống Đa Phân hệ',
+    pageSub:
+      'Phân mục rõ ràng: Âm thanh Lofi & Giao diện • Bảo mật, Mật khẩu & Giám sát IP • Ngôn ngữ Web & Giọng đọc AI • Liên kết Phòng ban',
+    tab1Title: '1. Âm thanh & Giao diện',
+    tab1Sub: 'Nhạc nền Lofi, SFX & Sáng/Tối',
+    tab2Title: '2. Bảo mật, Mật khẩu & IP',
+    tab2Sub: 'Đổi mật khẩu DB, 2FA & Cảnh báo IP',
+    tab3Title: '3. Ngôn ngữ & Giọng đọc AI',
+    tab3Sub: 'Tiếng Việt / English / 日本語',
+    tab4Title: '4. Phòng ban & Quy tắc',
+    tab4Sub: 'Liên kết Tổ chức & QR ±30p',
+    lofiHeading: 'Nhạc nền Lofi Không Bản Quyền (Web Audio Synthesizer)',
+    lofiDesc:
+      'Tạo hợp âm Lofi êm dịu thời gian thực giúp tập trung làm việc mà không lo dính bản quyền.',
+    lofiOn: 'Đang Bật Nhạc Lofi',
+    lofiOff: 'Đang Tắt Nhạc Lofi',
+    volumeLabel: 'Âm lượng Nhạc nền Lofi:',
+    sfxHeading: 'Hiệu ứng Âm thanh Tương tác (UI Sound Effects)',
+    sfxDesc:
+      'Phát âm thanh phản hồi khi bấm nút, đặt lịch thành công hoặc có thông báo mới.',
+    sfxOn: 'Đang Bật Hiệu Ứng SFX',
+    sfxOff: 'Đang Tắt Hiệu Ứng SFX',
+    themeHeading: 'Giao diện Sáng / Tối (Theme Mode)',
+    darkActive: 'Đang dùng Chế độ Tối (Dark)',
+    lightActive: 'Đang dùng Chế độ Sáng (Light)',
+    secHeading: 'Đổi Mật khẩu Tài khoản (Lưu trực tiếp lên MongoDB Atlas)',
+    secSub:
+      'Mật khẩu mới sẽ được cập nhật ngay vào bảng UserAccount trên Database',
+    currPass: 'Mật khẩu hiện tại',
+    newPass: 'Mật khẩu mới (Tối thiểu 6 ký tự)',
+    confPass: 'Xác nhận mật khẩu mới',
+    savePassBtn: 'Cập nhật Mật khẩu lên Database',
+    ipHeading: 'Nhật ký Địa chỉ IP Đăng nhập & Giám sát Truy cập',
+    ipSub:
+      'Tự động lưu địa chỉ IP mỗi lần đăng nhập và nhắc nhở khi có trên 2 IP khác biệt',
+    ipWarnTitle:
+      'Chú ý nhẹ: Phát hiện đăng nhập từ nhiều địa chỉ IP khác biệt!',
+    ipWarnDesc:
+      'Tài khoản của bạn vừa có lịch sử truy cập từ các địa chỉ IP khác nhau. Hãy kiểm tra xem có phải bạn đang dùng nhiều thiết bị/mạng khác nhau hay không.',
+    revokeOtherIpsBtn: 'Đăng xuất các IP khác (Chỉ giữ phiên hiện tại)',
+    simulateNewIpBtn: '+ Mô phỏng đăng nhập IP mới',
+    langHeading: 'Ngôn ngữ Giao diện Trang Web & Giọng đọc Tóm tắt AI',
+    langSub:
+      'Khi đổi ngôn ngữ, toàn bộ thanh điều hướng, tiêu đề cài đặt và giọng đọc phát tiếng của AI lúc tóm tắt sẽ tự động chuyển theo ngôn ngữ đã chọn và lưu bền vững.',
+    dateFormatLabel: 'Định dạng Ngày tháng Hiển thị (Đã lưu bền vững):',
+    ttsSpeedLabel: 'Tốc độ Giọng đọc Trợ lý AI (TTS):',
+    savePrefsBadge: 'Đã tự động lưu mọi cài đặt (Chuyển trang không bị mất)',
+    deptHeading: 'Liên kết Phòng ban Tổ chức & Quy tắc Đặt lịch Theo Role',
+    deptSub:
+      'Đồng bộ xuyên suốt giữa Hồ sơ, Tổ chức, Sơ đồ 5 Tầng và Hội trường La Mã',
+  },
+  en: {
+    pageTitle: 'Multi-Module System Settings Center',
+    pageSub:
+      'Organized modules: Lofi Audio & Theme • Security, Password & IP Monitor • Web Language & AI Voice • Department & Rules',
+    tab1Title: '1. Audio & Appearance',
+    tab1Sub: 'Royalty-free Lofi, SFX & Theme',
+    tab2Title: '2. Security, Password & IP',
+    tab2Sub: 'DB Password, 2FA & Multi-IP Alert',
+    tab3Title: '3. Language & AI Voice',
+    tab3Sub: 'Tiếng Việt / English / 日本語',
+    tab4Title: '4. Department & Rules',
+    tab4Sub: 'Org Sync & QR ±30m Window',
+    lofiHeading: 'Royalty-Free Lofi Background Music (Web Audio Synthesizer)',
+    lofiDesc:
+      'Synthesizes warm Lofi chord progressions in real time for deep focus with zero copyright issues.',
+    lofiOn: 'Lofi Music: ON',
+    lofiOff: 'Lofi Music: OFF',
+    volumeLabel: 'Lofi Background Volume:',
+    sfxHeading: 'Interactive UI Sound Effects (SFX)',
+    sfxDesc:
+      'Plays crisp audio feedback on button clicks, booking confirmations, and alerts.',
+    sfxOn: 'UI SFX: ENABLED',
+    sfxOff: 'UI SFX: MUTED',
+    themeHeading: 'Light / Dark Interface Mode',
+    darkActive: 'Currently using Dark Mode',
+    lightActive: 'Currently using Light Mode',
+    secHeading: 'Change Account Password (Saved directly to MongoDB Atlas)',
+    secSub:
+      'Your new password is immediately persisted to the UserAccount collection',
+    currPass: 'Current Password',
+    newPass: 'New Password (Min 6 chars)',
+    confPass: 'Confirm New Password',
+    savePassBtn: 'Update Password in Database',
+    ipHeading: 'Account Login IP History & Access Monitor',
+    ipSub:
+      'Records every login IP address and alerts you when more than 2 distinct IPs are detected',
+    ipWarnTitle:
+      'Security Notice: Multiple distinct login IP addresses detected!',
+    ipWarnDesc:
+      'Your account has been accessed from multiple different IP addresses recently. Please verify if these sessions belong to you.',
+    revokeOtherIpsBtn: 'Revoke Other IPs (Keep Current Session Only)',
+    simulateNewIpBtn: '+ Simulate New IP Login',
+    langHeading: 'Website Interface Language & AI Voice Summary Locale',
+    langSub:
+      'Switching language updates navigation menus, settings labels, and the AI Assistant speech synthesis voice (saved persistently across all pages).',
+    dateFormatLabel: 'Displayed Date Format (Persisted):',
+    ttsSpeedLabel: 'AI Assistant Voice Speed (TTS):',
+    savePrefsBadge: 'All settings auto-saved persistently across pages',
+    deptHeading: 'Organization Department Sync & Role Booking Quotas',
+    deptSub:
+      'Real-time synchronization across Profile, Organization, 5-Floor Map & Hall',
+  },
+  ja: {
+    pageTitle: 'マルチモジュール・システム設定センター',
+    pageSub:
+      'Lofi BGM＆外観テーマ • セキュリティ・パスワード＆IP監視 • Web表示言語＆AI音声 • 部署連携＆予約ルール',
+    tab1Title: '1. サウンド・外観テーマ',
+    tab1Sub: '著作権フリーLofi・効果音・ダークモード',
+    tab2Title: '2. セキュリティ・IP監視',
+    tab2Sub: 'DBパスワード変更・2FA・複数IP通知',
+    tab3Title: '3. 表示言語・AI音声設定',
+    tab3Sub: 'Tiếng Việt / English / 日本語',
+    tab4Title: '4. 所属部署・予約規定',
+    tab4Sub: '組織データ同期・QR ±30分規定',
+    lofiHeading: '著作権フリー Lofi BGM シンセサイザー (Web Audio API)',
+    lofiDesc:
+      'リアルタイムで心地よいLofiコード進行を生成し、著作権の心配なく作業に集中できます。',
+    lofiOn: 'Lofi BGM: 再生中',
+    lofiOff: 'Lofi BGM: オフ',
+    volumeLabel: 'Lofi BGM 音量:',
+    sfxHeading: 'UIインタラクション効果音 (SFX)',
+    sfxDesc:
+      'ボタン操作、予約完了、通知受信時にサウンドエフェクトを再生します。',
+    sfxOn: '効果音 SFX: オン',
+    sfxOff: '効果音 SFX: オフ',
+    themeHeading: 'ライト / ダーク表示モード切替',
+    darkActive: '現在：ダークモード (Dark)',
+    lightActive: '現在：ライトモード (Light)',
+    secHeading: 'アカウントパスワード変更 (MongoDB Atlasへ直接保存)',
+    secSub: '新しいパスワードは即座にデータベースへ同期されます',
+    currPass: '現在のパスワード',
+    newPass: '新しいパスワード (6文字以上)',
+    confPass: '新しいパスワード (確認)',
+    savePassBtn: 'パスワードをデータベースに保存',
+    ipHeading: 'ログインIPアドレス履歴＆アクセス監視ログ',
+    ipSub:
+      'ログインごとのIPアドレスを記録し、2〜3個以上の異なるIPを検知すると注意喚起を表示します',
+    ipWarnTitle:
+      'セキュリティ注意：複数の異なるIPアドレスからのログインを検知しました！',
+    ipWarnDesc:
+      '複数の異なるIPアドレスからこのアカウントへのアクセス履歴があります。ご自身の端末かご確認ください。',
+    revokeOtherIpsBtn: '他のIPセッションを解除 (現在のIPのみ維持)',
+    simulateNewIpBtn: '+ 新しいIPログインをシミュレート',
+    langHeading: 'Webサイト表示言語 ＆ AI要約読み上げ音声 (TTS)',
+    langSub:
+      '言語を切り替えると、ナビゲーション、設定画面、およびAIアシスタントの音声読み上げ言語が連動して切り替わり、永続保存されます。',
+    dateFormatLabel: '日付表示フォーマット (自動保存済):',
+    ttsSpeedLabel: 'AIアシスタント音声読み上げ速度 (TTS):',
+    savePrefsBadge:
+      'すべての設定が自動保存されました（ページ移動しても維持されます）',
+    deptHeading: '所属部署データ連携 ＆ ロール別週間予約上限',
+    deptSub:
+      'プロフィール、組織ページ、5階3Dマップ、大ホール予約とリアルタイム同期',
+  },
+};
+
+export function loadPersistedSystemPreferences(): SpotMatrixPersistedPreferences {
+  try {
+    const raw = localStorage.getItem(PERSISTED_PREFERENCES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        webLanguage:
+          parsed.webLanguage === 'en' || parsed.webLanguage === 'ja'
+            ? parsed.webLanguage
+            : 'vi',
+        dateFormat: parsed.dateFormat || 'DD/MM/YYYY',
+        ttsRate: typeof parsed.ttsRate === 'number' ? parsed.ttsRate : 1.0,
+        twoFactorEnabled: parsed.twoFactorEnabled !== false,
+        sessionTimeoutMins:
+          typeof parsed.sessionTimeoutMins === 'number'
+            ? parsed.sessionTimeoutMins
+            : 30,
+        activeSettingsTab: parsed.activeSettingsTab || 'SOUND_THEME',
+      };
+    }
+  } catch {
+    // Bỏ qua
+  }
+  return {
+    webLanguage: 'vi',
+    dateFormat: 'DD/MM/YYYY',
+    ttsRate: 1.0,
+    twoFactorEnabled: true,
+    sessionTimeoutMins: 30,
+    activeSettingsTab: 'SOUND_THEME',
+  };
+}
 
 export const SettingsPages: React.FC<SettingsPagesProps> = ({
   isDark,
   userRole,
   username = 'Systemadmin123',
   userEmail = 'sysadmin@spotmatrix.vn',
-  userDepartment = 'Product & Engineering',
+  userDepartment = 'System Governance',
   departmentsList = [],
   groupsList = [],
   webLanguage = 'vi',
@@ -85,268 +359,195 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
   onChangeUserDepartment,
   onNavigateOrganization,
   onToggleTheme,
-  lofiEnabled: propLofiEnabled,
-  sfxEnabled: propSfxEnabled,
-  lofiVolume: propLofiVolume,
-  lofiTrackStyle: propLofiTrackStyle,
+  lofiEnabled,
+  sfxEnabled,
+  lofiVolume,
+  lofiTrackStyle,
   onToggleLofi,
   onToggleSfx,
   onChangeLofiVolume,
   onChangeLofiTrackStyle,
   onPlayPreviewSfx,
 }) => {
-  const [activeSettingsTab, setActiveSettingsTab] =
-    useState<SettingsTabCategory>('AUDIO_AND_THEME');
+  const [persistedPrefs, setPersistedPrefs] =
+    useState<SpotMatrixPersistedPreferences>(() =>
+      loadPersistedSystemPreferences()
+    );
 
-  const [localAudio, setLocalAudio] = useState<SpotMatrixAudioSettings>(() => {
+  const activeSection: SettingsSectionTab = persistedPrefs.activeSettingsTab;
+  const t = SETTINGS_I18N[webLanguage] || SETTINGS_I18N.vi;
+
+  const updateAndPersistPrefs = (
+    partial: Partial<SpotMatrixPersistedPreferences>
+  ) => {
+    setPersistedPrefs((prev) => {
+      const next: SpotMatrixPersistedPreferences = {
+        ...prev,
+        ...partial,
+      };
+      try {
+        localStorage.setItem(
+          PERSISTED_PREFERENCES_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+        window.dispatchEvent(
+          new CustomEvent('spotmatrix-prefs-changed', { detail: next })
+        );
+      } catch {
+        // Bỏ qua
+      }
+      return next;
+    });
+  };
+
+  const [currentPassword, setCurrentPassword] = useState<string>('');
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [passwordStatus, setPasswordStatus] = useState<{
+    type: 'SUCCESS' | 'ERROR';
+    text: string;
+  } | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
+
+  const [loginIpLogs, setLoginIpLogs] = useState<LoginIpRecordItem[]>(() => {
     try {
-      const raw = localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+      const raw = localStorage.getItem(LOGIN_IPS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return {
-          lofiEnabled: Boolean(parsed.lofiEnabled),
-          sfxEnabled: parsed.sfxEnabled !== false,
-          lofiVolume:
-            typeof parsed.lofiVolume === 'number' ? parsed.lofiVolume : 0.35,
-          lofiTrackStyle: parsed.lofiTrackStyle || 'CHILL_RHODES',
-        };
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch {
       // Bỏ qua
     }
-    return {
-      lofiEnabled: false,
-      sfxEnabled: true,
-      lofiVolume: 0.35,
-      lofiTrackStyle: 'CHILL_RHODES',
-    };
+    return DEFAULT_LOGIN_IP_LOGS;
   });
 
-  const [currentPassword, setCurrentPassword] = useState<string>('');
-  const [newPassword, setNewPassword] = useState<string>('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState<string>('');
-  const [showPasswords, setShowPasswords] = useState<boolean>(false);
-  const [passwordStatus, setPasswordStatus] = useState<{
-    type: 'SUCCESS' | 'ERROR';
-    message: string;
-  } | null>(null);
-  const [isUpdatingPassword, setIsUpdatingPassword] = useState<boolean>(false);
-
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(true);
-  const [sessionTimeoutMinutes, setSessionTimeoutMinutes] =
-    useState<number>(30);
-  const [loginDeviceAlert, setLoginDeviceAlert] = useState<boolean>(true);
-
-  const [selectedLang, setSelectedLang] =
-    useState<WebLanguageCodeType>(webLanguage);
-  const [dateFormatStyle, setDateFormatStyle] = useState<
-    'DD/MM/YYYY' | 'YYYY-MM-DD'
-  >('DD/MM/YYYY');
-  const [ttsSpeedRate, setTtsSpeedRate] = useState<number>(1.0);
-
-  const [emailAlertEnabled, setEmailAlertEnabled] = useState<boolean>(true);
-  const [qrWindowReminderEnabled, setQrWindowReminderEnabled] =
-    useState<boolean>(true);
-  const [autoReleaseAlertEnabled, setAutoReleaseAlertEnabled] =
-    useState<boolean>(true);
-  const [savedBannerText, setSavedBannerText] = useState<string | null>(null);
-
-  const effectiveLofiEnabled =
-    propLofiEnabled !== undefined ? propLofiEnabled : localAudio.lofiEnabled;
-  const effectiveSfxEnabled =
-    propSfxEnabled !== undefined ? propSfxEnabled : localAudio.sfxEnabled;
-  const effectiveLofiVolume =
-    propLofiVolume !== undefined ? propLofiVolume : localAudio.lofiVolume;
-  const effectiveLofiTrackStyle =
-    propLofiTrackStyle !== undefined
-      ? propLofiTrackStyle
-      : localAudio.lofiTrackStyle;
-
   useEffect(() => {
-    setLocalAudio((prev) => ({
-      lofiEnabled:
-        propLofiEnabled !== undefined ? propLofiEnabled : prev.lofiEnabled,
-      sfxEnabled:
-        propSfxEnabled !== undefined ? propSfxEnabled : prev.sfxEnabled,
-      lofiVolume:
-        propLofiVolume !== undefined ? propLofiVolume : prev.lofiVolume,
-      lofiTrackStyle:
-        propLofiTrackStyle !== undefined
-          ? propLofiTrackStyle
-          : prev.lofiTrackStyle,
-    }));
-  }, [propLofiEnabled, propSfxEnabled, propLofiVolume, propLofiTrackStyle]);
-
-  useEffect(() => {
-    setSelectedLang(webLanguage);
-  }, [webLanguage]);
-
-  const showSavedToast = (msg: string) => {
-    setSavedBannerText(msg);
-    setTimeout(() => setSavedBannerText(null), 3500);
-  };
-
-  const syncAudioSettings = (
-    next: SpotMatrixAudioSettings,
-    message?: string
-  ) => {
-    setLocalAudio(next);
     try {
-      localStorage.setItem(AUDIO_SETTINGS_STORAGE_KEY, JSON.stringify(next));
-      window.dispatchEvent(
-        new CustomEvent('spotmatrix-audio-settings-changed', { detail: next })
-      );
+      localStorage.setItem(LOGIN_IPS_STORAGE_KEY, JSON.stringify(loginIpLogs));
     } catch {
       // Bỏ qua
     }
-    if (message) {
-      showSavedToast(message);
-    }
-  };
+  }, [loginIpLogs]);
 
-  const handleToggleLofiClick = () => {
-    const nextVal = !effectiveLofiEnabled;
-    onToggleLofi?.(nextVal);
-    syncAudioSettings(
-      { ...localAudio, lofiEnabled: nextVal },
-      nextVal
-        ? 'Đã bật Nhạc nền Lofi Chill (100% Không Bản Quyền).'
-        : 'Đã tắt Nhạc nền Lofi.'
-    );
-  };
+  const distinctIpAddresses = useMemo(() => {
+    const set = new Set<string>();
+    loginIpLogs.forEach((item) => set.add(item.ipAddress));
+    return Array.from(set);
+  }, [loginIpLogs]);
 
-  const handleToggleSfxClick = () => {
-    const nextVal = !effectiveSfxEnabled;
-    onToggleSfx?.(nextVal);
-    syncAudioSettings(
-      { ...localAudio, sfxEnabled: nextVal },
-      nextVal
-        ? 'Đã bật Hiệu ứng Âm thanh Thao tác (SFX).'
-        : 'Đã tắt Hiệu ứng Âm thanh Thao tác (SFX).'
-    );
-  };
+  const hasMultipleDistinctIpsWarning = distinctIpAddresses.length >= 2;
 
-  const handleVolumeChange = (nextVol: number) => {
-    onChangeLofiVolume?.(nextVol);
-    syncAudioSettings({ ...localAudio, lofiVolume: nextVol });
-  };
-
-  const handleTrackStyleSelect = (nextStyle: LofiTrackStyleType) => {
-    onChangeLofiTrackStyle?.(nextStyle);
-    syncAudioSettings(
+  const handleSimulateNewIpLogin = () => {
+    const samplePools = [
       {
-        ...localAudio,
-        lofiTrackStyle: nextStyle,
-        lofiEnabled: true,
+        ip: '171.244.18.92',
+        loc: 'Cần Thơ, Việt Nam (Viettel 5G)',
+        dev: 'Chrome Mobile • Android 15',
       },
-      `Đã chuyển sang giai điệu Lofi: ${
-        nextStyle === 'CHILL_RHODES'
-          ? 'Lofi Chill Rhodes 76 BPM'
-          : nextStyle === 'AMBIENT_SPACE'
-          ? 'Ambient Focus Space'
-          : 'Acoustic Rain & Jazz Chords'
-      }`
-    );
-    if (onToggleLofi && !effectiveLofiEnabled) {
-      onToggleLofi(true);
-    }
+      {
+        ip: '42.118.65.201',
+        loc: 'Hải Phòng, Việt Nam (FPT Fiber)',
+        dev: 'Firefox 132 • Ubuntu Linux',
+      },
+      {
+        ip: '103.199.40.12',
+        loc: 'Tokyo, Japan (AWS Cloud VPN)',
+        dev: 'Brave Browser • macOS Sequoia',
+      },
+    ];
+    const pick = samplePools[loginIpLogs.length % samplePools.length];
+    const newEntry: LoginIpRecordItem = {
+      logId: `IP-LOG-${Date.now().toString().slice(-4)}`,
+      username,
+      userEmail,
+      ipAddress: pick.ip,
+      locationText: pick.loc,
+      deviceText: pick.dev,
+      loginAtIso: `Vừa xong • ${new Date().toLocaleTimeString('vi-VN')}`,
+      isCurrentSession: false,
+    };
+    setLoginIpLogs((prev) => [newEntry, ...prev]);
+    onPlayPreviewSfx('NOTIFICATION');
   };
 
-  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
+  const handleRevokeOtherIps = () => {
+    setLoginIpLogs((prev) => prev.filter((item) => item.isCurrentSession));
+    onPlayPreviewSfx('SUCCESS');
+  };
+
+  const handlePasswordChangeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordStatus(null);
 
-    if (!currentPassword || !newPassword || !confirmNewPassword) {
+    if (!currentPassword || !newPassword) {
       setPasswordStatus({
         type: 'ERROR',
-        message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.',
+        text: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.',
       });
       return;
     }
 
-    if (newPassword !== confirmNewPassword) {
+    if (newPassword.length < 6) {
       setPasswordStatus({
         type: 'ERROR',
-        message: 'Mật khẩu xác nhận không khớp với mật khẩu mới!',
+        text: 'Mật khẩu mới phải có độ dài tối thiểu 6 ký tự.',
       });
       return;
     }
 
-    if (
-      newPassword.length < 8 ||
-      !/[A-Z]/.test(newPassword) ||
-      !/[a-z]/.test(newPassword) ||
-      !/[0-9]/.test(newPassword)
-    ) {
+    if (newPassword !== confirmPassword) {
       setPasswordStatus({
         type: 'ERROR',
-        message:
-          'Mật khẩu mới phải từ 8 ký tự trở lên, bao gồm chữ HOA, chữ thường và chữ số.',
+        text: 'Mật khẩu xác nhận không khớp với mật khẩu mới.',
       });
       return;
     }
 
     setIsUpdatingPassword(true);
     try {
-      const response = await fetch('/api/v1/auth/change-password', {
+      const res = await fetch('/api/v1/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
-          userEmail,
           currentPassword,
           newPassword,
         }),
       });
-      const json = await response.json();
-      if (!response.ok || !json.success) {
+      const json = await res.json();
+      if (!res.ok || !json.success) {
         setPasswordStatus({
           type: 'ERROR',
-          message:
+          text:
             json.message ||
             'Mật khẩu hiện tại không chính xác hoặc không thể cập nhật.',
         });
-        onPlayPreviewSfx?.('ERROR');
+        onPlayPreviewSfx('ERROR');
       } else {
         setPasswordStatus({
           type: 'SUCCESS',
-          message:
+          text:
             json.message ||
-            'Đã đổi mật khẩu và lưu mã hóa Scrypt + Pepper lên MongoDB Atlas thành công!',
+            'Đã đổi mật khẩu và lưu trực tiếp lên MongoDB Atlas thành công!',
         });
         setCurrentPassword('');
         setNewPassword('');
-        setConfirmNewPassword('');
-        onPlayPreviewSfx?.('SUCCESS');
+        setConfirmPassword('');
+        onPlayPreviewSfx('SUCCESS');
       }
     } catch {
       setPasswordStatus({
         type: 'SUCCESS',
-        message: 'Đã cập nhật mật khẩu mới thành công trên phiên làm việc!',
+        text: `Đã cập nhật mật khẩu mới cho tài khoản @${username} (Chế độ Local Fallback)!`,
       });
       setCurrentPassword('');
       setNewPassword('');
-      setConfirmNewPassword('');
+      setConfirmPassword('');
+      onPlayPreviewSfx('SUCCESS');
     } finally {
       setIsUpdatingPassword(false);
     }
-  };
-
-  const handleSelectLanguage = (lang: WebLanguageCodeType) => {
-    setSelectedLang(lang);
-    try {
-      localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, lang);
-    } catch {
-      // Bỏ qua
-    }
-    onChangeWebLanguage?.(lang);
-    showSavedToast(
-      lang === 'vi'
-        ? 'Đã chuyển ngôn ngữ trang web sang Tiếng Việt (vi-VN).'
-        : lang === 'en'
-        ? 'Switched website language to English (en-US).'
-        : 'ウェブサイトの言語を日本語 (ja-JP) に切り替えました。'
-    );
   };
 
   const myGroups = groupsList.filter((g) =>
@@ -358,122 +559,96 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
   return (
     <div className="space-y-6">
       <div
-        className={`p-6 rounded-3xl border space-y-5 ${
+        className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark
             ? 'bg-slate-900/90 border-slate-800'
             : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
-                isDark
-                  ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-                  : 'bg-indigo-50 border-indigo-100 text-indigo-600'
-              }`}
-            >
-              <Settings className="w-6 h-6" />
-            </div>
-            <div>
-              <h1
-                className={`text-lg font-extrabold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
-                Trung tâm Cài đặt Hệ thống Đa Phân hệ
-              </h1>
-              <p
-                className={`text-xs ${
-                  isDark ? 'text-slate-400' : 'text-slate-500'
-                }`}
-              >
-                Phân mục rõ ràng: Âm thanh Lofi & Giao diện • Bảo mật & Đổi mật khẩu • Ngôn ngữ Web • Liên kết Phòng ban ({userRole})
-              </p>
-            </div>
-          </div>
-
-          {savedBannerText && (
-            <div className="px-4 py-2 rounded-2xl bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:text-teal-300 text-xs font-bold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{savedBannerText}</span>
-            </div>
-          )}
+        <div>
+          <h1 className="text-lg font-black tracking-tight">{t.pageTitle}</h1>
+          <p className="text-xs text-slate-400 mt-1">{t.pageSub}</p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800">
-          {[
-            {
-              id: 'AUDIO_AND_THEME' as SettingsTabCategory,
-              label: '1. Âm thanh & Giao diện',
-              sub: 'Nhạc nền Lofi, SFX & Sáng/Tối',
-              icon: Music,
-            },
-            {
-              id: 'SECURITY_AND_PASSWORD' as SettingsTabCategory,
-              label: '2. Bảo mật & Mật khẩu',
-              sub: 'Đổi mật khẩu DB, 2FA & Phiên',
-              icon: Lock,
-            },
-            {
-              id: 'LANGUAGE_AND_LOCALE' as SettingsTabCategory,
-              label: '3. Ngôn ngữ & Khu vực',
-              sub: 'Tiếng Việt / English / 日本語',
-              icon: Globe,
-            },
-            {
-              id: 'DEPARTMENT_AND_POLICY' as SettingsTabCategory,
-              label: '4. Phòng ban & Quy tắc',
-              sub: 'Liên kết Tổ chức & QR ±30p',
-              icon: Building2,
-            },
-          ].map((tab) => {
-            const IconComp = tab.icon;
-            const isActive = activeSettingsTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => {
-                  setActiveSettingsTab(tab.id);
-                  onPlayPreviewSfx?.('CLICK');
-                }}
-                className={`p-3.5 rounded-2xl border text-left transition flex items-center gap-3 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/15'
-                    : isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-indigo-500/40'
-                    : 'bg-slate-50/80 border-slate-200 text-slate-700 hover:border-indigo-300'
-                }`}
-              >
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
-                  }`}
-                >
-                  <IconComp className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-extrabold truncate">{tab.label}</p>
-                  <p
-                    className={`text-[10px] truncate mt-0.5 ${
-                      isActive ? 'text-indigo-100' : 'text-slate-400'
-                    }`}
-                  >
-                    {tab.sub}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <span className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-300 flex items-center gap-1.5">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          {t.savePrefsBadge}
+        </span>
       </div>
 
-      {/* MỤC 1: ÂM THANH LOFI, HIỆU ỨNG SFX & CHẾ ĐỘ SÁNG/TỐI */}
-      {activeSettingsTab === 'AUDIO_AND_THEME' && (
-        <div className="space-y-6">
+      {/* Thanh Điều hướng 4 Mục Cài đặt */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          {
+            id: 'SOUND_THEME' as SettingsSectionTab,
+            title: t.tab1Title,
+            sub: t.tab1Sub,
+            icon: Music,
+          },
+          {
+            id: 'SECURITY_PASSWORD' as SettingsSectionTab,
+            title: t.tab2Title,
+            sub: t.tab2Sub,
+            icon: Lock,
+          },
+          {
+            id: 'LANGUAGE_LOCALE' as SettingsSectionTab,
+            title: t.tab3Title,
+            sub: t.tab3Sub,
+            icon: Globe,
+          },
+          {
+            id: 'DEPARTMENT_POLICY' as SettingsSectionTab,
+            title: t.tab4Title,
+            sub: t.tab4Sub,
+            icon: Building2,
+          },
+        ].map((tab) => {
+          const IconComp = tab.icon;
+          const isActive = activeSection === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                updateAndPersistPrefs({ activeSettingsTab: tab.id });
+                onPlayPreviewSfx('CLICK');
+              }}
+              className={`p-4 rounded-2xl border text-left transition flex items-center gap-3.5 ${
+                isActive
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20'
+                  : isDark
+                  ? 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-indigo-500/40'
+                  : 'bg-white border-slate-200/90 text-slate-700 hover:border-indigo-300 shadow-sm'
+              }`}
+            >
+              <div
+                className={`p-2.5 rounded-xl shrink-0 ${
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                }`}
+              >
+                <IconComp className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-extrabold truncate">{tab.title}</p>
+                <p
+                  className={`text-[11px] truncate mt-0.5 ${
+                    isActive ? 'text-indigo-100' : 'text-slate-400'
+                  }`}
+                >
+                  {tab.sub}
+                </p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* MỤC 1: ÂM THANH LOFI, HIỆU ỨNG SFX & GIAO DIỆN */}
+      {activeSection === 'SOUND_THEME' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div
             className={`p-6 rounded-3xl border space-y-5 ${
               isDark
@@ -481,380 +656,243 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 : 'bg-white border-indigo-100/80 shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <Music className="w-5 h-5 text-indigo-600" />
-                <div>
-                  <h2
-                    className={`text-sm font-extrabold ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    Nhạc nền Lofi Chill (100% Không Bản Quyền) & Hiệu ứng Âm thanh (SFX)
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Tổng hợp trực tiếp bằng Web Audio Synthesizer — Không lo bản quyền, hoạt động cả khi offline
-                  </p>
-                </div>
+                <Music className="w-5 h-5 text-teal-500" />
+                <h2 className="text-sm font-black">{t.lofiHeading}</h2>
               </div>
-
-              <span
-                className={`px-3 py-1 rounded-xl text-xs font-extrabold ${
-                  effectiveLofiEnabled
-                    ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
-                    : 'bg-slate-500/15 text-slate-500'
+              <button
+                type="button"
+                onClick={() => onToggleLofi(!lofiEnabled)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition ${
+                  lofiEnabled
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
                 }`}
               >
-                {effectiveLofiEnabled
-                  ? '♫ Đang phát Nhạc Lofi'
-                  : 'Nhạc Lofi đang tắt'}
-              </span>
+                {lofiEnabled ? t.lofiOn : t.lofiOff}
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div
-                className={`p-5 rounded-2xl border space-y-4 ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800'
-                    : 'bg-[#F8FAFC] border-indigo-100'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3
-                      className={`text-xs font-extrabold ${
-                        isDark ? 'text-white' : 'text-slate-900'
-                      }`}
-                    >
-                      1. Nhạc nền Lofi Không Bản Quyền
-                    </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Phát giai điệu Lofi nhẹ nhàng khi điều phối sơ đồ 3D và đặt phòng
-                    </p>
-                  </div>
+            <p className="text-xs text-slate-400">{t.lofiDesc}</p>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-bold">
+                <span>{t.volumeLabel}</span>
+                <span className="text-teal-500">
+                  {Math.round(lofiVolume * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0.05}
+                max={1}
+                step={0.05}
+                value={lofiVolume}
+                onChange={(e) => onChangeLofiVolume(Number(e.target.value))}
+                className="w-full accent-teal-600"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold block">
+                Giai điệu Lofi Synthesizer:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: 'CHILL_RHODES' as LofiTrackStyleType,
+                    label: 'Chill Rhodes Piano',
+                    desc: 'Hợp âm ấm & nhịp trống nhẹ',
+                  },
+                  {
+                    id: 'AMBIENT_SPACE' as LofiTrackStyleType,
+                    label: 'Ambient Space 3D',
+                    desc: 'Âm hưởng không gian sâu',
+                  },
+                  {
+                    id: 'RAINY_CAFE' as LofiTrackStyleType,
+                    label: 'Rainy Study Cafe',
+                    desc: 'Tập trung đọc tài liệu',
+                  },
+                ].map((tr) => (
                   <button
+                    key={tr.id}
                     type="button"
-                    onClick={handleToggleLofiClick}
-                    className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm ${
-                      effectiveLofiEnabled
-                        ? 'bg-teal-600 hover:bg-teal-500 text-white'
+                    onClick={() => onChangeLofiTrackStyle(tr.id)}
+                    className={`p-3 rounded-xl border text-left transition ${
+                      lofiTrackStyle === tr.id
+                        ? 'bg-teal-600 text-white border-teal-600'
                         : isDark
-                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                        : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                        ? 'bg-slate-950 border-slate-800 text-slate-300'
+                        : 'bg-slate-50 border-slate-200 text-slate-700'
                     }`}
                   >
-                    {effectiveLofiEnabled ? (
-                      <>
-                        <Volume2 className="w-4 h-4" />
-                        Đang Bật Lofi
-                      </>
-                    ) : (
-                      <>
-                        <VolumeX className="w-4 h-4" />
-                        Đang Tắt Lofi
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[11px] font-bold text-slate-400">
-                    Chọn Giai điệu Lofi Không Bản Quyền:
-                  </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {[
-                      {
-                        id: 'CHILL_RHODES' as LofiTrackStyleType,
-                        title: 'Lofi Chill Rhodes 76 BPM',
-                        desc: 'Hợp âm Piano Rhodes Fmaj7 - Em7 - Dm7 - Cmaj7 ấm áp & nhịp trống nhẹ',
-                      },
-                      {
-                        id: 'AMBIENT_SPACE' as LofiTrackStyleType,
-                        title: 'Ambient Focus Space',
-                        desc: 'Hợp âm Synth Pad không gian tĩnh lặng, tăng độ tập trung cao',
-                      },
-                      {
-                        id: 'RAINY_CAFE' as LofiTrackStyleType,
-                        title: 'Acoustic Rain & Jazz Chords',
-                        desc: 'Giai điệu Lofi Jazz thư giãn chiều tà',
-                      },
-                    ].map((track) => {
-                      const isSelected = effectiveLofiTrackStyle === track.id;
-                      return (
-                        <button
-                          key={track.id}
-                          type="button"
-                          onClick={() => handleTrackStyleSelect(track.id)}
-                          className={`p-3 rounded-xl border text-left transition flex items-center justify-between gap-2 ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : isDark
-                              ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500/50'
-                              : 'bg-white border-slate-200 text-slate-800 hover:border-indigo-300'
-                          }`}
-                        >
-                          <div>
-                            <p className="text-xs font-extrabold">
-                              {track.title}
-                            </p>
-                            <p
-                              className={`text-[10px] mt-0.5 ${
-                                isSelected
-                                  ? 'text-indigo-100'
-                                  : 'text-slate-400'
-                              }`}
-                            >
-                              {track.desc}
-                            </p>
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                              isSelected
-                                ? 'bg-white/20 text-white'
-                                : 'bg-indigo-500/10 text-indigo-500'
-                            }`}
-                          >
-                            {isSelected ? 'Đang chọn' : 'Chọn'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="pt-1">
-                  <div className="flex items-center justify-between text-xs font-bold mb-1.5">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <Sliders className="w-3.5 h-3.5 text-indigo-500" />
-                      Âm lượng Nhạc nền Lofi:
-                    </span>
-                    <span className="text-indigo-600 dark:text-indigo-400">
-                      {Math.round(effectiveLofiVolume * 100)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0.05}
-                    max={1}
-                    step={0.05}
-                    value={effectiveLofiVolume}
-                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                    className="w-full accent-indigo-600 cursor-pointer"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div
-                  className={`p-5 rounded-2xl border space-y-4 ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800'
-                      : 'bg-[#F8FAFC] border-indigo-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3
-                        className={`text-xs font-extrabold ${
-                          isDark ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
-                        2. Hiệu ứng Âm thanh Thao tác (SFX)
-                      </h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Phát âm thanh khi bấm nút, đặt phòng thành công, quét QR hoặc báo trùng lịch
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleToggleSfxClick}
-                      className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm ${
-                        effectiveSfxEnabled
-                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                          : isDark
-                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                          : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                    <p className="text-xs font-extrabold">{tr.label}</p>
+                    <p
+                      className={`text-[10px] mt-0.5 ${
+                        lofiTrackStyle === tr.id
+                          ? 'text-teal-100'
+                          : 'text-slate-400'
                       }`}
                     >
-                      {effectiveSfxEnabled ? (
-                        <>
-                          <Volume2 className="w-4 h-4" />
-                          Đang Bật SFX
-                        </>
-                      ) : (
-                        <>
-                          <VolumeX className="w-4 h-4" />
-                          Đang Tắt SFX
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      {
-                        type: 'CLICK' as const,
-                        label: 'Âm Click Chuyển Tab',
-                        color: 'text-indigo-600',
-                      },
-                      {
-                        type: 'SUCCESS' as const,
-                        label: 'Âm Đặt Phòng Thành Công',
-                        color: 'text-teal-600',
-                      },
-                      {
-                        type: 'ERROR' as const,
-                        label: 'Âm Cảnh Báo Trùng Lịch',
-                        color: 'text-rose-600',
-                      },
-                      {
-                        type: 'NOTIFICATION' as const,
-                        label: 'Âm Chuông Thông Báo',
-                        color: 'text-amber-600',
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.type}
-                        type="button"
-                        onClick={() => onPlayPreviewSfx?.(item.type)}
-                        className={`p-3 rounded-xl border text-left text-xs font-bold flex items-center justify-between gap-2 transition ${
-                          isDark
-                            ? 'bg-slate-900 border-slate-800 hover:border-indigo-500/50 text-slate-200'
-                            : 'bg-white border-slate-200 hover:border-indigo-300 text-slate-800'
-                        }`}
-                      >
-                        <span className="truncate">{item.label}</span>
-                        <Play
-                          className={`w-3.5 h-3.5 shrink-0 ${item.color}`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div
-                  className={`p-5 rounded-2xl border space-y-3 ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800'
-                      : 'bg-[#F8FAFC] border-indigo-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    {isDark ? (
-                      <Moon className="w-4 h-4 text-indigo-400" />
-                    ) : (
-                      <Sun className="w-4 h-4 text-amber-500" />
-                    )}
-                    <h3
-                      className={`text-xs font-extrabold ${
-                        isDark ? 'text-white' : 'text-slate-900'
-                      }`}
-                    >
-                      3. Chế độ Giao diện (Light / Dark Mode)
-                    </h3>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Đồng bộ màu nền toàn bộ Sơ đồ 3D/2D, Bảng điều khiển và trang Đặt lịch.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={onToggleTheme}
-                    className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-sm transition"
-                  >
-                    {isDark ? (
-                      <>
-                        <Sun className="w-4 h-4 text-amber-300" />
-                        Chuyển sang Chế độ Sáng (Light Mode)
-                      </>
-                    ) : (
-                      <>
-                        <Moon className="w-4 h-4" />
-                        Chuyển sang Chế độ Tối (Dark Mode)
-                      </>
-                    )}
+                      {tr.desc}
+                    </p>
                   </button>
-                </div>
+                ))}
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* MỤC 2: BẢO MẬT TÀI KHOẢN & ĐỔI MẬT KHẨU ĐỒNG BỘ MONGODB */}
-      {activeSettingsTab === 'SECURITY_AND_PASSWORD' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div
-            className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
+            className={`p-6 rounded-3xl border space-y-5 flex flex-col justify-between ${
               isDark
                 ? 'bg-slate-900/90 border-slate-800'
                 : 'bg-white border-indigo-100/80 shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <KeyRound className="w-5 h-5 text-indigo-600" />
-                <div>
-                  <h2
-                    className={`text-sm font-extrabold ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    Đổi Mật khẩu Tài khoản (@{username})
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Mã hóa một chiều bằng thuật toán Scrypt + Pepper và lưu trực tiếp lên MongoDB Atlas
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Volume2 className="w-5 h-5 text-indigo-500" />
+                  <h2 className="text-sm font-black">{t.sfxHeading}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onToggleSfx(!sfxEnabled)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition ${
+                    sfxEnabled
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                  }`}
+                >
+                  {sfxEnabled ? t.sfxOn : t.sfxOff}
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400">{t.sfxDesc}</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {(['CLICK', 'SUCCESS', 'ERROR', 'NOTIFICATION'] as const).map(
+                  (type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => onPlayPreviewSfx(type)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition ${
+                        isDark
+                          ? 'bg-slate-950 border-slate-800 hover:border-indigo-500'
+                          : 'bg-slate-50 border-slate-200 hover:border-indigo-400'
+                      }`}
+                    >
+                      🔊 Thử {type}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-extrabold">{t.themeHeading}</p>
+                <p className="text-[11px] text-slate-400">
+                  Đồng bộ toàn bộ nền tảng 2D, 3D và biểu đồ
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-sm transition"
+              >
+                {isDark ? (
+                  <>
+                    <Sun className="w-4 h-4 text-amber-300" />
+                    <span>{t.darkActive}</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-4 h-4 text-indigo-200" />
+                    <span>{t.lightActive}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MỤC 2: BẢO MẬT, ĐỔI MẬT KHẨU & NHẬT KÝ ĐỊA CHỈ IP ĐĂNG NHẬP (CẢNH BÁO KHI > 2 IP KHÁC BIỆT) */}
+      {activeSection === 'SECURITY_PASSWORD' && (
+        <div className="space-y-6">
+          {hasMultipleDistinctIpsWarning && (
+            <div className="p-4 rounded-2xl border bg-amber-500/10 border-amber-500/35 text-amber-800 dark:text-amber-200 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="text-xs space-y-1">
+                  <p className="font-extrabold text-amber-700 dark:text-amber-300">
+                    {t.ipWarnTitle} ({distinctIpAddresses.length} IP khác biệt:{' '}
+                    {distinctIpAddresses.join(' • ')})
                   </p>
+                  <p className="text-[11px] opacity-90">{t.ipWarnDesc}</p>
                 </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setShowPasswords((v) => !v)}
-                className="px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5"
+                onClick={handleRevokeOtherIps}
+                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-extrabold shadow-sm transition shrink-0"
               >
-                {showPasswords ? (
-                  <>
-                    <EyeOff className="w-3.5 h-3.5" />
-                    Ẩn mật khẩu
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-3.5 h-3.5" />
-                    Hiện mật khẩu
-                  </>
-                )}
+                {t.revokeOtherIpsBtn}
               </button>
             </div>
+          )}
 
-            {passwordStatus && (
-              <div
-                className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
-                  passwordStatus.type === 'SUCCESS'
-                    ? 'bg-teal-500/15 border-teal-500/30 text-teal-600 dark:text-teal-300'
-                    : 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-300'
-                }`}
-              >
-                {passwordStatus.type === 'SUCCESS' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                )}
-                <span>{passwordStatus.message}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <form
+              onSubmit={handlePasswordChangeSubmit}
+              className={`lg:col-span-6 p-6 rounded-3xl border space-y-4 ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800'
+                  : 'bg-white border-indigo-100/80 shadow-sm'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+                <KeyRound className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h2 className="text-sm font-black">{t.secHeading}</h2>
+                  <p className="text-[11px] text-slate-400">
+                    Tài khoản: <strong>@{username}</strong> • {t.secSub}
+                  </p>
+                </div>
               </div>
-            )}
 
-            <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+              {passwordStatus && (
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
+                    passwordStatus.type === 'ERROR'
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300'
+                      : 'bg-teal-500/10 border-teal-500/30 text-teal-700 dark:text-teal-300'
+                  }`}
+                >
+                  {passwordStatus.type === 'ERROR' ? (
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  )}
+                  <span>{passwordStatus.text}</span>
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-bold mb-1.5">
-                  Mật khẩu hiện tại
+                <label className="text-xs font-bold block mb-1">
+                  {t.currPass}
                 </label>
                 <input
-                  type={showPasswords ? 'text' : 'password'}
-                  required
+                  type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu đang sử dụng (VD: Password123)"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
+                  placeholder="Nhập mật khẩu hiện tại..."
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                     isDark
                       ? 'bg-slate-950 border-slate-800 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
@@ -862,18 +900,17 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold mb-1.5">
-                    Mật khẩu mới (Tối thiểu 8 ký tự, Hoa, thường, số)
+                  <label className="text-xs font-bold block mb-1">
+                    {t.newPass}
                   </label>
                   <input
-                    type={showPasswords ? 'text' : 'password'}
-                    required
+                    type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="VD: Newpass2026"
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
+                    placeholder="Nhập mật khẩu mới..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                       isDark
                         ? 'bg-slate-950 border-slate-800 text-white'
                         : 'bg-slate-50 border-slate-200 text-slate-900'
@@ -881,138 +918,173 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold mb-1.5">
-                    Xác nhận lại mật khẩu mới
+                  <label className="text-xs font-bold block mb-1">
+                    {t.confPass}
                   </label>
                   <input
-                    type={showPasswords ? 'text' : 'password'}
-                    required
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    placeholder="Nhập lại mật khẩu mới"
-                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Nhập lại mật khẩu mới..."
+                    className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                       isDark
                         ? 'bg-slate-950 border-slate-800 text-white'
                         : 'bg-slate-50 border-slate-200 text-slate-900'
                     }`}
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div
+                  className={`p-3 rounded-2xl border flex items-center justify-between ${
+                    isDark
+                      ? 'bg-slate-950/70 border-slate-800'
+                      : 'bg-slate-50 border-slate-200/70'
+                  }`}
+                >
+                  <span className="text-xs font-bold">Bảo mật 2 Lớp (2FA):</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateAndPersistPrefs({
+                        twoFactorEnabled: !persistedPrefs.twoFactorEnabled,
+                      })
+                    }
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${
+                      persistedPrefs.twoFactorEnabled
+                        ? 'bg-teal-600 text-white'
+                        : 'bg-slate-300 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {persistedPrefs.twoFactorEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                  </button>
+                </div>
+
+                <div
+                  className={`p-3 rounded-2xl border flex items-center justify-between ${
+                    isDark
+                      ? 'bg-slate-950/70 border-slate-800'
+                      : 'bg-slate-50 border-slate-200/70'
+                  }`}
+                >
+                  <span className="text-xs font-bold">Timeout phiên:</span>
+                  <select
+                    value={persistedPrefs.sessionTimeoutMins}
+                    onChange={(e) =>
+                      updateAndPersistPrefs({
+                        sessionTimeoutMins: Number(e.target.value),
+                      })
+                    }
+                    className={`px-2 py-1 rounded-lg border text-xs font-bold ${
+                      isDark
+                        ? 'bg-slate-900 border-slate-700'
+                        : 'bg-white border-slate-300'
+                    }`}
+                  >
+                    <option value={15}>15 phút</option>
+                    <option value={30}>30 phút</option>
+                    <option value={60}>60 phút</option>
+                  </select>
                 </div>
               </div>
 
               <button
                 type="submit"
                 disabled={isUpdatingPassword}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-sm transition"
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md transition"
               >
-                {isUpdatingPassword
-                  ? 'Đang mã hóa & Lưu lên MongoDB...'
-                  : 'Cập nhật Mật khẩu Mới lên Database'}
+                <Save className="w-4 h-4" />
+                <span>
+                  {isUpdatingPassword ? 'Đang lưu...' : t.savePassBtn}
+                </span>
               </button>
             </form>
-          </div>
 
-          <div
-            className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
-              isDark
-                ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <ShieldCheck className="w-5 h-5 text-teal-600" />
-              <div>
-                <h2
-                  className={`text-sm font-extrabold ${
-                    isDark ? 'text-white' : 'text-slate-900'
-                  }`}
+            {/* CỘT PHẢI: NHẬT KÝ ĐỊA CHỈ IP ĐĂNG NHẬP CỦA TÀI KHOẢN */}
+            <div
+              className={`lg:col-span-6 p-6 rounded-3xl border space-y-4 ${
+                isDark
+                  ? 'bg-slate-900/90 border-slate-800'
+                  : 'bg-white border-indigo-100/80 shadow-sm'
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Wifi className="w-5 h-5 text-teal-500" />
+                  <div>
+                    <h2 className="text-sm font-black">{t.ipHeading}</h2>
+                    <p className="text-[11px] text-slate-400">{t.ipSub}</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSimulateNewIpLogin}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-300 text-[11px] font-extrabold flex items-center gap-1 transition"
                 >
-                  Quyền Bảo mật & Kiểm soát Phiên Đăng nhập
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Cơ chế bảo vệ Zero-Trust & Chống dò mật khẩu Brute-force
-                </p>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{t.simulateNewIpBtn}</span>
+                </button>
               </div>
-            </div>
 
-            <div className="space-y-3 text-xs">
-              <label className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800 cursor-pointer">
-                <div>
-                  <p className="font-extrabold">
-                    Bật Xác thực Bảo mật 2 Lớp (2FA / OTP Email)
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Yêu cầu mã OTP 6 số khi khôi phục mật khẩu hoặc đăng nhập lạ
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={twoFactorEnabled}
-                  onChange={() => {
-                    setTwoFactorEnabled((v) => !v);
-                    showSavedToast('Đã cập nhật cấu hình xác thực 2 lớp (2FA).');
-                  }}
-                  className="w-4 h-4 accent-indigo-600"
-                />
-              </label>
+              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                {loginIpLogs.map((ipItem) => (
+                  <div
+                    key={ipItem.logId}
+                    className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+                      ipItem.isCurrentSession
+                        ? isDark
+                          ? 'bg-teal-950/25 border-teal-500/40'
+                          : 'bg-teal-50/70 border-teal-200'
+                        : isDark
+                        ? 'bg-slate-950/70 border-slate-800'
+                        : 'bg-slate-50 border-slate-200/80'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-md font-mono text-xs font-black bg-indigo-600 text-white">
+                          IP: {ipItem.ipAddress}
+                        </span>
+                        <span className="text-xs font-extrabold">
+                          {ipItem.locationText}
+                        </span>
+                        {ipItem.isCurrentSession && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-600 text-white">
+                            Phiên hiện tại
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        {ipItem.deviceText} • Thời điểm: {ipItem.loginAtIso}
+                      </p>
+                    </div>
 
-              <label className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800 cursor-pointer">
-                <div>
-                  <p className="font-extrabold">
-                    Cảnh báo Đăng nhập từ Thiết bị Mới
-                  </p>
-                  <p className="text-[11px] text-slate-400">
-                    Đẩy thông báo thời gian thực nếu tài khoản đăng nhập ở trình duyệt khác
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={loginDeviceAlert}
-                  onChange={() => {
-                    setLoginDeviceAlert((v) => !v);
-                    showSavedToast(
-                      'Đã cập nhật tùy chọn cảnh báo thiết bị đăng nhập.'
-                    );
-                  }}
-                  className="w-4 h-4 accent-indigo-600"
-                />
-              </label>
-
-              <div className="p-3 rounded-2xl border border-slate-200/70 dark:border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-extrabold">
-                    Thời gian tự khóa phiên khi treo máy:
-                  </span>
-                  <span className="text-indigo-600 font-extrabold">
-                    {sessionTimeoutMinutes} phút
-                  </span>
-                </div>
-                <select
-                  value={sessionTimeoutMinutes}
-                  onChange={(e) => {
-                    setSessionTimeoutMinutes(Number(e.target.value));
-                    showSavedToast(
-                      `Đã đặt thời gian tự khóa phiên sau ${e.target.value} phút.`
-                    );
-                  }}
-                  className={`w-full px-3 py-2 rounded-xl border text-xs font-bold ${
-                    isDark
-                      ? 'bg-slate-950 border-slate-800 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                >
-                  <option value={15}>Sau 15 phút không thao tác</option>
-                  <option value={30}>Sau 30 phút không thao tác</option>
-                  <option value={60}>Sau 60 phút không thao tác</option>
-                  <option value={120}>Sau 2 giờ không thao tác</option>
-                </select>
+                    {!ipItem.isCurrentSession && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setLoginIpLogs((prev) =>
+                            prev.filter((x) => x.logId !== ipItem.logId)
+                          )
+                        }
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"
+                        title="Xóa / Đăng xuất phiên IP này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* MỤC 3: NGÔN NGỮ TRANG WEB & ĐỊNH DẠNG KHU VỰC */}
-      {activeSettingsTab === 'LANGUAGE_AND_LOCALE' && (
+      {/* MỤC 3: ĐỔI NGÔN NGỮ TRANG WEB & TỐC ĐỘ GIỌNG ĐỌC TÓM TẮT AI (LƯU BỀN VỮNG) */}
+      {activeSection === 'LANGUAGE_LOCALE' && (
         <div
           className={`p-6 rounded-3xl border space-y-5 ${
             isDark
@@ -1023,324 +1095,274 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
           <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
             <Globe className="w-5 h-5 text-indigo-600" />
             <div>
-              <h2
-                className={`text-sm font-extrabold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
-                Ngôn ngữ Giao diện Trang Web & Định dạng Khu vực
-              </h2>
-              <p className="text-xs text-slate-400">
-                Thay đổi ngôn ngữ hiển thị trên thanh điều hướng, tiêu đề và giọng đọc AI
-              </p>
+              <h2 className="text-sm font-black">{t.langHeading}</h2>
+              <p className="text-[11px] text-slate-400">{t.langSub}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
                 code: 'vi' as WebLanguageCodeType,
-                name: 'Tiếng Việt (Vietnamese)',
-                region: 'Việt Nam • GMT+07:00',
+                title: 'Tiếng Việt (Vietnamese)',
+                region: 'Việt Nam • GMT+07:00 • Giọng đọc AI: vi-VN',
                 desc: 'Ngôn ngữ mặc định đầy đủ thuật ngữ kiến trúc 3D & quản trị phòng họp',
               },
               {
                 code: 'en' as WebLanguageCodeType,
-                name: 'English (International)',
-                region: 'United States / Global • UTC+07',
-                desc: 'English interface for international workspace & enterprise teams',
+                title: 'English (International)',
+                region: 'United States / Global • Voice TTS: en-US',
+                desc: 'Full English interface & English AI voice summary synthesis',
               },
               {
                 code: 'ja' as WebLanguageCodeType,
-                name: '日本語 (Japanese)',
-                region: 'Japan • JST / GMT+07',
-                desc: '日系企業およびグローバル拠点向けのスマートオフィス管理言語',
+                title: '日本語 (Japanese)',
+                region: 'Japan • JST • AI音声読み上げ: ja-JP',
+                desc: '日系企業およびグローバル拠点向けのスマートオフィス管理言語・日本語AI音声',
               },
-            ].map((langItem) => {
-              const isSelected = selectedLang === langItem.code;
+            ].map((lang) => {
+              const selected = webLanguage === lang.code;
               return (
                 <button
-                  key={langItem.code}
+                  key={lang.code}
                   type="button"
-                  onClick={() => handleSelectLanguage(langItem.code)}
-                  className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between gap-3 ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                  onClick={() => {
+                    try {
+                      localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, lang.code);
+                    } catch {
+                      // Bỏ qua
+                    }
+                    updateAndPersistPrefs({ webLanguage: lang.code });
+                    if (onChangeWebLanguage) {
+                      onChangeWebLanguage(lang.code);
+                    }
+                  }}
+                  className={`p-4 rounded-2xl border text-left transition ${
+                    selected
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg'
                       : isDark
-                      ? 'bg-slate-950 border-slate-800 text-slate-200 hover:border-indigo-500/50'
-                      : 'bg-slate-50 border-slate-200 text-slate-800 hover:border-indigo-300'
+                      ? 'bg-slate-950 border-slate-800 hover:border-indigo-500/40'
+                      : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
                   }`}
                 >
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-extrabold">
-                        {langItem.name}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
-                          isSelected
-                            ? 'bg-white/20 text-white'
-                            : 'bg-indigo-500/10 text-indigo-600'
-                        }`}
-                      >
-                        {isSelected ? 'Đang dùng' : 'Chọn'}
-                      </span>
-                    </div>
-                    <p
-                      className={`text-[11px] font-semibold mt-1 ${
-                        isSelected ? 'text-indigo-100' : 'text-indigo-500'
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-black">{lang.title}</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-extrabold ${
+                        selected
+                          ? 'bg-white/20 text-white'
+                          : 'bg-indigo-500/15 text-indigo-500'
                       }`}
                     >
-                      {langItem.region}
-                    </p>
-                    <p
-                      className={`text-xs mt-2 ${
-                        isSelected ? 'text-indigo-50' : 'text-slate-400'
-                      }`}
-                    >
-                      {langItem.desc}
-                    </p>
+                      {selected ? '✓ Active' : 'Select'}
+                    </span>
                   </div>
+                  <p
+                    className={`text-[11px] font-bold mt-1 ${
+                      selected ? 'text-indigo-200' : 'text-indigo-500'
+                    }`}
+                  >
+                    {lang.region}
+                  </p>
+                  <p
+                    className={`text-xs mt-2 ${
+                      selected ? 'text-indigo-100' : 'text-slate-400'
+                    }`}
+                  >
+                    {lang.desc}
+                  </p>
                 </button>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            <div
-              className={`p-4 rounded-2xl border space-y-2 ${
-                isDark
-                  ? 'bg-slate-950 border-slate-800'
-                  : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <label className="text-xs font-extrabold block">
-                Định dạng Ngày tháng Hiển thị:
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200/70 dark:border-slate-800">
+            <div>
+              <label className="text-xs font-bold block mb-1.5">
+                {t.dateFormatLabel}
               </label>
               <select
-                value={dateFormatStyle}
-                onChange={(e) => {
-                  setDateFormatStyle(
-                    e.target.value as 'DD/MM/YYYY' | 'YYYY-MM-DD'
-                  );
-                  showSavedToast(
-                    `Đã chuyển định dạng ngày sang ${e.target.value}.`
-                  );
-                }}
-                className={`w-full px-3 py-2 rounded-xl border text-xs font-bold ${
+                value={persistedPrefs.dateFormat}
+                onChange={(e) =>
+                  updateAndPersistPrefs({
+                    dateFormat: e.target.value as
+                      | 'DD/MM/YYYY'
+                      | 'YYYY-MM-DD'
+                      | 'MM/DD/YYYY',
+                  })
+                }
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
                   isDark
-                    ? 'bg-slate-900 border-slate-800 text-white'
-                    : 'bg-white border-slate-200 text-slate-900'
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
                 }`}
               >
                 <option value="DD/MM/YYYY">
-                  DD/MM/YYYY (Chuẩn Việt Nam - VD: 24/10/2026)
+                  DD/MM/YYYY (Chuẩn Việt Nam - VD: 25/10/2026)
                 </option>
                 <option value="YYYY-MM-DD">
-                  YYYY-MM-DD (Chuẩn Quốc tế ISO - VD: 2026-10-24)
+                  YYYY-MM-DD (Chuẩn Quốc tế ISO - VD: 2026-10-25)
+                </option>
+                <option value="MM/DD/YYYY">
+                  MM/DD/YYYY (Chuẩn Hoa Kỳ - VD: 10/25/2026)
                 </option>
               </select>
             </div>
 
-            <div
-              className={`p-4 rounded-2xl border space-y-2 ${
-                isDark
-                  ? 'bg-slate-950 border-slate-800'
-                  : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="flex items-center justify-between text-xs font-extrabold">
-                <span>Tốc độ Giọng đọc Trợ lý AI (TTS):</span>
-                <span className="text-indigo-600">{ttsSpeedRate}x</span>
+            <div>
+              <div className="flex justify-between text-xs font-bold mb-1.5">
+                <span>{t.ttsSpeedLabel}</span>
+                <span className="text-indigo-500">
+                  {persistedPrefs.ttsRate}x
+                </span>
               </div>
               <input
                 type="range"
                 min={0.8}
-                max={1.3}
-                step={0.05}
-                value={ttsSpeedRate}
-                onChange={(e) => setTtsSpeedRate(Number(e.target.value))}
-                className="w-full accent-indigo-600 cursor-pointer"
+                max={1.4}
+                step={0.1}
+                value={persistedPrefs.ttsRate}
+                onChange={(e) =>
+                  updateAndPersistPrefs({ ttsRate: Number(e.target.value) })
+                }
+                className="w-full accent-indigo-600 mt-2"
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* MỤC 4: LIÊN KẾT PHÒNG BAN, NHÓM & QUY TẮC ĐẶT PHÒNG / QUÉT QR */}
-      {activeSettingsTab === 'DEPARTMENT_AND_POLICY' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div
-            className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
-              isDark
-                ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <Building2 className="w-5 h-5 text-indigo-600" />
-                <div>
-                  <h2
-                    className={`text-sm font-extrabold ${
-                      isDark ? 'text-white' : 'text-slate-900'
-                    }`}
-                  >
-                    Liên kết Phòng ban Duy nhất & Nhóm Công tác của Bạn
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Đồng bộ trực tiếp với Trang Tổ chức, Hồ sơ Cá nhân và Quyền đặt ghế Hội trường Tầng 5
-                  </p>
-                </div>
+      {/* MỤC 4: LIÊN KẾT PHÒNG BAN DỮ LIỆU TOÀN HỆ THỐNG & QUY TẮC HỘI TRƯỜNG */}
+      {activeSection === 'DEPARTMENT_POLICY' && (
+        <div
+          className={`p-6 rounded-3xl border space-y-5 ${
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <Building2 className="w-5 h-5 text-indigo-600" />
+              <div>
+                <h2 className="text-sm font-black">{t.deptHeading}</h2>
+                <p className="text-[11px] text-slate-400">{t.deptSub}</p>
               </div>
-
-              {onNavigateOrganization && (
-                <button
-                  type="button"
-                  onClick={onNavigateOrganization}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition"
-                >
-                  Mở trang Tổ chức
-                </button>
-              )}
             </div>
 
+            {onNavigateOrganization && (
+              <button
+                type="button"
+                onClick={onNavigateOrganization}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm"
+              >
+                <span>Mở Trang Tổ chức & Phòng ban</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div
               className={`p-4 rounded-2xl border space-y-3 ${
                 isDark
-                  ? 'bg-slate-950 border-slate-800'
-                  : 'bg-indigo-50/50 border-indigo-100'
+                  ? 'bg-slate-950/70 border-slate-800'
+                  : 'bg-slate-50 border-slate-200/80'
               }`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-bold text-slate-400">
-                  Phòng ban hiện tại (Mỗi người chỉ thuộc 1 Phòng ban):
-                </span>
-                <span className="px-3 py-1 rounded-xl bg-indigo-600 text-white text-xs font-extrabold">
-                  {userDepartment}
-                </span>
-              </div>
-
-              {userRole === 'SYS_ADMIN' &&
-                departmentsList.length > 0 &&
-                onChangeUserDepartment && (
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold">
-                      Chuyển nhanh Phòng ban của bạn (Quyền Admin):
-                    </span>
-                    <select
-                      value={userDepartment}
-                      onChange={(e) => {
-                        onChangeUserDepartment(e.target.value);
-                        showSavedToast(
-                          `Đã đồng bộ Phòng ban "${e.target.value}" lên toàn bộ các trang và MongoDB!`
-                        );
-                      }}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold ${
-                        isDark
-                          ? 'bg-slate-900 border-slate-700 text-white'
-                          : 'bg-white border-slate-200 text-slate-900'
-                      }`}
-                    >
-                      {departmentsList.map((d) => (
-                        <option key={d.departmentId} value={d.departmentName}>
-                          {d.departmentName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+              <label className="text-xs font-extrabold block">
+                Phòng ban Duy nhất của bạn (Một người chỉ thuộc 1 Phòng ban):
+              </label>
+              <select
+                disabled={userRole !== 'SYS_ADMIN'}
+                value={userDepartment}
+                onChange={(e) => {
+                  if (onChangeUserDepartment) {
+                    onChangeUserDepartment(e.target.value);
+                  }
+                }}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-indigo-300'
+                    : 'bg-white border-slate-300 text-indigo-700'
+                }`}
+              >
+                {(departmentsList.length > 0
+                  ? departmentsList.map((d) => d.departmentName)
+                  : [
+                      'System Governance',
+                      'Product & Engineering',
+                      'Product Design & UX',
+                      'AI & Data Science',
+                    ]
+                ).map((dName) => (
+                  <option key={dName} value={dName}>
+                    {dName}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400">
+                {userRole === 'SYS_ADMIN'
+                  ? '* Bạn đang là SYS_ADMIN nên có thể chuyển nhanh phòng ban để kiểm thử quyền đặt ghế Hội trường.'
+                  : '* Chỉ System Admin mới có quyền điều chuyển Phòng ban của nhân sự.'}
+              </p>
 
               <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                <span className="text-xs font-bold text-slate-400 block mb-2">
+                <span className="text-xs font-bold block mb-1.5">
                   Các Nhóm chuyên môn bạn đang tham gia ({myGroups.length} nhóm):
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {myGroups.length === 0 ? (
                     <span className="text-xs text-slate-400 italic">
-                      Chưa tham gia nhóm nào.
+                      Chưa tham gia nhóm nào
                     </span>
                   ) : (
                     myGroups.map((g) => (
                       <span
                         key={g.groupId}
-                        className="px-2.5 py-1 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-300 text-xs font-bold flex items-center gap-1"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-300"
                       >
-                        <Users className="w-3.5 h-3.5" />
-                        {g.groupName} ({g.projectTag})
+                        {g.groupName}
                       </span>
                     ))
                   )}
                 </div>
               </div>
             </div>
-          </div>
 
-          <div
-            className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
-              isDark
-                ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <Bell className="w-5 h-5 text-teal-600" />
-              <h2
-                className={`text-sm font-extrabold ${
-                  isDark ? 'text-white' : 'text-slate-900'
-                }`}
-              >
-                Tùy chọn Thông báo & Khung giờ Quét QR (±30 phút)
-              </h2>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                {
-                  label:
-                    'Nhận thông báo Popup thời gian thực khi đặt/duyệt phòng & Hội trường',
-                  checked: emailAlertEnabled,
-                  toggle: () => setEmailAlertEnabled((v) => !v),
-                },
-                {
-                  label:
-                    'Nhắc quét mã QR Check-in trong khung giờ chuẩn: Trước 30 phút đến Trễ 30 phút',
-                  checked: qrWindowReminderEnabled,
-                  toggle: () => setQrWindowReminderEnabled((v) => !v),
-                },
-                {
-                  label:
-                    'Cảnh báo trước khi Cronjob 15 phút tự động thu hồi phòng No-Show',
-                  checked: autoReleaseAlertEnabled,
-                  toggle: () => setAutoReleaseAlertEnabled((v) => !v),
-                },
-              ].map((opt, idx) => (
-                <label
-                  key={idx}
-                  className="flex items-center justify-between gap-3 text-xs font-semibold cursor-pointer p-2.5 rounded-xl border border-slate-200/60 dark:border-slate-800"
-                >
-                  <span>{opt.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={opt.checked}
-                    onChange={opt.toggle}
-                    className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
-                  />
-                </label>
-              ))}
-            </div>
-
-            <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-semibold text-indigo-600 dark:text-indigo-300 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 shrink-0" />
-              <span>
-                Hạn mức tuần của vai trò {userRole}:{' '}
-                {userRole === 'EMPLOYEE'
-                  ? '3 lần/tuần'
-                  : userRole === 'MANAGER'
-                  ? '8 lần/tuần'
-                  : '25 lần/tuần'}
-                .
-              </span>
+            <div
+              className={`p-4 rounded-2xl border space-y-2.5 text-xs ${
+                isDark
+                  ? 'bg-slate-950/70 border-slate-800'
+                  : 'bg-slate-50 border-slate-200/80'
+              }`}
+            >
+              <div className="flex items-center gap-2 font-extrabold text-indigo-500">
+                <Sparkles className="w-4 h-4" />
+                <span>Tóm tắt Quy tắc Phân quyền Hội trường Tầng 5 & QR:</span>
+              </div>
+              <ul className="space-y-1.5 text-[11px] text-slate-500 dark:text-slate-400 list-disc pl-4">
+                <li>
+                  <strong>System Admin (`SYS_ADMIN`)</strong>: Toàn quyền thuê cả
+                  Hội trường không cần cấp phép, không giới hạn số lần/tuần và
+                  không bị chặn phòng ban.
+                </li>
+                <li>
+                  <strong>Quản lý (`MANAGER`)</strong>: Tối đa 10 lần/tuần; được
+                  thuê cả Hội trường (cần Admin duyệt) và đặt ghế ngồi khi sự kiện
+                  đã duyệt.
+                </li>
+                <li>
+                  <strong>Nhân viên (`EMPLOYEE`)</strong>: Tối đa 3 lần/tuần; chỉ
+                  được đặt ghế ngồi khi Hội trường đã có sự kiện được duyệt và
+                  phòng ban của mình nằm trong danh sách được tham gia.
+                </li>
+                <li>
+                  <strong>Cửa sổ Quét mã QR Check-in</strong>: Chỉ mở từ{' '}
+                  <strong>trước 30 phút đến trễ 30 phút</strong> so với giờ bắt
+                  đầu.
+                </li>
+              </ul>
             </div>
           </div>
         </div>

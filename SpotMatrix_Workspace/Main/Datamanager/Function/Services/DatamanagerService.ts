@@ -66,86 +66,140 @@ const memoryTrustProfiles: UserTrustProfileItem[] = [
   },
 ];
 
-const memoryEquipmentList: SharedEquipmentItem[] = [
-  {
-    equipmentId: 'EQ-01',
-    equipmentCode: 'EQ-M101-SCREEN-01',
-    equipmentName: 'Màn hình Hội nghị 4K Samsung 75"',
-    categoryName: 'PROJECTOR',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M1-01',
-    position2D: { posX: 150, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 24,
-    monthlyUsageHours: 96,
-    healthPercent: 98,
-  },
-  {
-    equipmentId: 'EQ-02',
-    equipmentCode: 'EQ-M101-CAM-02',
-    equipmentName: 'Camera AI 360° Poly Studio E70',
-    categoryName: 'AUDIO_POD',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M1-01',
-    position2D: { posX: 150, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 18,
-    monthlyUsageHours: 72,
-    healthPercent: 94,
-  },
-  {
-    equipmentId: 'EQ-03',
-    equipmentCode: 'EQ-M102-LASER-01',
-    equipmentName: 'Máy chiếu Laser Epson 4K Pro',
-    categoryName: 'PROJECTOR',
-    status: 'IN_USE',
-    assignedNodeId: 'M1-02',
-    position2D: { posX: 400, posY: 115 },
-    currentBookingId: 'BK-2026-001',
-    weeklyUsageHours: 31,
-    monthlyUsageHours: 124,
-    healthPercent: 86,
-  },
-  {
-    equipmentId: 'EQ-04',
-    equipmentCode: 'EQ-M103-HUB-01',
-    equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
-    categoryName: 'TYPE_C_HUB',
-    status: 'BROKEN',
-    assignedNodeId: 'M1-03',
-    position2D: { posX: 650, posY: 115 },
-    currentBookingId: null,
-    weeklyUsageHours: 12,
-    monthlyUsageHours: 54,
-    healthPercent: 45,
-  },
-  {
-    equipmentId: 'EQ-05',
-    equipmentCode: 'EQ-M205-WACOM-01',
-    equipmentName: 'Bảng Tương tác Cảm ứng KTS Wacom 24"',
-    categoryName: 'WACOM_TABLET',
-    status: 'AVAILABLE',
-    assignedNodeId: 'M2-05',
-    position2D: { posX: 400, posY: 345 },
-    currentBookingId: null,
-    weeklyUsageHours: 19,
-    monthlyUsageHours: 78,
-    healthPercent: 95,
-  },
-  {
-    equipmentId: 'EQ-06',
-    equipmentCode: 'EQ-H01-PANO-01',
-    equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường',
-    categoryName: 'PROJECTOR',
-    status: 'AVAILABLE',
-    assignedNodeId: 'H-01',
-    position2D: { posX: 400, posY: 230 },
-    currentBookingId: null,
-    weeklyUsageHours: 28,
-    monthlyUsageHours: 112,
-    healthPercent: 99,
-  },
-];
+// Hàm khởi tạo Thiết bị đầy đủ cho toàn bộ 25/25 phòng (Tầng 1-4: 24 phòng + Tầng 5: Hội trường H-01)
+export function buildAllTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
+  const list: SharedEquipmentItem[] = [];
+  const roomSpecs: Array<{
+    suffix: string;
+    primaryName: string;
+    category: SharedEquipmentItem['categoryName'];
+    posX: number;
+    posY: number;
+    secondaryName?: string;
+    secondaryCat?: SharedEquipmentItem['categoryName'];
+  }> = [
+    {
+      suffix: '01',
+      primaryName: 'Màn hình Hội nghị 4K Samsung 75"',
+      category: 'MONITOR_4K',
+      posX: 150,
+      posY: 115,
+      secondaryName: 'Camera AI 360° Poly Studio E70',
+      secondaryCat: 'AUDIO_POD',
+    },
+    {
+      suffix: '02',
+      primaryName: 'Máy chiếu Laser Epson 4K Pro',
+      category: 'PROJECTOR',
+      posX: 400,
+      posY: 115,
+    },
+    {
+      suffix: '03',
+      primaryName: 'Hệ thống Âm thanh Hội trường Bose Videobar VB1',
+      category: 'AUDIO_POD',
+      posX: 650,
+      posY: 115,
+      secondaryName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
+      secondaryCat: 'TYPE_C_HUB',
+    },
+    {
+      suffix: '04',
+      primaryName: 'Bảng Tương tác Cảm ứng KTS Wacom Cintiq 24"',
+      category: 'WACOM_TABLET',
+      posX: 150,
+      posY: 345,
+    },
+    {
+      suffix: '05',
+      primaryName: 'Màn hình Cảm ứng Đa điểm LG One:Quick Works 55"',
+      category: 'MONITOR_4K',
+      posX: 400,
+      posY: 345,
+    },
+    {
+      suffix: '06',
+      primaryName: 'Tổ hợp Micro Đa hướng & Camera PTZ 4K Logitech Rally',
+      category: 'CONF_MIC_CAM',
+      posX: 650,
+      posY: 345,
+    },
+  ];
+
+  let seq = 1;
+  for (let floor = 1; floor <= 4; floor++) {
+    roomSpecs.forEach((spec, idx) => {
+      const roomCode = `M${floor}-${spec.suffix}`;
+      const isInUse = floor === 1 && spec.suffix === '02';
+      list.push({
+        equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+        equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-01`,
+        equipmentName: `${spec.primaryName} (${roomCode})`,
+        categoryName: spec.category,
+        status: isInUse ? 'IN_USE' : 'AVAILABLE',
+        assignedNodeId: roomCode,
+        position2D: { posX: spec.posX, posY: spec.posY },
+        currentBookingId: isInUse ? 'BK-2026-001' : null,
+        weeklyUsageHours: 16 + ((floor * 3 + idx * 4) % 18),
+        monthlyUsageHours: 64 + ((floor * 12 + idx * 15) % 68),
+        healthPercent: 92 + ((floor + idx) % 8),
+      });
+      seq += 1;
+
+      if (floor === 1 && spec.secondaryName && spec.secondaryCat) {
+        const isBroken = spec.suffix === '03';
+        list.push({
+          equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+          equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-02`,
+          equipmentName: `${spec.secondaryName} (${roomCode})`,
+          categoryName: spec.secondaryCat,
+          status: isBroken ? 'BROKEN' : 'AVAILABLE',
+          assignedNodeId: roomCode,
+          position2D: { posX: spec.posX, posY: spec.posY },
+          currentBookingId: null,
+          weeklyUsageHours: 14,
+          monthlyUsageHours: 58,
+          healthPercent: isBroken ? 45 : 95,
+        });
+        seq += 1;
+      }
+    });
+  }
+
+  list.push(
+    {
+      equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-PANO-01',
+      equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường (H-01)',
+      categoryName: 'PROJECTOR',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 28,
+      monthlyUsageHours: 112,
+      healthPercent: 99,
+    },
+    {
+      equipmentId: `EQ-${String(seq + 1).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-AUDIO-02',
+      equipmentName: 'Hệ thống Loa Line-Array & Micro Không dây Sân khấu (H-01)',
+      categoryName: 'AUDIO_POD',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 26,
+      monthlyUsageHours: 104,
+      healthPercent: 98,
+    }
+  );
+
+  return list;
+}
+
+const memoryEquipmentList: SharedEquipmentItem[] =
+  buildAllTwentyFiveRoomEquipments();
 
 const memoryAuditLogs: AuditConcurrencyLogItem[] = [
   {
@@ -157,6 +211,8 @@ const memoryAuditLogs: AuditConcurrencyLogItem[] = [
     outcomeStatus: 'CONFLICT_BLOCKED',
     detailMessage:
       'Từ chối giữ chỗ do xung đột Optimistic Lock (Version 1 đã được nâng lên Version 2 trước 18ms).',
+    ipAddress: '113.161.72.104',
+    locationLabel: 'TP. Hồ Chí Minh, VN',
     createdAtIso: new Date().toISOString(),
   },
   {
@@ -167,6 +223,8 @@ const memoryAuditLogs: AuditConcurrencyLogItem[] = [
     outcomeStatus: 'AUTO_REVOKED',
     detailMessage:
       'Cronjob tự động thu hồi phòng M2-03 sau 15 phút quá hạn Check-in QR và trừ 10 điểm tín nhiệm.',
+    ipAddress: '127.0.0.1 (System Worker)',
+    locationLabel: 'SpotMatrix Cloud Core',
     createdAtIso: new Date().toISOString(),
   },
 ];
@@ -305,7 +363,7 @@ export async function listSharedEquipments(
   if (getMongoConnectionState()) {
     const query = statusFilter ? { status: statusFilter } : {};
     const dbItems = await SharedEquipmentModel.find(query).lean();
-    if (dbItems.length > 0) return dbItems as unknown as SharedEquipmentItem[];
+    if (dbItems.length >= 25) return dbItems as unknown as SharedEquipmentItem[];
   }
   if (statusFilter) {
     return memoryEquipmentList.filter((item) => item.status === statusFilter);
@@ -397,6 +455,8 @@ export async function recordAuditConcurrencyLog(params: {
   lockVersionAttempted?: number;
   outcomeStatus: 'SUCCESS' | 'CONFLICT_BLOCKED' | 'AUTO_REVOKED';
   detailMessage: string;
+  ipAddress?: string;
+  locationLabel?: string;
 }): Promise<AuditConcurrencyLogItem> {
   const newLogEntry: AuditConcurrencyLogItem = {
     auditId: `AUD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
@@ -406,6 +466,8 @@ export async function recordAuditConcurrencyLog(params: {
     lockVersionAttempted: params.lockVersionAttempted,
     outcomeStatus: params.outcomeStatus,
     detailMessage: params.detailMessage,
+    ipAddress: params.ipAddress || '113.161.72.104',
+    locationLabel: params.locationLabel || 'TP. Hồ Chí Minh, VN',
     createdAtIso: new Date().toISOString(),
   };
 

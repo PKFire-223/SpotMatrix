@@ -88,6 +88,7 @@ type ActiveSidebarPage =
   | 'PROFILE'
   | 'SETTINGS';
 
+// 1. Khởi tạo chuẩn 25 Phòng (Tầng 1–4: 24 Phòng họp kính 3D + Tầng 5: Hội trường Đấu trường La Mã H-01)
 function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
   const rooms: WorkspaceNodeItem[] = [];
   const floorTemplates = [
@@ -137,14 +138,140 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
   return rooms;
 }
 
-const INITIAL_ROOM_EQUIPMENTS: SharedEquipmentItem[] = [
-  { equipmentId: 'EQ-01', equipmentCode: 'EQ-M101-SCREEN-01', equipmentName: 'Màn hình Hội nghị 4K Samsung 75"', categoryName: 'PROJECTOR', status: 'AVAILABLE', assignedNodeId: 'M1-01', position2D: { posX: 150, posY: 115 }, currentBookingId: null, weeklyUsageHours: 24, monthlyUsageHours: 96, healthPercent: 98 },
-  { equipmentId: 'EQ-02', equipmentCode: 'EQ-M101-CAM-02', equipmentName: 'Camera AI 360° Poly Studio E70', categoryName: 'AUDIO_POD', status: 'AVAILABLE', assignedNodeId: 'M1-01', position2D: { posX: 150, posY: 115 }, currentBookingId: null, weeklyUsageHours: 18, monthlyUsageHours: 72, healthPercent: 94 },
-  { equipmentId: 'EQ-03', equipmentCode: 'EQ-M102-LASER-01', equipmentName: 'Máy chiếu Laser Epson 4K Pro', categoryName: 'PROJECTOR', status: 'IN_USE', assignedNodeId: 'M1-02', position2D: { posX: 400, posY: 115 }, currentBookingId: 'BK-2026-001', weeklyUsageHours: 31, monthlyUsageHours: 124, healthPercent: 86 },
-  { equipmentId: 'EQ-04', equipmentCode: 'EQ-M103-HUB-01', equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W', categoryName: 'TYPE_C_HUB', status: 'BROKEN', assignedNodeId: 'M1-03', position2D: { posX: 650, posY: 115 }, currentBookingId: null, weeklyUsageHours: 12, monthlyUsageHours: 54, healthPercent: 45 },
-  { equipmentId: 'EQ-05', equipmentCode: 'EQ-M205-WACOM-01', equipmentName: 'Bảng Tương tác Cảm ứng KTS Wacom 24"', categoryName: 'WACOM_TABLET', status: 'AVAILABLE', assignedNodeId: 'M2-05', position2D: { posX: 400, posY: 345 }, currentBookingId: null, weeklyUsageHours: 19, monthlyUsageHours: 78, healthPercent: 95 },
-  { equipmentId: 'EQ-06', equipmentCode: 'EQ-H01-PANO-01', equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường', categoryName: 'PROJECTOR', status: 'AVAILABLE', assignedNodeId: 'H-01', position2D: { posX: 400, posY: 230 }, currentBookingId: null, weeklyUsageHours: 28, monthlyUsageHours: 112, healthPercent: 99 },
-];
+// 2. Khởi tạo đủ 30 thiết bị định danh riêng cho toàn bộ 25/25 phòng (Không phòng nào bị thiếu thiết bị)
+function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
+  const list: SharedEquipmentItem[] = [];
+  const roomSpecs: Array<{
+    suffix: string;
+    primaryName: string;
+    category: SharedEquipmentItem['categoryName'];
+    posX: number;
+    posY: number;
+    secondaryName?: string;
+    secondaryCat?: SharedEquipmentItem['categoryName'];
+  }> = [
+    {
+      suffix: '01',
+      primaryName: 'Màn hình Hội nghị 4K Samsung 75"',
+      category: 'MONITOR_4K',
+      posX: 150,
+      posY: 115,
+      secondaryName: 'Camera AI 360° Poly Studio E70',
+      secondaryCat: 'AUDIO_POD',
+    },
+    {
+      suffix: '02',
+      primaryName: 'Máy chiếu Laser Epson 4K Pro',
+      category: 'PROJECTOR',
+      posX: 400,
+      posY: 115,
+    },
+    {
+      suffix: '03',
+      primaryName: 'Hệ thống Âm thanh Hội trường Bose Videobar VB1',
+      category: 'AUDIO_POD',
+      posX: 650,
+      posY: 115,
+      secondaryName: 'Trạm Chia tín hiệu HDMI & Type-C 100W',
+      secondaryCat: 'TYPE_C_HUB',
+    },
+    {
+      suffix: '04',
+      primaryName: 'Bảng Tương tác Cảm ứng KTS Wacom Cintiq 24"',
+      category: 'WACOM_TABLET',
+      posX: 150,
+      posY: 345,
+    },
+    {
+      suffix: '05',
+      primaryName: 'Màn hình Cảm ứng Đa điểm LG One:Quick Works 55"',
+      category: 'MONITOR_4K',
+      posX: 400,
+      posY: 345,
+    },
+    {
+      suffix: '06',
+      primaryName: 'Tổ hợp Micro Đa hướng & Camera PTZ 4K Logitech Rally',
+      category: 'CONF_MIC_CAM',
+      posX: 650,
+      posY: 345,
+    },
+  ];
+
+  let seq = 1;
+  for (let floor = 1; floor <= 4; floor++) {
+    roomSpecs.forEach((spec, idx) => {
+      const roomCode = `M${floor}-${spec.suffix}`;
+      const isInUse = floor === 1 && spec.suffix === '02';
+      list.push({
+        equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+        equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-01`,
+        equipmentName: `${spec.primaryName} (${roomCode})`,
+        categoryName: spec.category,
+        status: isInUse ? 'IN_USE' : 'AVAILABLE',
+        assignedNodeId: roomCode,
+        position2D: { posX: spec.posX, posY: spec.posY },
+        currentBookingId: isInUse ? 'BK-2026-001' : null,
+        weeklyUsageHours: 16 + ((floor * 3 + idx * 4) % 18),
+        monthlyUsageHours: 64 + ((floor * 12 + idx * 15) % 68),
+        healthPercent: 92 + ((floor + idx) % 8),
+      });
+      seq += 1;
+
+      if (floor === 1 && spec.secondaryName && spec.secondaryCat) {
+        const isBroken = spec.suffix === '03';
+        list.push({
+          equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+          equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-02`,
+          equipmentName: `${spec.secondaryName} (${roomCode})`,
+          categoryName: spec.secondaryCat,
+          status: isBroken ? 'BROKEN' : 'AVAILABLE',
+          assignedNodeId: roomCode,
+          position2D: { posX: spec.posX, posY: spec.posY },
+          currentBookingId: null,
+          weeklyUsageHours: 14,
+          monthlyUsageHours: 58,
+          healthPercent: isBroken ? 45 : 95,
+        });
+        seq += 1;
+      }
+    });
+  }
+
+  list.push(
+    {
+      equipmentId: `EQ-${String(seq).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-PANO-01',
+      equipmentName: 'Màn hình LED Cong Panorama 360° Hội trường (H-01)',
+      categoryName: 'PROJECTOR',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 28,
+      monthlyUsageHours: 112,
+      healthPercent: 99,
+    },
+    {
+      equipmentId: `EQ-${String(seq + 1).padStart(2, '0')}`,
+      equipmentCode: 'EQ-H01-AUDIO-02',
+      equipmentName: 'Hệ thống Loa Line-Array & Micro Không dây Sân khấu (H-01)',
+      categoryName: 'AUDIO_POD',
+      status: 'AVAILABLE',
+      assignedNodeId: 'H-01',
+      position2D: { posX: 400, posY: 230 },
+      currentBookingId: null,
+      weeklyUsageHours: 26,
+      monthlyUsageHours: 104,
+      healthPercent: 98,
+    }
+  );
+
+  return list;
+}
+
+const INITIAL_ROOM_EQUIPMENTS: SharedEquipmentItem[] =
+  buildStandardTwentyFiveRoomEquipments();
 
 const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
   { userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', role: 'SYS_ADMIN', departmentName: 'System Governance', trustScore: 100, onTimeCheckInCount: 32, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
@@ -155,9 +282,52 @@ const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
 const INITIAL_FIVE_FLOOR_ROOMS = buildStandardFiveFloorRooms();
 
 const INITIAL_MANAGED_USERS: ManagedUserAccountItem[] = [
-  { accountCode: 'ACC-ADMIN-001', username: 'Systemadmin123', userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', departmentName: 'System Governance', role: 'SYS_ADMIN', trustScore: 100, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
-  { accountCode: 'ACC-MGR-002', username: 'Managerlead123', userEmail: 'manager.lead@spotmatrix.vn', fullName: 'Lê Thu Hà (Quản lý)', departmentName: 'Product & Engineering', role: 'MANAGER', trustScore: 100, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
-  { accountCode: 'ACC-EMP-003', username: 'Employeedev123', userEmail: 'employee.dev@spotmatrix.vn', fullName: 'Nguyễn Minh Quân (Nhân viên)', departmentName: 'Product & Engineering', role: 'EMPLOYEE', trustScore: 96, accountStatus: 'ACTIVE', isOnline: false, lastActiveText: 'Chưa đăng nhập' },
+  {
+    accountCode: 'ACC-ADMIN-001',
+    username: 'Systemadmin123',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    departmentName: 'System Governance',
+    role: 'SYS_ADMIN',
+    trustScore: 100,
+    accountStatus: 'ACTIVE',
+    isOnline: false,
+    lastActiveText: 'Chưa đăng nhập',
+    recentIpAddresses: [
+      '113.161.72.104 (TP.HCM)',
+      '14.231.108.55 (Hà Nội)',
+      '27.74.201.18 (Đà Nẵng)',
+    ],
+  },
+  {
+    accountCode: 'ACC-MGR-002',
+    username: 'Managerlead123',
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    departmentName: 'Product & Engineering',
+    role: 'MANAGER',
+    trustScore: 100,
+    accountStatus: 'ACTIVE',
+    isOnline: false,
+    lastActiveText: 'Chưa đăng nhập',
+    recentIpAddresses: ['113.161.72.104 (TP.HCM)'],
+  },
+  {
+    accountCode: 'ACC-EMP-003',
+    username: 'Employeedev123',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    departmentName: 'Product & Engineering',
+    role: 'EMPLOYEE',
+    trustScore: 96,
+    accountStatus: 'ACTIVE',
+    isOnline: false,
+    lastActiveText: 'Chưa đăng nhập',
+    recentIpAddresses: [
+      '113.161.72.104 (TP.HCM)',
+      '171.244.18.92 (Cần Thơ)',
+    ],
+  },
 ];
 
 const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
@@ -190,11 +360,11 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentCode: 'UX-DESIGN',
     departmentName: 'Product Design & UX',
     description: 'Khối Thiết kế Trải nghiệm Không gian Số, Bản vẽ Mặt bằng 2D/3D & Đồ họa',
-    managerEmail: 'manager.lead@spotmatrix.vn',
-    managerName: 'Lê Thu Hà (Quản lý)',
-    floorLocation: 'Tầng 3',
+    managerEmail: 'tran.bao.ngoc@spotmatrix.vn',
+    managerName: 'Trần Bảo Ngọc (UX Lead)',
+    floorLocation: 'Tầng 3 — Khu Thiết kế & Sáng tạo',
     colorBadge: 'AMBER',
-    memberEmails: [],
+    memberEmails: ['tran.bao.ngoc@spotmatrix.vn'],
     updatedAtIso: new Date().toISOString(),
   },
   {
@@ -202,11 +372,11 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentCode: 'AI-DATA',
     departmentName: 'AI & Data Science',
     description: 'Khối Trí tuệ Nhân tạo, Phân tích Mật độ Sử dụng Phòng họp & Tối ưu Công suất',
-    managerEmail: 'sysadmin@spotmatrix.vn',
-    managerName: 'System Administrator',
-    floorLocation: 'Tầng 4',
+    managerEmail: 'pham.hoang.nam@spotmatrix.vn',
+    managerName: 'Phạm Hoàng Nam (AI Researcher)',
+    floorLocation: 'Tầng 4 — Khu AI & Khoa học Dữ liệu',
     colorBadge: 'ROSE',
-    memberEmails: [],
+    memberEmails: ['pham.hoang.nam@spotmatrix.vn'],
     updatedAtIso: new Date().toISOString(),
   },
 ];
@@ -221,7 +391,7 @@ const INITIAL_GROUPS: OrganizationGroupItem[] = [
     leaderEmail: 'manager.lead@spotmatrix.vn',
     leaderName: 'Lê Thu Hà (Quản lý)',
     projectTag: '3D Engine v5.0',
-    memberEmails: ['sysadmin@spotmatrix.vn', 'manager.lead@spotmatrix.vn', 'employee.dev@spotmatrix.vn'],
+    memberEmails: ['manager.lead@spotmatrix.vn', 'employee.dev@spotmatrix.vn'],
     updatedAtIso: new Date().toISOString(),
   },
   {
@@ -245,7 +415,7 @@ const INITIAL_GROUPS: OrganizationGroupItem[] = [
     leaderEmail: 'sysadmin@spotmatrix.vn',
     leaderName: 'System Administrator',
     projectTag: 'Zero-Trust Audit',
-    memberEmails: ['sysadmin@spotmatrix.vn', 'manager.lead@spotmatrix.vn'],
+    memberEmails: ['sysadmin@spotmatrix.vn'],
     updatedAtIso: new Date().toISOString(),
   },
 ];
@@ -471,18 +641,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     getOrInitAudioContext,
   ]);
 
-  useEffect(() => {
-    const handleAudioEvent = (ev: Event) => {
-      const customEv = ev as CustomEvent<SpotMatrixAudioSettings>;
-      if (customEv.detail) {
-        setAudioSettings(customEv.detail);
-      }
-    };
-    window.addEventListener('spotmatrix-audio-settings-changed', handleAudioEvent);
-    return () =>
-      window.removeEventListener('spotmatrix-audio-settings-changed', handleAudioEvent);
-  }, []);
-
   const persistAudioSettings = (next: SpotMatrixAudioSettings) => {
     setAudioSettings(next);
     try {
@@ -622,6 +780,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       outcomeStatus: 'SUCCESS',
       detailMessage:
         'Xác nhận quét QR đúng hạn tại Hội trường H01-A3 lúc 12:45:10 (+2 điểm tín nhiệm).',
+      ipAddress: '113.161.72.104',
       createdAtIso: new Date().toISOString(),
     },
   ]);
@@ -634,7 +793,6 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const isSysAdmin = userSession?.userProfile.role === 'SYS_ADMIN';
 
-  // Đồng bộ chính xác trạng thái Online thực tế: Chỉ duy nhất tài khoản đang đăng nhập mới hiện Đang Online
   useEffect(() => {
     const activeUsername = userSession?.userProfile.username?.toLowerCase();
     setManagedUsers((prev) =>
@@ -757,39 +915,13 @@ const MainWorkspaceRoutes: React.FC = () => {
         lockVersionAttempted,
         outcomeStatus,
         detailMessage,
+        ipAddress: '113.161.72.104',
         createdAtIso: new Date().toISOString(),
       };
       setAuditLogs((prev) => [newAudit, ...prev]);
     },
     []
   );
-
-  useEffect(() => {
-    const handleStorageSync = (e: StorageEvent) => {
-      if (e.key === 'spotmatrix_last_qr_checkin_payload' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          setBookingsList((prev) =>
-            prev.map((b) =>
-              b.bookingId === parsed.bookingId
-                ? { ...b, bookingStatus: 'CHECKED_IN', checkedInAtIso: parsed.scannedAtText }
-                : b
-            )
-          );
-          recordRealtimeAuditLog(
-            'QR_CHECKIN_SUCCESS',
-            parsed.userEmail,
-            parsed.roomCode,
-            `Đã quét QR Check-in đúng hạn cho vé ${parsed.bookingId} tại thời điểm cố định: [${parsed.scannedAtText}].`
-          );
-        } catch {
-          // Bỏ qua
-        }
-      }
-    };
-    window.addEventListener('storage', handleStorageSync);
-    return () => window.removeEventListener('storage', handleStorageSync);
-  }, [recordRealtimeAuditLog]);
 
   const pushRealtimeNotification = useCallback(
     async (
@@ -839,6 +971,13 @@ const MainWorkspaceRoutes: React.FC = () => {
     setActivePage('OVERVIEW');
     navigate('/dashboard', { replace: true });
     playUiSoundEffect('SUCCESS');
+
+    recordRealtimeAuditLog(
+      'USER_LOGIN_SESSION',
+      sessionData.userProfile.userEmail,
+      'AUTH_GATEWAY',
+      `Đăng nhập thành công vào hệ thống SpotMatrix bởi @${sessionData.userProfile.username} (IP: 113.161.72.104).`
+    );
 
     const incomingProfile = sessionData.userProfile as AuthenticatedUserSession['userProfile'] & {
       avatarUrl?: string | null;
@@ -990,7 +1129,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
   };
 
-  // Quyền Tối cao SYS_ADMIN: Xóa lịch đặt phòng tại cửa sổ Xem chi tiết & Gửi thông báo đến người đặt
   const handleAdminDeleteBookingWithNotification = (
     bookingId: string,
     reasonText: string
@@ -1093,10 +1231,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     const isHallWholeRoomRental = codeToBook === 'H-01' || timeWindow?.bookingMode === 'HALL_EVENT_RENTAL';
     const isHallSeatBooking = /^H01-[A-C]\d+$/i.test(codeToBook) || timeWindow?.bookingMode === 'HALL_SEAT_BOOKING';
 
-    // Quy tắc phê duyệt:
-    // - Thuê cả Hội trường (H-01): SYS_ADMIN duyệt thẳng, MANAGER phải chờ SYS_ADMIN duyệt (PENDING_APPROVAL).
-    // - Đặt ghế ngồi Hội trường (khi sự kiện đã duyệt): APPROVED ngay.
-    // - Phòng họp Tầng 1-4: EMPLOYEE chờ duyệt, MANAGER & SYS_ADMIN duyệt thẳng.
     const needsApproval = isHallWholeRoomRental
       ? currentRole !== 'SYS_ADMIN'
       : isHallSeatBooking
@@ -1151,8 +1285,6 @@ const MainWorkspaceRoutes: React.FC = () => {
         newBookingItem.requesterUsername
       } đặt ${codeToBook} (${newBookingItem.startTimeIso}-${
         newBookingItem.endTimeIso
-      }, Chu kỳ: ${newBookingItem.recurringOption}, Số kỳ: ${
-        newBookingItem.occurrenceDates?.length || 1
       }).`,
       'SUCCESS',
       newBookingItem.lockVersion
@@ -1218,18 +1350,6 @@ const MainWorkspaceRoutes: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checkedInAtIso: frozenTime }),
     }).catch(() => {});
-
-    if (targetEmail) {
-      fetch('/api/v1/datamanager/trust-scores/adjust', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userEmail: targetEmail,
-          eventType: 'QR_CHECKIN_ONTIME',
-          targetNodeId: targetBk?.nodeId || 'M1-01',
-        }),
-      }).catch(() => {});
-    }
 
     recordRealtimeAuditLog(
       'QR_CHECKIN_SUCCESS',
@@ -1382,7 +1502,6 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   };
 
-  // Quản lý Tổ chức (Phòng ban & Nhóm riêng biệt) đồng bộ toàn bộ các trang và MongoDB Atlas qua /api/v1/organization
   const handleUpsertDepartment = (dept: OrganizationDepartmentItem) => {
     setDepartmentsList((prev) => {
       const idx = prev.findIndex((d) => d.departmentId === dept.departmentId);
@@ -1529,46 +1648,47 @@ const MainWorkspaceRoutes: React.FC = () => {
     ).catch(() => {});
   };
 
+  // Đa ngôn ngữ cho cả Sidebar, Header và Menu Avatar
   const sidebarItems = [
     {
       id: 'OVERVIEW' as ActiveSidebarPage,
       label: webLanguage === 'en' ? 'Overview (Dashboard)' : webLanguage === 'ja' ? 'ダッシュボード概要' : 'Tổng quan (Dashboard)',
-      sub: 'Số liệu thật & Trợ lý Chat',
+      sub: webLanguage === 'en' ? 'Live Telemetry & AI Voice' : webLanguage === 'ja' ? 'リアルタイム統計・AI音声' : 'Số liệu thật & Trợ lý Chat',
       icon: LayoutDashboard,
       adminOnly: false,
     },
     {
       id: 'FLOORPLAN' as ActiveSidebarPage,
       label: webLanguage === 'en' ? '3D/2D Floorplan' : webLanguage === 'ja' ? '3D/2D フロアマップ' : 'Sơ đồ Phòng họp',
-      sub: '5 Tầng 3D/2D & Hội trường',
+      sub: webLanguage === 'en' ? '5 Floors 3D/2D & Hall' : webLanguage === 'ja' ? '5階3Dモデル・大ホール' : '5 Tầng 3D/2D & Hội trường',
       icon: Map,
       adminOnly: false,
     },
     {
       id: 'BOOKING' as ActiveSidebarPage,
       label: webLanguage === 'en' ? 'Room & Hall Booking' : webLanguage === 'ja' ? '会議室・ホール予約' : 'Đặt lịch Phòng họp',
-      sub: 'Hội trường 2 chế độ & QR ±30p',
+      sub: webLanguage === 'en' ? '2-Mode Hall & QR ±30m' : webLanguage === 'ja' ? '2モード大ホール・QR ±30分' : 'Hội trường 2 chế độ & QR ±30p',
       icon: CalendarCheck,
       adminOnly: false,
     },
     {
       id: 'ORGANIZATION' as ActiveSidebarPage,
       label: webLanguage === 'en' ? 'Organization & Teams' : webLanguage === 'ja' ? '組織・部署・グループ' : 'Tổ chức & Phòng ban',
-      sub: 'Phòng ban duy nhất & Đa nhóm',
+      sub: webLanguage === 'en' ? '1 Dept & Sub-Groups' : webLanguage === 'ja' ? '単一部署・専門グループ' : 'Phòng ban duy nhất & Đa nhóm',
       icon: Building2,
       adminOnly: false,
     },
     {
       id: 'DATAMANAGER' as ActiveSidebarPage,
       label: webLanguage === 'en' ? 'Equipment & Trust' : webLanguage === 'ja' ? '設備・信頼スコア' : 'Thiết bị & Tín nhiệm',
-      sub: 'Mã số thiết bị & Điểm số',
+      sub: webLanguage === 'en' ? '25 Rooms Devices & Score' : webLanguage === 'ja' ? '全25室設備・信頼スコア' : 'Thiết bị 25 phòng & Điểm số',
       icon: Database,
       adminOnly: false,
     },
     {
       id: 'AUDIT' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Audit & Admin' : webLanguage === 'ja' ? '監査ログ・ユーザー管理' : 'Nhật ký & Quản trị User',
-      sub: 'Chỉ dành cho SYS_ADMIN',
+      label: webLanguage === 'en' ? 'Audit & IP Security' : webLanguage === 'ja' ? '監査ログ・IPセキュリティ' : 'Nhật ký & Quản trị User',
+      sub: webLanguage === 'en' ? 'SYS_ADMIN Exclusive' : webLanguage === 'ja' ? 'SYS_ADMIN 専用管理' : 'Chỉ dành cho SYS_ADMIN',
       icon: ShieldAlert,
       adminOnly: true,
     },
@@ -1618,7 +1738,11 @@ const MainWorkspaceRoutes: React.FC = () => {
 
                   <nav className="space-y-1.5">
                     <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
-                      Danh mục Chức năng
+                      {webLanguage === 'en'
+                        ? 'Navigation Menu'
+                        : webLanguage === 'ja'
+                        ? 'ナビゲーションメニュー'
+                        : 'Danh mục Chức năng'}
                     </p>
                     {sidebarItems.map((item) => {
                       const IconComponent = item.icon;
@@ -1669,7 +1793,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                 </div>
 
                 <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v4.8 (Lofi & Multi-Guard)
+                  SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
                 </div>
               </aside>
 
@@ -1714,7 +1838,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Gợi ý Phòng họp</span>
+                      <span className="hidden sm:inline">
+                        {webLanguage === 'en'
+                          ? 'Smart Room Suggest'
+                          : webLanguage === 'ja'
+                          ? '最適な会議室を提案'
+                          : 'Gợi ý Phòng họp'}
+                      </span>
                     </button>
 
                     <button
@@ -1731,17 +1861,28 @@ const MainWorkspaceRoutes: React.FC = () => {
                           ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                           : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                       }`}
-                      title="Bật/Tắt Nhạc nền Lofi Chill (Không bản quyền)"
                     >
                       {audioSettings.lofiEnabled ? (
                         <>
                           <Music className="w-3.5 h-3.5 animate-bounce" />
-                          <span className="hidden md:inline">Nhạc Lofi: Đang bật</span>
+                          <span className="hidden md:inline">
+                            {webLanguage === 'en'
+                              ? 'Lofi Music: ON'
+                              : webLanguage === 'ja'
+                              ? 'Lofi BGM: オン'
+                              : 'Nhạc Lofi: Đang bật'}
+                          </span>
                         </>
                       ) : (
                         <>
                           <VolumeX className="w-3.5 h-3.5" />
-                          <span className="hidden md:inline">Bật Nhạc Lofi</span>
+                          <span className="hidden md:inline">
+                            {webLanguage === 'en'
+                              ? 'Enable Lofi Music'
+                              : webLanguage === 'ja'
+                              ? 'Lofi BGM を再生'
+                              : 'Bật Nhạc Lofi'}
+                          </span>
                         </>
                       )}
                     </button>
@@ -1826,7 +1967,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                             </p>
                             <p className="flex items-center justify-between">
                               <span className="text-slate-400 flex items-center gap-1.5">
-                                <Building2 className="w-3.5 h-3.5" /> Vai trò:
+                                <Building2 className="w-3.5 h-3.5" /> Role:
                               </span>
                               <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
                                 {userSession.userProfile.role}
@@ -1834,10 +1975,10 @@ const MainWorkspaceRoutes: React.FC = () => {
                             </p>
                             <p className="flex items-center justify-between">
                               <span className="text-slate-400 flex items-center gap-1.5">
-                                <Award className="w-3.5 h-3.5" /> Điểm tín nhiệm:
+                                <Award className="w-3.5 h-3.5" /> Trust Score:
                               </span>
                               <strong className="font-extrabold text-teal-600 dark:text-teal-400">
-                                {userSession.userProfile.trustScore} điểm
+                                {userSession.userProfile.trustScore} pts
                               </strong>
                             </p>
                           </div>
@@ -1856,7 +1997,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                             }`}
                           >
                             <User className="w-4 h-4 text-indigo-600" />
-                            <span>Hồ sơ Cá nhân & Ảnh đại diện</span>
+                            <span>
+                              {webLanguage === 'en'
+                                ? 'Profile & AI Banner Studio'
+                                : webLanguage === 'ja'
+                                ? 'プロフィール＆AI背景生成'
+                                : 'Hồ sơ Cá nhân & Tạo Nền AI'}
+                            </span>
                           </button>
 
                           <button
@@ -1872,10 +2019,16 @@ const MainWorkspaceRoutes: React.FC = () => {
                               ) : (
                                 <Moon className="w-4 h-4 text-indigo-600" />
                               )}
-                              <span>Chế độ Sáng / Tối</span>
+                              <span>
+                                {webLanguage === 'en'
+                                  ? 'Light / Dark Theme'
+                                  : webLanguage === 'ja'
+                                  ? 'ライト / ダークモード'
+                                  : 'Chế độ Sáng / Tối'}
+                              </span>
                             </span>
                             <span className="text-[11px] font-bold text-slate-400">
-                              {isDark ? 'Đang bật Tối' : 'Đang bật Sáng'}
+                              {isDark ? 'Dark' : 'Light'}
                             </span>
                           </button>
 
@@ -1891,7 +2044,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                             }`}
                           >
                             <Settings className="w-4 h-4 text-teal-600" />
-                            <span>Cài đặt Nhạc Lofi, SFX & Hệ thống</span>
+                            <span>
+                              {webLanguage === 'en'
+                                ? 'System Settings & Security'
+                                : webLanguage === 'ja'
+                                ? 'システム設定・セキュリティ'
+                                : 'Cài đặt Nhạc Lofi, Bảo mật & Ngôn ngữ'}
+                            </span>
                           </button>
 
                           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
@@ -1902,7 +2061,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                             className="w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-rose-600 hover:bg-rose-500/10 font-bold transition"
                           >
                             <LogOut className="w-4 h-4" />
-                            <span>Đăng xuất tài khoản</span>
+                            <span>
+                              {webLanguage === 'en'
+                                ? 'Sign Out'
+                                : webLanguage === 'ja'
+                                ? 'ログアウト'
+                                : 'Đăng xuất tài khoản'}
+                            </span>
                           </button>
                         </div>
                       </div>
@@ -1922,6 +2087,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                         isDark={isDark}
                         userRole={userSession.userProfile.role}
                         userEmail={userSession.userProfile.userEmail}
+                        webLanguage={webLanguage}
                         onNavigateSection={(sec) => {
                           setActivePage(sec);
                           playUiSoundEffect('CLICK');
@@ -1935,6 +2101,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                         selectedNode={selectedNode}
                         userRole={userSession.userProfile.role}
                         userDepartment={userSession.userProfile.departmentName}
+                        webLanguage={webLanguage}
                         isDark={isDark}
                         onSelectNode={(n) => {
                           setSelectedNode(n);
@@ -1955,6 +2122,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onSelectNode={(n) => {
                         setSelectedNode(n);
