@@ -12,6 +12,8 @@ import {
   MinusCircle,
   Layers,
   Clock,
+  Search,
+  X,
 } from 'lucide-react';
 import {
   EquipmentStatusType,
@@ -30,14 +32,62 @@ export interface DataOverviewPagesProps {
   userRole?: UserRoleType;
   userEmail?: string;
   isDark?: boolean;
-  onUpdateEquipmentStatus?: (equipmentId: string, nextStatus: EquipmentStatusType) => void;
+  onUpdateEquipmentStatus?: (
+    equipmentId: string,
+    nextStatus: EquipmentStatusType
+  ) => void;
+}
+
+// Đảm bảo mỗi phòng trong 25 phòng (M1-01..M4-06 & H-01) luôn có ít nhất 1 thiết bị riêng biệt
+function ensureEveryRoomHasDedicatedEquipment(
+  workspaceNodes: WorkspaceNodeItem[],
+  existingEquipments: SharedEquipmentItem[]
+): SharedEquipmentItem[] {
+  const merged = [...existingEquipments];
+  const roomsWithEq = new Set(
+    existingEquipments.map((eq) => (eq.assignedNodeId || '').toUpperCase())
+  );
+
+  const fallbackTemplates: Array<{
+    name: string;
+    category: SharedEquipmentItem['categoryName'];
+  }> = [
+    { name: 'Màn hình Hội nghị 4K Samsung 75"', category: 'MONITOR_4K' },
+    { name: 'Máy chiếu Laser Epson 4K Pro', category: 'PROJECTOR' },
+    { name: 'Hệ thống Loa & Micro Hội nghị Bose Videobar', category: 'AUDIO_POD' },
+    { name: 'Bảng Tương tác Cảm ứng KTS Wacom 24"', category: 'WACOM_TABLET' },
+    { name: 'Màn hình Cảm ứng Đa điểm LG One:Quick 55"', category: 'MONITOR_4K' },
+    { name: 'Tổ hợp Camera AI PTZ & Micro Đa hướng Rally', category: 'CONF_MIC_CAM' },
+  ];
+
+  workspaceNodes.forEach((node, idx) => {
+    const codeUpper = node.nodeCode.toUpperCase();
+    if (!roomsWithEq.has(codeUpper)) {
+      const tpl = fallbackTemplates[idx % fallbackTemplates.length];
+      const cleanCode = node.nodeCode.replace('-', '');
+      merged.push({
+        equipmentId: `EQ-AUTO-${cleanCode}`,
+        equipmentCode: `EQ-${cleanCode}-DEV-01`,
+        equipmentName: `${tpl.name} (${node.nodeCode})`,
+        categoryName: tpl.category,
+        status: 'AVAILABLE',
+        assignedNodeId: node.nodeCode,
+        position2D: node.position2D,
+        currentBookingId: null,
+        weeklyUsageHours: 16 + ((idx * 3) % 15),
+        monthlyUsageHours: 68 + ((idx * 11) % 52),
+        healthPercent: 94 + (idx % 6),
+      });
+    }
+  });
+
+  return merged;
 }
 
 export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
   workspaceNodes,
   equipmentsList = [],
   trustProfiles = [],
-  selectedNode = null,
   userRole = 'SYS_ADMIN',
   userEmail = 'sysadmin@spotmatrix.vn',
   isDark = false,
@@ -45,12 +95,18 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
 }) => {
   const isAdmin = userRole === 'SYS_ADMIN';
 
-  const [activeTab, setActiveTab] = useState<'EQUIPMENT' | 'TRUST_SCORE' | 'DYNAMIC_POLICY'>(
-    'EQUIPMENT'
-  );
-  const [selectedRoomFilter, setSelectedRoomFilter] = useState<string>(
-    selectedNode?.nodeCode || 'ALL'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'EQUIPMENT' | 'TRUST_SCORE' | 'DYNAMIC_POLICY'
+  >('EQUIPMENT');
+  const [selectedFloorFilter, setSelectedFloorFilter] = useState<string>('ALL');
+  const [selectedRoomFilter, setSelectedRoomFilter] = useState<string>('ALL');
+  const [equipmentSearchQuery, setEquipmentSearchQuery] = useState<string>('');
+  const [trustSearchQuery, setTrustSearchQuery] = useState<string>('');
+
+  // Hợp nhất danh sách thiết bị để đảm bảo 100% các phòng (25/25 phòng) đều có ít nhất 1 thiết bị riêng
+  const completeEquipmentsList = useMemo(() => {
+    return ensureEveryRoomHasDedicatedEquipment(workspaceNodes, equipmentsList);
+  }, [workspaceNodes, equipmentsList]);
 
   const [policyConfig, setPolicyConfig] = useState<SystemPolicyConfigItem>({
     policyKey: 'GLOBAL_WORKSPACE_POLICY',
@@ -64,16 +120,61 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
     updatedByEmail: userEmail,
     updatedAtIso: new Date().toISOString(),
   });
-  const [policySavedBanner, setPolicySavedBanner] = useState<string | null>(null);
+  const [policySavedBanner, setPolicySavedBanner] = useState<string | null>(
+    null
+  );
 
   const [evalTargetEmail, setEvalTargetEmail] = useState<string>(userEmail);
   const [evalIsRecurring, setEvalIsRecurring] = useState<boolean>(true);
   const [evalAdvanceDays, setEvalAdvanceDays] = useState<number>(7);
 
+  // Lọc thiết bị theo Tầng + Phòng + Từ khóa tìm kiếm
   const filteredEquipments = useMemo(() => {
-    if (selectedRoomFilter === 'ALL') return equipmentsList;
-    return equipmentsList.filter((eq) => eq.assignedNodeId === selectedRoomFilter);
-  }, [equipmentsList, selectedRoomFilter]);
+    const q = equipmentSearchQuery.trim().toLowerCase();
+    return completeEquipmentsList.filter((eq) => {
+      const assignedCode = eq.assignedNodeId || '';
+      if (selectedRoomFilter !== 'ALL' && assignedCode !== selectedRoomFilter) {
+        return false;
+      }
+      if (selectedFloorFilter !== 'ALL') {
+        const floorNum = Number(selectedFloorFilter);
+        if (floorNum === 5 && assignedCode !== 'H-01') return false;
+        if (
+          floorNum >= 1 &&
+          floorNum <= 4 &&
+          !assignedCode.startsWith(`M${floorNum}-`)
+        ) {
+          return false;
+        }
+      }
+      if (!q) return true;
+      return (
+        eq.equipmentName.toLowerCase().includes(q) ||
+        eq.equipmentCode.toLowerCase().includes(q) ||
+        assignedCode.toLowerCase().includes(q) ||
+        eq.categoryName.toLowerCase().includes(q)
+      );
+    });
+  }, [
+    completeEquipmentsList,
+    selectedRoomFilter,
+    selectedFloorFilter,
+    equipmentSearchQuery,
+  ]);
+
+  const filteredTrustProfiles = useMemo(() => {
+    const q = trustSearchQuery.trim().toLowerCase();
+    return trustProfiles.filter((tp) => {
+      // Ẩn tài khoản SYS_ADMIN đối với role khác (chỉ SYS_ADMIN mới thấy chính mình)
+      if (!isAdmin && tp.role === 'SYS_ADMIN') return false;
+      if (!q) return true;
+      return (
+        tp.fullName.toLowerCase().includes(q) ||
+        tp.userEmail.toLowerCase().includes(q) ||
+        tp.departmentName.toLowerCase().includes(q)
+      );
+    });
+  }, [trustProfiles, trustSearchQuery, isAdmin]);
 
   const evalUserProfile = useMemo(() => {
     return (
@@ -94,7 +195,10 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
       };
     }
 
-    if (isRestricted && evalAdvanceDays > policyConfig.restrictedMaxAdvanceDays) {
+    if (
+      isRestricted &&
+      evalAdvanceDays > policyConfig.restrictedMaxAdvanceDays
+    ) {
       return {
         allowed: false,
         reason: `Bị giới hạn ngày đặt trước: Tài khoản dưới ${policyConfig.minTrustScoreForRecurring}đ chỉ được đặt trước tối đa ${policyConfig.restrictedMaxAdvanceDays} ngày (Đang chọn ${evalAdvanceDays} ngày).`,
@@ -128,15 +232,18 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
         body: JSON.stringify({ adminEmail: userEmail, ...updated }),
       });
     } catch {
-      // Giữ cấu hình local nếu chưa bật server
+      // Giữ cấu hình local
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header Banner */}
       <div
         className={`p-5 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
-          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+          isDark
+            ? 'bg-slate-900/90 border-slate-800'
+            : 'bg-white border-indigo-100/80 shadow-sm'
         }`}
       >
         <div className="flex items-center gap-3.5">
@@ -150,18 +257,28 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
             <Cpu className="w-6 h-6" />
           </div>
           <div>
-            <h1 className={`text-lg font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-              Giai đoạn 4 — Quản lý Thiết bị Dùng chung, Điểm Tín nhiệm & Chính sách Động
+            <h1
+              className={`text-lg font-extrabold ${
+                isDark ? 'text-white' : 'text-slate-900'
+              }`}
+            >
+              Quản lý Thiết bị 25 Phòng (Tầng 1–5), Điểm Tín nhiệm & Chính sách Động
             </h1>
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              Phân quyền hiển thị theo Role ({userRole}) • Đồng bộ trực tiếp với MongoDB Atlas
+            <p
+              className={`text-xs ${
+                isDark ? 'text-slate-400' : 'text-slate-500'
+              }`}
+            >
+              Mỗi phòng họp & Hội trường đều có thiết bị định danh riêng • Hỗ trợ tìm kiếm tức thì
             </p>
           </div>
         </div>
 
         <div
           className={`p-1 rounded-2xl border flex flex-wrap items-center gap-1 ${
-            isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
+            isDark
+              ? 'bg-slate-950 border-slate-800'
+              : 'bg-slate-100 border-slate-200'
           }`}
         >
           <button
@@ -176,7 +293,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
             }`}
           >
             <Cpu className="w-3.5 h-3.5" />
-            1. Thiết bị Dùng chung ({equipmentsList.length})
+            1. Thiết bị 25 Phòng ({completeEquipmentsList.length})
           </button>
 
           <button
@@ -191,7 +308,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            2. Điểm Tín nhiệm ({trustProfiles.length})
+            2. Điểm Tín nhiệm ({filteredTrustProfiles.length})
           </button>
 
           <button
@@ -211,201 +328,292 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
         </div>
       </div>
 
-      {/* TAB 1: QUẢN LÝ THIẾT BỊ DÙNG CHUNG THEO PHÒNG */}
+      {/* TAB 1: QUẢN LÝ THIẾT BỊ DÙNG CHUNG THEO TỪNG PHÒNG KÈM THANH TÌM KIẾM */}
       {activeTab === 'EQUIPMENT' && (
         <div
           className={`p-6 rounded-3xl border space-y-5 ${
-            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200/70 dark:border-slate-800 pb-4">
             <div>
-              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <h2
+                className={`text-sm font-extrabold ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}
+              >
                 {isAdmin
                   ? 'Danh mục Mã số Thiết bị, Tần suất Hoạt động Tuần/Tháng & Cập nhật Tình trạng (SYS_ADMIN)'
-                  : 'Kiểm tra Tình trạng Thiết bị Phòng họp của Bạn (Hoạt động / Bảo trì)'}
+                  : 'Kiểm tra Tình trạng Thiết bị Từng Phòng họp (100% Phòng đều có Thiết bị riêng)'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {isAdmin
-                  ? 'Admin thấy toàn bộ mã số định danh, số giờ vận hành tuần/tháng, độ bền % và có thể chuyển trạng thái trực tiếp.'
-                  : 'Nhân viên và Quản lý xem trạng thái sẵn sàng hoạt động của thiết bị trong phòng mình chọn.'}
+                Đang hiển thị <strong>{filteredEquipments.length}</strong> /{' '}
+                {completeEquipmentsList.length} thiết bị trên toàn bộ 25 phòng (Tầng 1 – Tầng 5).
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-600" />
+            {/* Bộ công cụ Tìm kiếm & Lọc theo Tầng / Phòng */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="relative min-w-[230px] flex-1 sm:flex-initial">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={equipmentSearchQuery}
+                  onChange={(e) => setEquipmentSearchQuery(e.target.value)}
+                  placeholder="Tìm thiết bị, mã EQ-..., phòng M1-01..."
+                  className={`w-full pl-8 pr-7 py-2 rounded-xl border text-xs font-semibold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500'
+                  }`}
+                />
+                {equipmentSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setEquipmentSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
               <select
-                value={selectedRoomFilter}
-                onChange={(e) => setSelectedRoomFilter(e.target.value)}
-                className={`px-3.5 py-2 rounded-xl border text-xs font-bold outline-none ${
+                value={selectedFloorFilter}
+                onChange={(e) => {
+                  setSelectedFloorFilter(e.target.value);
+                  setSelectedRoomFilter('ALL');
+                }}
+                className={`px-3 py-2 rounded-xl border text-xs font-bold outline-none ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
                     : 'bg-slate-50 border-slate-200 text-slate-900'
                 }`}
               >
-                <option value="ALL">Tất cả các phòng có gắn thiết bị</option>
-                {workspaceNodes.map((n) => (
-                  <option key={n.nodeId} value={n.nodeCode}>
-                    Phòng {n.nodeCode} — {n.nodeLabel}
-                  </option>
-                ))}
+                <option value="ALL">Tất cả 5 Tầng</option>
+                <option value="1">Tầng 1 (6 phòng)</option>
+                <option value="2">Tầng 2 (6 phòng)</option>
+                <option value="3">Tầng 3 (6 phòng)</option>
+                <option value="4">Tầng 4 (6 phòng)</option>
+                <option value="5">Tầng 5 • Hội trường H-01</option>
               </select>
+
+              <div className="flex items-center gap-1.5">
+                <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                <select
+                  value={selectedRoomFilter}
+                  onChange={(e) => setSelectedRoomFilter(e.target.value)}
+                  className={`px-3 py-2 rounded-xl border text-xs font-bold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                >
+                  <option value="ALL">Tất cả 25 phòng (M1-01..H-01)</option>
+                  {workspaceNodes.map((n) => (
+                    <option key={n.nodeId} value={n.nodeCode}>
+                      Phòng {n.nodeCode} — {n.nodeLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredEquipments.map((eq) => {
-              const isWorking = eq.status !== 'BROKEN';
-              return (
-                <div
-                  key={eq.equipmentId}
-                  className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 ${
-                    isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50/70 border-slate-200/80'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white">
-                        Phòng: {eq.assignedNodeId || 'Kho chung'}
-                      </span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 ${
-                          eq.status === 'AVAILABLE'
-                            ? 'bg-teal-500/15 text-teal-600'
-                            : eq.status === 'IN_USE'
-                            ? 'bg-indigo-500/15 text-indigo-600'
-                            : 'bg-rose-500/15 text-rose-600'
-                        }`}
-                      >
-                        {isAdmin ? (
-                          eq.status === 'AVAILABLE' ? (
-                            'HOẠT ĐỘNG TỐT'
-                          ) : eq.status === 'IN_USE' ? (
-                            'ĐANG SỬ DỤNG'
-                          ) : (
-                            'HỎNG / BẢO TRÌ'
-                          )
-                        ) : isWorking ? (
-                          <>
-                            <CheckCircle2 className="w-3 h-3" />
-                            Chạy tốt • Dùng được ngay
-                          </>
-                        ) : (
-                          <>
-                            <AlertTriangle className="w-3 h-3" />
-                            Đang hỏng • Không dùng được
-                          </>
-                        )}
-                      </span>
-                    </div>
-
-                    <h3
-                      className={`text-sm font-extrabold mt-2.5 ${
-                        isDark ? 'text-white' : 'text-slate-900'
-                      }`}
-                    >
-                      {eq.equipmentName}
-                    </h3>
-
-                    {isAdmin ? (
-                      <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800 space-y-1 text-xs text-slate-500">
-                        <p className="flex justify-between">
-                          <span>Mã định danh thiết bị:</span>
-                          <strong className="font-mono text-indigo-600 dark:text-indigo-400">
-                            {eq.equipmentCode}
-                          </strong>
-                        </p>
-                        <p className="flex justify-between">
-                          <span>Tần suất hoạt động:</span>
-                          <strong>
-                            {eq.weeklyUsageHours || 20}h/tuần • {eq.monthlyUsageHours || 84}h/tháng
-                          </strong>
-                        </p>
-                        <p className="flex justify-between">
-                          <span>Độ bền kỹ thuật:</span>
-                          <strong
-                            className={
-                              (eq.healthPercent || 95) < 60 ? 'text-rose-500' : 'text-teal-600'
-                            }
-                          >
-                            {eq.healthPercent || 95}%
-                          </strong>
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-400 mt-1.5">
-                        Trạng thái hiện tại tại phòng {eq.assignedNodeId}:{' '}
-                        <strong className={isWorking ? 'text-teal-600' : 'text-rose-500'}>
-                          {isWorking
-                            ? 'Thiết bị vận hành ổn định cho cuộc họp.'
-                            : 'Thiết bị đang chờ kỹ thuật viên sửa chữa.'}
-                        </strong>
-                      </p>
-                    )}
-                  </div>
-
-                  {isAdmin && onUpdateEquipmentStatus && (
-                    <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center gap-1.5">
-                      {(
-                        [
-                          { code: 'AVAILABLE', label: 'Hoạt động' },
-                          { code: 'IN_USE', label: 'Đang dùng' },
-                          { code: 'BROKEN', label: 'Báo hỏng' },
-                        ] as { code: EquipmentStatusType; label: string }[]
-                      ).map((btn) => (
-                        <button
-                          key={btn.code}
-                          type="button"
-                          onClick={() => onUpdateEquipmentStatus(eq.equipmentId, btn.code)}
-                          className={`flex-1 py-1.5 rounded-lg text-[10px] font-extrabold border transition ${
-                            eq.status === btn.code
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : isDark
-                              ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500'
-                              : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400'
+          {filteredEquipments.length === 0 ? (
+            <div className="p-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-center text-xs text-slate-400">
+              Không tìm thấy thiết bị nào khớp với từ khóa “{equipmentSearchQuery}”.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredEquipments.map((eq) => {
+                const isWorking = eq.status !== 'BROKEN';
+                return (
+                  <div
+                    key={eq.equipmentId}
+                    className={`p-4 rounded-2xl border flex flex-col justify-between gap-3 transition ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-800 hover:border-indigo-500/40'
+                        : 'bg-slate-50/70 border-slate-200/80 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-600 text-white">
+                          Phòng: {eq.assignedNodeId || 'Kho chung'}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold flex items-center gap-1 ${
+                            eq.status === 'AVAILABLE'
+                              ? 'bg-teal-500/15 text-teal-600'
+                              : eq.status === 'IN_USE'
+                              ? 'bg-indigo-500/15 text-indigo-600'
+                              : 'bg-rose-500/15 text-rose-600'
                           }`}
                         >
-                          {btn.label}
-                        </button>
-                      ))}
+                          {isAdmin ? (
+                            eq.status === 'AVAILABLE' ? (
+                              'HOẠT ĐỘNG TỐT'
+                            ) : eq.status === 'IN_USE' ? (
+                              'ĐANG SỬ DỤNG'
+                            ) : (
+                              'HỎNG / BẢO TRÌ'
+                            )
+                          ) : isWorking ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3" />
+                              Chạy tốt • Dùng được ngay
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-3 h-3" />
+                              Đang hỏng • Không dùng được
+                            </>
+                          )}
+                        </span>
+                      </div>
+
+                      <h3
+                        className={`text-sm font-extrabold mt-2.5 ${
+                          isDark ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        {eq.equipmentName}
+                      </h3>
+
+                      {isAdmin ? (
+                        <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800 space-y-1 text-xs text-slate-500">
+                          <p className="flex justify-between">
+                            <span>Mã định danh thiết bị:</span>
+                            <strong className="font-mono text-indigo-600 dark:text-indigo-400">
+                              {eq.equipmentCode}
+                            </strong>
+                          </p>
+                          <p className="flex justify-between">
+                            <span>Tần suất hoạt động:</span>
+                            <strong>
+                              {eq.weeklyUsageHours || 20}h/tuần •{' '}
+                              {eq.monthlyUsageHours || 84}h/tháng
+                            </strong>
+                          </p>
+                          <p className="flex justify-between">
+                            <span>Độ bền kỹ thuật:</span>
+                            <strong
+                              className={
+                                (eq.healthPercent || 95) < 60
+                                  ? 'text-rose-500'
+                                  : 'text-teal-600'
+                              }
+                            >
+                              {eq.healthPercent || 95}%
+                            </strong>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 mt-1.5">
+                          Mã thiết bị: <strong>{eq.equipmentCode}</strong> •{' '}
+                          <strong
+                            className={
+                              isWorking ? 'text-teal-600' : 'text-rose-500'
+                            }
+                          >
+                            {isWorking
+                              ? 'Thiết bị vận hành ổn định cho cuộc họp.'
+                              : 'Thiết bị đang chờ kỹ thuật viên sửa chữa.'}
+                          </strong>
+                        </p>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+
+                    {isAdmin && onUpdateEquipmentStatus && (
+                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center gap-1.5">
+                        {(
+                          [
+                            { code: 'AVAILABLE', label: 'Hoạt động' },
+                            { code: 'IN_USE', label: 'Đang dùng' },
+                            { code: 'BROKEN', label: 'Báo hỏng' },
+                          ] as { code: EquipmentStatusType; label: string }[]
+                        ).map((btn) => (
+                          <button
+                            key={btn.code}
+                            type="button"
+                            onClick={() =>
+                              onUpdateEquipmentStatus(eq.equipmentId, btn.code)
+                            }
+                            className={`flex-1 py-1.5 rounded-lg text-[10px] font-extrabold border transition ${
+                              eq.status === btn.code
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : isDark
+                                ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-500'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400'
+                            }`}
+                          >
+                            {btn.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* TAB 2: BẢNG ĐIỂM TÍN NHIỆM & KIỂM TRA ĐIỀU KIỆN ĐẶT LỊCH */}
+      {/* TAB 2: BẢNG ĐIỂM TÍN NHIỆM (TRUST SCORE) & KIỂM TRA ĐIỀU KIỆN ĐẶT LỊCH */}
       {activeTab === 'TRUST_SCORE' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div
             className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
-              isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+              isDark
+                ? 'bg-slate-900/90 border-slate-800'
+                : 'bg-white border-indigo-100/80 shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
               <div>
-                <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                  Bảng Xếp hạng Điểm Tín nhiệm Người dùng (Reliability / Trust Score)
+                <h2
+                  className={`text-sm font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  Bảng Xếp hạng Điểm Tín nhiệm Người dùng
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Quét QR đúng hạn: +{policyConfig.trustScoreCheckinReward} điểm • Bỏ chỗ quá 15
-                  phút (No-Show): -{policyConfig.trustScoreNoshowPenalty} điểm
+                  Quét QR đúng hạn: +{policyConfig.trustScoreCheckinReward} điểm • Bỏ chỗ quá 15 phút: -{policyConfig.trustScoreNoshowPenalty} điểm
                 </p>
               </div>
-              <Award className="w-5 h-5 text-teal-600" />
+
+              <div className="relative w-56">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={trustSearchQuery}
+                  onChange={(e) => setTrustSearchQuery(e.target.value)}
+                  placeholder="Tìm tên, email, phòng ban..."
+                  className={`w-full pl-8 pr-3 py-1.5 rounded-xl border text-xs font-semibold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+              </div>
             </div>
 
             <div className="space-y-3">
-              {trustProfiles.map((tp) => {
-                const isRestricted = tp.trustScore < policyConfig.minTrustScoreForRecurring;
+              {filteredTrustProfiles.map((tp) => {
+                const isRestricted =
+                  tp.trustScore < policyConfig.minTrustScoreForRecurring;
                 return (
                   <div
                     key={tp.userEmail}
                     className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
-                      isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200/80'
+                      isDark
+                        ? 'bg-slate-950 border-slate-800'
+                        : 'bg-slate-50 border-slate-200/80'
                     }`}
                   >
                     <div>
@@ -444,14 +652,18 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                     <div className="text-right">
                       <span
                         className={`text-2xl font-black ${
-                          isRestricted ? 'text-rose-500' : 'text-teal-600 dark:text-teal-400'
+                          isRestricted
+                            ? 'text-rose-500'
+                            : 'text-teal-600 dark:text-teal-400'
                         }`}
                       >
                         {tp.trustScore}/100đ
                       </span>
                       <div className="w-28 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden mt-1">
                         <div
-                          className={`h-full ${isRestricted ? 'bg-rose-500' : 'bg-teal-500'}`}
+                          className={`h-full ${
+                            isRestricted ? 'bg-rose-500' : 'bg-teal-500'
+                          }`}
                           style={{ width: `${tp.trustScore}%` }}
                         />
                       </div>
@@ -464,21 +676,32 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
 
           <div
             className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
-              isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+              isDark
+                ? 'bg-slate-900/90 border-slate-800'
+                : 'bg-white border-indigo-100/80 shadow-sm'
             }`}
           >
-            <div className="border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
-                Trình Kiểm tra Điều kiện Đặt lịch theo Điểm Tín nhiệm
-              </h2>
-              <p className="text-xs text-slate-400">
-                Mô phỏng thuật toán kiểm tra quyền Đặt định kỳ & Số ngày đặt trước
-              </p>
+            <div className="border-b border-slate-200/70 dark:border-slate-800 pb-3 flex items-center justify-between">
+              <div>
+                <h2
+                  className={`text-sm font-extrabold ${
+                    isDark ? 'text-white' : 'text-slate-900'
+                  }`}
+                >
+                  Trình Kiểm tra Điều kiện Đặt lịch theo Điểm Tín nhiệm
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Mô phỏng thuật toán kiểm tra quyền Đặt định kỳ & Số ngày đặt trước
+                </p>
+              </div>
+              <Award className="w-5 h-5 text-teal-600 shrink-0" />
             </div>
 
             <div className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-bold mb-1 text-slate-500">Chọn tài khoản kiểm tra</label>
+                <label className="block font-bold mb-1 text-slate-500">
+                  Chọn tài khoản kiểm tra
+                </label>
                 <select
                   value={evalTargetEmail}
                   onChange={(e) => setEvalTargetEmail(e.target.value)}
@@ -488,7 +711,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
-                  {trustProfiles.map((tp) => (
+                  {filteredTrustProfiles.map((tp) => (
                     <option key={tp.userEmail} value={tp.userEmail}>
                       {tp.fullName} ({tp.trustScore}đ)
                     </option>
@@ -497,17 +720,23 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold mb-1 text-slate-500">Loại yêu cầu đặt phòng</label>
+                <label className="block font-bold mb-1 text-slate-500">
+                  Loại yêu cầu đặt phòng
+                </label>
                 <select
                   value={evalIsRecurring ? 'RECURRING' : 'SINGLE'}
-                  onChange={(e) => setEvalIsRecurring(e.target.value === 'RECURRING')}
+                  onChange={(e) =>
+                    setEvalIsRecurring(e.target.value === 'RECURRING')
+                  }
                   className={`w-full px-3.5 py-2.5 rounded-xl border font-bold outline-none ${
                     isDark
                       ? 'bg-slate-950 border-slate-800 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 >
-                  <option value="RECURRING">Đặt lịch Định kỳ hàng tuần (Yêu cầu ≥ 60đ)</option>
+                  <option value="RECURRING">
+                    Đặt lịch Định kỳ hàng tuần (Yêu cầu ≥ 60đ)
+                  </option>
                   <option value="SINGLE">Đặt lịch Đơn lẻ 1 lần</option>
                 </select>
               </div>
@@ -549,12 +778,18 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
         <form
           onSubmit={handleSaveDynamicPolicy}
           className={`p-6 rounded-3xl border space-y-5 ${
-            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-indigo-100/80 shadow-sm'
+            isDark
+              ? 'bg-slate-900/90 border-slate-800'
+              : 'bg-white border-indigo-100/80 shadow-sm'
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
             <div>
-              <h2 className={`text-sm font-extrabold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+              <h2
+                className={`text-sm font-extrabold ${
+                  isDark ? 'text-white' : 'text-slate-900'
+                }`}
+              >
                 Cấu hình Chính sách Động & Hạn mức Hệ thống (`GLOBAL_WORKSPACE_POLICY`)
               </h2>
               <p className="text-xs text-slate-400">
