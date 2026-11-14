@@ -55,6 +55,7 @@ import {
   AuthenticatedUserSession,
   LoginPages,
 } from '../../Main/Auth/Pages/LoginPages';
+import { LandingShowcasePages } from '../../Main/Auth/Pages/LandingShowcasePages';
 import {
   ProfilePages,
   UserProfileCustomization,
@@ -1697,6 +1698,29 @@ const MainWorkspaceRoutes: React.FC = () => {
   return (
     <Routes>
       <Route
+        path="/"
+        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
+      />
+
+      <Route
+        path="/welcome"
+        element={
+          <LandingShowcasePages
+            isDark={isDark}
+            webLanguage={webLanguage}
+            isAuthenticated={Boolean(userSession)}
+            onToggleTheme={toggleThemeMode}
+            onChangeWebLanguage={(lang) => {
+              setWebLanguage(lang);
+              playUiSoundEffect('CLICK');
+            }}
+            onNavigateToLogin={() => navigate('/login')}
+            onNavigateToDashboard={() => navigate('/dashboard')}
+          />
+        }
+      />
+
+      <Route
         path="/qr-checkin"
         element={
           <QrCheckinConfirmPages
@@ -1712,7 +1736,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           userSession ? (
             <Navigate to="/dashboard" replace />
           ) : (
-            <LoginPages onLoginSuccess={handleLoginSuccess} />
+            <LoginPages
+              onLoginSuccess={handleLoginSuccess}
+              onOpenLandingShowcase={() => navigate('/welcome')}
+            />
           )
         }
       />
@@ -1792,8 +1819,21 @@ const MainWorkspaceRoutes: React.FC = () => {
                   </nav>
                 </div>
 
-                <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
+                <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playUiSoundEffect('CLICK');
+                      navigate('/welcome');
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600/15 via-blue-600/15 to-emerald-500/15 hover:from-indigo-600 hover:to-emerald-500 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
+                  >
+                    <span>Trang Giới Thiệu 3D WebGL</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="text-[11px] text-slate-400">
+                    SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
+                  </div>
                 </div>
               </aside>
 
@@ -2333,7 +2373,7 @@ const MainWorkspaceRoutes: React.FC = () => {
 
       <Route
         path="*"
-        element={<Navigate to={userSession ? '/dashboard' : '/login'} replace />}
+        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
       />
     </Routes>
   );
