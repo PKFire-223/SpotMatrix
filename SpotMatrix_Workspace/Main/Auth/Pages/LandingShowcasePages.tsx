@@ -19,6 +19,8 @@ import {
   Monitor,
   Users,
   ChevronDown,
+  Eye,
+  Gauge,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 import { WebLanguageCodeType } from '../../../Shared/Types/GlobalSystemTypes';
@@ -55,13 +57,14 @@ interface LandingTranslationPack {
   chapter4Title: string;
   chapter4Desc: string;
   scrollHint: string;
+  inspect3dToggle: string;
 }
 
 const LANDING_TRANSLATIONS: Record<WebLanguageCodeType, LandingTranslationPack> = {
   vi: {
-    navBadge: 'WebGL 3.0 Spatial Engine • 60 FPS',
+    navBadge: 'PBR WebGL 3.0 • Studio HDRI • 60 FPS',
     chapterLabels: [
-      '01. Kiến trúc 3D',
+      '01. Kiến trúc 3D PBR',
       '02. Tách lớp 5 Tầng',
       '03. Đấu trường H-01',
       '04. Bảo mật & QR',
@@ -70,29 +73,30 @@ const LANDING_TRANSLATIONS: Record<WebLanguageCodeType, LandingTranslationPack> 
     ctaBackDashboard: 'Vào Bảng Điều Khiển',
     heroTagline: 'NỀN TẢNG QUẢN TRỊ KHÔNG GIAN 3D/2D & HỘI TRƯỜNG LA MÃ',
     heroTitlePrefix: 'Định hình Không gian Làm việc trên ',
-    heroTitleHighlight: 'Ma trận Kính 3D Thời gian Thực',
+    heroTitleHighlight: 'Ma trận Kính Khúc xạ 3D Thời gian Thực',
     heroDescription:
-      'Trải nghiệm kiến trúc tòa nhà 5 tầng tương tác trực tiếp bằng WebGL Three.js: 24 phòng họp kính tiêu chuẩn (M1-01..M4-06), Hội trường Đấu Trường La Mã 30 ghế vòm (H-01), định danh 30 thiết bị 4K/Audio và khóa đồng thời Optimistic Locking.',
-    floorInspectorTitle: 'Bộ chọn Tầng 3D Trực tiếp (Click để Camera bay tới Tầng)',
-    floorResetBtn: 'Góc nhìn Cuộn Tự động',
-    chapter2Badge: 'CHƯƠNG 02 • EXPLODED ISOMETRIC CUTAWAY',
-    chapter2Title: 'Tách Lớp 24 Phòng Họp Kính & 30 Thiết Bị Định Danh',
+      'Trải nghiệm bản sao số kiến trúc 5 tầng dựng bằng WebGL Three.js PBR: 24 phòng họp kính vát cạnh có phản xạ ánh sáng Studio HDRI (M1-01..M4-06), Hội trường Đấu Trường La Mã 30 ghế vòm (H-01), định danh 30 thiết bị 4K/Audio và khóa đồng thời Optimistic Locking.',
+    floorInspectorTitle: 'Chọn Tầng 3D Trực tiếp (Click để Camera bay cận cảnh vào Tầng)',
+    floorResetBtn: 'Trả về Cuộn Tự động',
+    chapter2Badge: 'CHƯƠNG 02 • EXPLODED BEVELED GLASS MATRIX',
+    chapter2Title: 'Tách Lớp 24 Phòng Họp Kính Vát Cạnh & 30 Thiết Bị Định Danh',
     chapter2Desc:
-      'Khi bạn cuộn trang, 5 mặt sàn tự động tách giãn theo trục dọc trong không gian 3D. Mỗi phòng từ M1-01 đến M4-06 đều trang bị tường kính khúc xạ, bàn Boardroom/Collab, màn hình 4K phát sáng và đèn Beacon báo trạng thái Trống / Giữ chỗ 5p / Đang họp.',
+      'Khi cuộn trang, 5 mặt sàn kiến trúc tự động tách giãn theo trục dọc. Từng phòng từ M1-01 đến M4-06 được kết xuất bằng vật liệu kính quang học (IOR 1.5, Clearcoat 1.0), khung nhôm Anodized vát cạnh bắt sáng, bàn họp Boardroom/Collab, màn hình 4K phát sáng và hạt kim cương báo trạng thái Trống / Giữ chỗ 5p / Đang họp.',
     chapter3Badge: 'CHƯƠNG 03 • COLOSSEUM AMPHITHEATER H-01 (TẦNG 5)',
     chapter3Title: 'Hội Trường Đấu Trường La Mã & Màn Hình Panorama 360°',
     chapter3Desc:
-      'Camera bay lên đỉnh Tầng 5 để lộ diện kiến trúc vòm La Mã 3 dãy ghế bậc thang (H01-A1..A7, H01-B1..B9, H01-C1..C12) xoay quanh sân khấu tròn trung tâm. Hỗ trợ phân quyền 2 chế độ: Thuê trọn sự kiện theo Phòng ban (HALL_EVENT_RENTAL) và Đặt chỗ từng ghế ngồi (HALL_SEAT_BOOKING).',
+      'Camera bay lên đỉnh Tầng 5 để lộ diện kiến trúc vòm La Mã với hàng cột trụ Colonnade, 3 dãy ghế bậc thang (H01-A1..A7, H01-B1..B9, H01-C1..C12) xoay quanh sân khấu tròn trung tâm. Hỗ trợ phân quyền 2 chế độ: Thuê trọn sự kiện theo Phòng ban (HALL_EVENT_RENTAL) và Đặt chỗ từng ghế ngồi (HALL_SEAT_BOOKING).',
     chapter4Badge: 'CHƯƠNG 04 • ZERO DOUBLE-BOOKING & QR CHECK-IN ±30P',
     chapter4Title: 'Khóa Đồng Thời Optimistic Lock, Điểm Tín Nhiệm & Cảnh Báo IP',
     chapter4Desc:
       'Bảo vệ tuyệt đối mọi giao dịch đặt chỗ bằng kiểm soát phiên bản lockVersion, cửa sổ quét mã QR Check-in chính xác (±30 phút cộng +2 điểm Trust Score, tự động thu hồi sau 15 phút vắng mặt) và giám sát bảo mật đa địa chỉ IP.',
     scrollHint: 'Cuộn chuột để tách lớp tòa nhà 3D',
+    inspect3dToggle: 'Chế độ Ngắm 3D Toàn cảnh',
   },
   en: {
-    navBadge: 'WebGL 3.0 Spatial Engine • 60 FPS',
+    navBadge: 'PBR WebGL 3.0 • Studio HDRI • 60 FPS',
     chapterLabels: [
-      '01. 3D Architecture',
+      '01. PBR 3D Matrix',
       '02. 5-Floor Explode',
       '03. Colosseum H-01',
       '04. Security & QR',
@@ -101,29 +105,30 @@ const LANDING_TRANSLATIONS: Record<WebLanguageCodeType, LandingTranslationPack> 
     ctaBackDashboard: 'Open Workspace Dashboard',
     heroTagline: '3D/2D SPATIAL WORKSPACE & COLOSSEUM HALL PLATFORM',
     heroTitlePrefix: 'Orchestrate Your Enterprise Space in ',
-    heroTitleHighlight: 'Real-Time 3D Glass Matrix',
+    heroTitleHighlight: 'Real-Time Refractive 3D Glass Matrix',
     heroDescription:
-      'Explore an interactive 5-floor WebGL Three.js architectural twin: 24 glass meeting pods (M1-01..M4-06), the 30-seat Colosseum Amphitheater (H-01), 30 tracked 4K/Audio devices, and zero-conflict Optimistic Locking.',
+      'Explore an interactive 5-floor WebGL Three.js PBR digital twin: 24 beveled glass meeting pods with Studio HDRI reflections (M1-01..M4-06), the 30-seat Colosseum Amphitheater (H-01), 30 tracked 4K/Audio devices, and zero-conflict Optimistic Locking.',
     floorInspectorTitle: 'Interactive 3D Floor Focus (Click to Fly Camera to Floor)',
     floorResetBtn: 'Auto Scroll Camera',
-    chapter2Badge: 'CHAPTER 02 • EXPLODED ISOMETRIC CUTAWAY',
-    chapter2Title: 'Exploded 24 Glass Meeting Rooms & 30 Tracked Devices',
+    chapter2Badge: 'CHAPTER 02 • EXPLODED BEVELED GLASS MATRIX',
+    chapter2Title: 'Exploded 24 Beveled Glass Rooms & 30 Tracked Devices',
     chapter2Desc:
-      'As you scroll, all 5 architectural slabs dynamically separate along the vertical axis. Every room from M1-01 to M4-06 renders refractive glass walls, Boardroom/Collab tables, glowing 4K screens, and live status beacons.',
+      'As you scroll, all 5 architectural slabs dynamically separate along the vertical axis. Every room from M1-01 to M4-06 renders optical glass (IOR 1.5, Clearcoat 1.0), beveled anodized aluminum frames, Boardroom/Collab tables, glowing 4K screens, and diamond status beacons.',
     chapter3Badge: 'CHAPTER 03 • COLOSSEUM AMPHITHEATER H-01 (FLOOR 5)',
     chapter3Title: 'Colosseum Tiered Arena & 360° Panorama LED Halo',
     chapter3Desc:
-      'The camera ascends to Floor 5, revealing 3 concentric seat arcs (H01-A1..A7, H01-B1..B9, H01-C1..C12) surrounding the central podium with dual-mode governance: Department Event Rental and Individual Seat Booking.',
+      'The camera ascends to Floor 5, revealing perimeter colonnade pillars and 3 concentric seat arcs (H01-A1..A7, H01-B1..B9, H01-C1..C12) surrounding the central podium with dual-mode governance: Department Event Rental and Individual Seat Booking.',
     chapter4Badge: 'CHAPTER 04 • ZERO DOUBLE-BOOKING & ±30M QR CHECK-IN',
     chapter4Title: 'Optimistic Concurrency Lock, Trust Score & Multi-IP Guard',
     chapter4Desc:
       'Eliminate race conditions with lockVersion verification, ±30-minute QR Check-in validation (+2 Trust Score reward, 15-minute no-show auto-release), and multi-IP anomaly detection.',
     scrollHint: 'Scroll down to explode the 3D building',
+    inspect3dToggle: 'Pure 3D Inspection Mode',
   },
   ja: {
-    navBadge: 'WebGL 3.0 空間エンジン • 60 FPS',
+    navBadge: 'PBR WebGL 3.0 • Studio HDRI • 60 FPS',
     chapterLabels: [
-      '01. 3D建築マトリクス',
+      '01. PBR 3D建築',
       '02. 5階層フロア分解',
       '03. コロッセオ H-01',
       '04. QR & セキュリティ',
@@ -132,15 +137,15 @@ const LANDING_TRANSLATIONS: Record<WebLanguageCodeType, LandingTranslationPack> 
     ctaBackDashboard: 'ダッシュボードへ移動',
     heroTagline: '3D/2D ワークスペース＆コロッセオ大ホール管理基盤',
     heroTitlePrefix: '次世代のオフィス空間を ',
-    heroTitleHighlight: 'リアルタイム3Dガラスマトリクスで制御',
+    heroTitleHighlight: 'リアルタイムPBR 3Dガラスマトリクスで制御',
     heroDescription:
-      'WebGL Three.jsによる5階建てインタラクティブ空間：24室のガラス会議室（M1-01..M4-06）、30席の円形闘技場ホール（H-01）、30台の4K/音響機器管理、楽観的ロックによる重複予約防止を実現。',
+      'WebGL Three.js PBRによる5階建てインタラクティブ空間：面取りガラス会議室24室（M1-01..M4-06）、30席の円形闘技場ホール（H-01）、30台の4K/音響機器管理、楽観的ロックによる重複予約防止を実現。',
     floorInspectorTitle: '3Dフロア直接フォーカス（クリックでカメラ移動）',
     floorResetBtn: '自動スクロール視点',
     chapter2Badge: 'CHAPTER 02 • 5階層アイソメトリック分解ビュー',
-    chapter2Title: '24室のガラス会議室と30台の専用機器を立体可視化',
+    chapter2Title: '24室の面取りガラス会議室と30台の専用機器を立体可視化',
     chapter2Desc:
-      'スクロールに合わせて5つのフロアが垂直方向に美しく分解。M1-01からM4-06までの各部屋にガラス壁、会議テーブル、4Kモニター、リアルタイム状態ビーコンを表示します。',
+      'スクロールに合わせて5つのフロアが垂直方向に分解。M1-01からM4-06までの各部屋に光学ガラス壁（IOR 1.5）、アルミフレーム、会議テーブル、4Kモニター、状態ビーコンを表示します。',
     chapter3Badge: 'CHAPTER 03 • 5階 コロッセオ大ホール H-01',
     chapter3Title: '円形3列シート（30席）と360°パノラマLEDスクリーン',
     chapter3Desc:
@@ -150,6 +155,7 @@ const LANDING_TRANSLATIONS: Record<WebLanguageCodeType, LandingTranslationPack> 
     chapter4Desc:
       'lockVersionによる競合防止、開始前後30分のQRチェックイン（+2点加算・15分無断キャンセル自動解放）、複数IPログイン警告を統合。',
     scrollHint: 'スクロールして3Dビルを分解表示',
+    inspect3dToggle: '3D全体ビュー切替',
   },
 };
 
@@ -164,6 +170,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
 }) => {
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [selectedFloorPreview, setSelectedFloorPreview] = useState<number | null>(null);
+  const [pure3dInspectMode, setPure3dInspectMode] = useState<boolean>(false);
 
   const t = LANDING_TRANSLATIONS[webLanguage] || LANDING_TRANSLATIONS.vi;
 
@@ -204,20 +211,20 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
   };
 
   const floorBadges = [
-    { floor: 1, code: 'Tầng 1 (M1-01..06)', sub: '6 Phòng kính • 8 Thiết bị' },
-    { floor: 2, code: 'Tầng 2 (M2-01..06)', sub: '6 Phòng kính • 7 Thiết bị' },
-    { floor: 3, code: 'Tầng 3 (M3-01..06)', sub: '6 Phòng kính • 7 Thiết bị' },
-    { floor: 4, code: 'Tầng 4 (M4-01..06)', sub: '6 Phòng kính • 6 Thiết bị' },
-    { floor: 5, code: 'Tầng 5 (H-01 La Mã)', sub: '30 Ghế vòm • Panorama 360°' },
+    { floor: 1, code: 'Tầng 1 (M1-01..06)', sub: '6 Phòng kính PBR • 8 Thiết bị' },
+    { floor: 2, code: 'Tầng 2 (M2-01..06)', sub: '6 Phòng kính PBR • 7 Thiết bị' },
+    { floor: 3, code: 'Tầng 3 (M3-01..06)', sub: '6 Phòng kính PBR • 7 Thiết bị' },
+    { floor: 4, code: 'Tầng 4 (M4-01..06)', sub: '6 Phòng kính PBR • 6 Thiết bị' },
+    { floor: 5, code: 'Tầng 5 (H-01 La Mã)', sub: 'Đấu trường Vòm • Panorama 360°' },
   ];
 
   return (
     <div
       className={`relative min-h-[420vh] w-full selection:bg-indigo-500 selection:text-white transition-colors duration-500 ${
-        isDark ? 'bg-[#050814] text-slate-100' : 'bg-[#EEF4FF] text-slate-900'
+        isDark ? 'bg-[#040711] text-slate-100' : 'bg-[#EEF4FF] text-slate-900'
       }`}
     >
-      {/* LỚP NỀN WEBGL 3D THREE.JS CỐ ĐỊNH TOÀN MÀN HÌNH */}
+      {/* LỚP NỀN WEBGL 3D THREE.JS PBR CỐ ĐỊNH TOÀN MÀN HÌNH */}
       <SpotMatrixHeroCanvas3D
         scrollProgress={scrollProgress}
         activeChapter={activeChapter}
@@ -225,24 +232,26 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
         isDark={isDark}
       />
 
-      {/* LỚP PHỦ VIGNETTE ĐỂ CHỮ NỔI BẬT SẮC NÉT TRÊN NỀN 3D */}
+      {/* LỚP PHỦ VIGNETTE ĐỂ CHỮ NỔI BẬT MÀ KHÔNG LÀM MỜ ĐỘ BÓNG CỦA TÒA NHÀ 3D */}
       <div
-        className={`pointer-events-none fixed inset-0 z-[1] ${
+        className={`pointer-events-none fixed inset-0 z-[1] transition-opacity duration-500 ${
+          pure3dInspectMode ? 'opacity-10' : 'opacity-100'
+        } ${
           isDark
-            ? 'bg-gradient-to-r from-[#050814]/85 via-[#050814]/35 to-transparent'
-            : 'bg-gradient-to-r from-white/80 via-white/30 to-transparent'
+            ? 'bg-gradient-to-r from-[#040711]/80 via-[#040711]/20 to-transparent'
+            : 'bg-gradient-to-r from-white/75 via-white/15 to-transparent'
         }`}
       />
 
       {/* =====================================================================
-          THANH ĐIỀU HƯỚNG KÍNH MỜ CỐ ĐỊNH (FLOATING GLASS NAVBAR)
+          THANH ĐIỀU HƯỚNG KÍNH MỜ CỐ ĐỊNH (FLOATING SPECULAR GLASS NAVBAR)
          ===================================================================== */}
       <header className="fixed top-0 inset-x-0 z-30 px-4 sm:px-8 py-3.5">
         <div
-          className={`max-w-7xl mx-auto rounded-2xl border px-4 sm:px-6 py-3 backdrop-blur-xl shadow-lg flex flex-wrap items-center justify-between gap-3 transition-colors ${
+          className={`max-w-7xl mx-auto rounded-2xl border px-4 sm:px-6 py-3 backdrop-blur-xl shadow-2xl flex flex-wrap items-center justify-between gap-3 transition-colors ${
             isDark
-              ? 'bg-slate-950/75 border-slate-800/90 shadow-black/40'
-              : 'bg-white/80 border-slate-200/90 shadow-indigo-500/10'
+              ? 'bg-slate-950/75 border-indigo-500/25 shadow-black/50'
+              : 'bg-white/80 border-indigo-200/80 shadow-indigo-500/10'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -272,7 +281,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                   onClick={() => scrollToChapterRatio(targetRatios[idx])}
                   className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
                     isCurrent
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white shadow-md shadow-indigo-600/30'
                       : isDark
                       ? 'text-slate-400 hover:text-white hover:bg-slate-800/70'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
@@ -284,8 +293,24 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             })}
           </nav>
 
-          {/* Cụm chuyển đổi Ngôn ngữ (VI / EN / JA), Sáng/Tối & Nút vào Hệ thống */}
+          {/* Cụm Nút Ngắm 3D, Chuyển đổi Ngôn ngữ (VI / EN / JA), Sáng/Tối & Nút vào Hệ thống */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPure3dInspectMode((prev) => !prev)}
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[11px] font-extrabold transition ${
+                pure3dInspectMode
+                  ? 'bg-emerald-600 border-emerald-400 text-white shadow-lg shadow-emerald-600/30'
+                  : isDark
+                  ? 'bg-slate-900 border-slate-800 text-cyan-300 hover:border-cyan-500/50'
+                  : 'bg-slate-100 border-slate-200 text-indigo-700 hover:border-indigo-400'
+              }`}
+              title={t.inspect3dToggle}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>{t.inspect3dToggle}</span>
+            </button>
+
             <div
               className={`inline-flex items-center rounded-xl p-1 border ${
                 isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
@@ -348,16 +373,16 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
       {/* =====================================================================
           BẢNG ĐIỀU KHIỂN CHỌN TẦNG 3D NỔI BÊN PHẢI (INTERACTIVE 3D FLOOR HUD)
          ===================================================================== */}
-      <aside className="hidden xl:flex fixed right-8 top-1/2 -translate-y-1/2 z-20 flex-col gap-2 w-60">
+      <aside className="hidden xl:flex fixed right-8 top-1/2 -translate-y-1/2 z-20 flex-col gap-2 w-64">
         <div
-          className={`p-3.5 rounded-2xl border backdrop-blur-xl shadow-xl space-y-2 ${
+          className={`p-4 rounded-2xl border backdrop-blur-xl shadow-2xl space-y-2.5 ${
             isDark
-              ? 'bg-slate-950/80 border-slate-800/90 text-slate-200'
-              : 'bg-white/85 border-slate-200/90 text-slate-800'
+              ? 'bg-slate-950/80 border-indigo-500/30 text-slate-200 shadow-black/50'
+              : 'bg-white/85 border-indigo-200 text-slate-800 shadow-indigo-500/10'
           }`}
         >
           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-current/10">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-indigo-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 text-cyan-400">
               <Compass className="w-3.5 h-3.5" />
               3D Floor Camera Rig
             </span>
@@ -391,9 +416,9 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                     }
                     className={`w-full p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${
                       isSelected
-                        ? 'bg-indigo-600/90 border-indigo-400 text-white shadow-md shadow-indigo-600/30 translate-x-[-4px]'
+                        ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 border-cyan-300 text-white shadow-lg shadow-indigo-600/30 translate-x-[-4px]'
                         : isDark
-                        ? 'bg-slate-900/75 border-slate-800 hover:border-indigo-500/50 text-slate-200'
+                        ? 'bg-slate-900/75 border-slate-800 hover:border-cyan-500/50 text-slate-200'
                         : 'bg-slate-50/90 border-slate-200 hover:border-indigo-400 text-slate-800'
                     }`}
                   >
@@ -401,7 +426,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                       <p className="text-xs font-extrabold">{item.code}</p>
                       <p
                         className={`text-[10px] ${
-                          isSelected ? 'text-indigo-100' : 'opacity-65'
+                          isSelected ? 'text-cyan-100' : 'opacity-65'
                         }`}
                       >
                         {item.sub}
@@ -416,20 +441,42 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                 );
               })}
           </div>
+
+          {/* Thông số kỹ thuật Engine PBR trực tiếp */}
+          <div
+            className={`mt-2 pt-2 border-t text-[10px] space-y-1 ${
+              isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-600'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1 font-bold">
+                <Gauge className="w-3 h-3 text-emerald-400" /> Shaders:
+              </span>
+              <span className="font-mono text-cyan-400">PMREM HDRI + IOR 1.5</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-bold">Geometry:</span>
+              <span className="font-mono text-indigo-400">Beveled Extrude 3D</span>
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* =====================================================================
           NỘI DUNG 4 CHƯƠNG TRƯỢT THEO THANH CUỘN (SCROLL-TELLING CHAPTERS)
          ===================================================================== */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-8 pt-28 pb-24">
+      <main
+        className={`relative z-10 max-w-7xl mx-auto px-4 sm:px-8 pt-28 pb-24 transition-opacity duration-500 ${
+          pure3dInspectMode ? 'opacity-15 pointer-events-none' : 'opacity-100'
+        }`}
+      >
         {/* CHƯƠNG 1: HERO OVERVIEW */}
         <section className="min-h-[92vh] flex flex-col justify-center max-w-2xl space-y-6">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full text-xs font-extrabold border backdrop-blur-md bg-indigo-500/10 border-indigo-500/30 text-indigo-500 dark:text-indigo-300"
+            className="inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full text-xs font-extrabold border backdrop-blur-md bg-indigo-500/10 border-indigo-500/35 text-indigo-500 dark:text-cyan-300"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>{t.heroTagline}</span>
@@ -439,10 +486,10 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-[1.1]"
+            className="text-4xl sm:text-5xl xl:text-6xl font-black tracking-tight leading-[1.08]"
           >
             {t.heroTitlePrefix}
-            <span className="bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-indigo-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">
               {t.heroTitleHighlight}
             </span>
           </motion.h1>
@@ -451,10 +498,10 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
-            className={`text-sm sm:text-base xl:text-lg leading-relaxed backdrop-blur-sm rounded-2xl p-4 border ${
+            className={`text-sm sm:text-base xl:text-lg leading-relaxed backdrop-blur-md rounded-2xl p-4.5 border shadow-xl ${
               isDark
-                ? 'bg-slate-950/65 border-slate-800/80 text-slate-300'
-                : 'bg-white/75 border-slate-200/80 text-slate-700'
+                ? 'bg-slate-950/65 border-indigo-500/25 text-slate-300'
+                : 'bg-white/80 border-indigo-200/80 text-slate-700'
             }`}
           >
             {t.heroDescription}
@@ -472,17 +519,17 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
               return (
                 <div
                   key={stat.label}
-                  className={`p-3.5 rounded-2xl border backdrop-blur-xl transition-transform hover:-translate-y-1 ${
+                  className={`p-3.5 rounded-2xl border backdrop-blur-xl transition-all hover:-translate-y-1 ${
                     isDark
-                      ? 'bg-slate-950/75 border-slate-800/90'
-                      : 'bg-white/85 border-slate-200/90 shadow-sm'
+                      ? 'bg-slate-950/75 border-indigo-500/25 hover:border-cyan-400/50 shadow-lg shadow-black/40'
+                      : 'bg-white/85 border-indigo-200/80 hover:border-indigo-400 shadow-sm'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-2xl font-black bg-gradient-to-r from-indigo-500 to-cyan-400 bg-clip-text text-transparent">
+                    <span className="text-2xl font-black bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
                       {stat.value}
                     </span>
-                    <StatIcon className="w-4 h-4 text-indigo-400" />
+                    <StatIcon className="w-4 h-4 text-cyan-400" />
                   </div>
                   <p className="text-xs font-extrabold">{stat.label}</p>
                   <p className="text-[11px] opacity-65">{stat.sub}</p>
@@ -506,12 +553,12 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
               onClick={() => scrollToChapterRatio(0.36)}
               className={`px-5 py-4 rounded-2xl border text-xs sm:text-sm font-extrabold backdrop-blur-xl flex items-center gap-2 transition ${
                 isDark
-                  ? 'bg-slate-900/80 border-slate-700 text-slate-200 hover:border-indigo-400'
+                  ? 'bg-slate-900/80 border-slate-700 text-slate-200 hover:border-cyan-400'
                   : 'bg-white/90 border-slate-300 text-slate-800 hover:border-indigo-500'
               }`}
             >
               <span>{t.scrollHint}</span>
-              <ChevronDown className="w-4 h-4 animate-bounce text-indigo-400" />
+              <ChevronDown className="w-4 h-4 animate-bounce text-cyan-400" />
             </button>
           </div>
         </section>
@@ -521,7 +568,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
           <div
             className={`p-6 sm:p-8 rounded-3xl border backdrop-blur-xl shadow-2xl space-y-5 ${
               isDark
-                ? 'bg-slate-950/80 border-indigo-500/30 shadow-indigo-950/30'
+                ? 'bg-slate-950/80 border-cyan-500/30 shadow-indigo-950/40'
                 : 'bg-white/90 border-indigo-200 shadow-indigo-500/10'
             }`}
           >
@@ -542,12 +589,12 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                   isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}
               >
-                <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-500 mb-1">
+                <div className="flex items-center gap-2 text-xs font-extrabold text-emerald-400 mb-1">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Kiến trúc Phòng Kính 3D</span>
+                  <span>Kiến trúc Phòng Kính PBR</span>
                 </div>
                 <p className="text-[11px] opacity-75">
-                  Tường kính có lối cửa vào, trụ góc nhôm, bàn dài Boardroom / bàn tròn Collab, ghế xoay theo sức chứa 2–12 người.
+                  Vách kính khúc xạ IOR 1.5, gờ vát cạnh Beveled bắt sáng, trụ góc nhôm Anodized, bàn dài Boardroom & bàn tròn Collab.
                 </p>
               </div>
 
@@ -556,7 +603,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                   isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}
               >
-                <div className="flex items-center gap-2 text-xs font-extrabold text-indigo-400 mb-1">
+                <div className="flex items-center gap-2 text-xs font-extrabold text-cyan-400 mb-1">
                   <Cpu className="w-4 h-4" />
                   <span>30 Thiết bị Định danh</span>
                 </div>
@@ -581,9 +628,9 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                     }
                     className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition ${
                       selectedFloorPreview === fl
-                        ? 'bg-indigo-600 border-indigo-400 text-white'
+                        ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 border-cyan-300 text-white shadow-md'
                         : isDark
-                        ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-indigo-400'
+                        ? 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
                         : 'bg-slate-100 border-slate-300 text-slate-700 hover:border-indigo-500'
                     }`}
                   >
@@ -646,7 +693,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             <button
               type="button"
               onClick={() => setSelectedFloorPreview(5)}
-              className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 transition"
+              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 transition"
             >
               Khóa Góc Nhìn Cận Cảnh Đấu Trường La Mã H-01 (Tầng 5)
             </button>
@@ -737,14 +784,16 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             <div
               className={`px-4 py-2.5 rounded-full border backdrop-blur-xl shadow-xl flex items-center gap-3 text-xs font-extrabold ${
                 isDark
-                  ? 'bg-slate-900/90 border-indigo-500/50 text-white'
+                  ? 'bg-slate-900/90 border-cyan-500/50 text-white'
                   : 'bg-white/95 border-indigo-300 text-slate-900'
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               <span>
                 Đang khóa Camera 3D tại Tầng {selectedFloorPreview}{' '}
-                {selectedFloorPreview === 5 ? '(Đấu Trường La Mã H-01)' : `(M${selectedFloorPreview}-01..06)`}
+                {selectedFloorPreview === 5
+                  ? '(Đấu Trường La Mã H-01)'
+                  : `(M${selectedFloorPreview}-01..06)`}
               </span>
               <button
                 type="button"
