@@ -17,6 +17,7 @@ import {
   BellRing,
   AlertTriangle,
   Wifi,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   AuditConcurrencyLogItem,
@@ -47,6 +48,11 @@ export interface AuditLogPagesProps {
   isDark: boolean;
   onToggleBlockUser: (username: string) => void;
   onDeleteUserAccount: (username: string) => void;
+  onChangeUserRole?: (
+    username: string,
+    userEmail: string,
+    nextRole: 'EMPLOYEE' | 'MANAGER'
+  ) => void;
   onAdminOverrideBookingApproval: (
     bookingId: string,
     decision: 'APPROVED' | 'REJECTED'
@@ -65,12 +71,16 @@ const AUDIT_I18N: Record<
     onlineBadge: (o: number, t: number) => string;
     sec1Title: (c: number) => string;
     sec1Sub: string;
+    adminRolePolicyNote: string;
     colCode: string;
     colName: string;
     colRole: string;
     colIps: string;
     colStatus: string;
     colAction: string;
+    roleAdminLockedBadge: string;
+    roleOptionEmployee: string;
+    roleOptionManager: string;
     multiIpAlert: (c: number) => string;
     onlineText: string;
     offlineText: string;
@@ -106,18 +116,23 @@ const AUDIT_I18N: Record<
   vi: {
     headerTitle: 'Trung tâm Nhật ký Bảo mật IP, Kiểm toán Hệ thống & Quản trị User',
     headerSub:
-      'Lưu vết địa chỉ IP đăng nhập (nhắc nhở khi > 2 IP khác biệt) • Xem chi tiết & Xóa lịch đặt phòng kèm gửi thông báo',
+      'Lưu vết địa chỉ IP đăng nhập (nhắc nhở khi > 2 IP khác biệt) • Đổi Role Nhân viên / Quản lý • Xem chi tiết & Xóa lịch đặt phòng',
     onlineBadge: (o, t) => `Đang đăng nhập thực tế: ${o} / ${t} tài khoản`,
     sec1Title: (c) =>
-      `1. Quản lý Tài khoản, Trạng thái Online & Giám sát Địa chỉ IP Đăng nhập (${c})`,
+      `1. Quản lý Tài khoản, Phân quyền Role (Nhân viên / Quản lý) & Giám sát IP (${c})`,
     sec1Sub:
-      'Tự động gắn nhãn nhắc nhở chú ý nhẹ khi phát hiện tài khoản đăng nhập từ nhiều hơn 2 địa chỉ IP khác biệt',
+      'Admin có thể chuyển đổi Role của người dùng giữa Nhân viên (EMPLOYEE) và Quản lý (MANAGER) trực tiếp bên dưới.',
+    adminRolePolicyNote:
+      '* Quy tắc Bảo mật Tối cao: Tài khoản SYS_ADMIN phải được khởi tạo riêng từ trước trong Database Seed hoặc qua Backend, tuyệt đối không cấp quyền SYS_ADMIN qua giao diện web.',
     colCode: 'Mã Định danh',
     colName: 'Họ tên & Tài khoản',
-    colRole: 'Vai trò & Bộ phận',
+    colRole: 'Phân quyền Role & Bộ phận',
     colIps: 'Lịch sử Địa chỉ IP Đăng nhập',
     colStatus: 'Trạng thái Phiên',
     colAction: 'Thao tác Admin',
+    roleAdminLockedBadge: 'SYS_ADMIN (Khởi tạo từ DB/Backend • Cố định)',
+    roleOptionEmployee: 'EMPLOYEE — Nhân viên',
+    roleOptionManager: 'MANAGER — Quản lý',
     multiIpAlert: (c) => `Chú ý nhẹ: Đăng nhập từ ${c} địa chỉ IP khác biệt`,
     onlineText: 'Đang Online',
     offlineText: 'Offline',
@@ -156,18 +171,23 @@ const AUDIT_I18N: Record<
   en: {
     headerTitle: 'IP Security Audit Center, Concurrency Logs & User Administration',
     headerSub:
-      'Tracks login IP addresses (alerts when > 2 distinct IPs) • Inspect & revoke bookings with instant user notification',
+      'Tracks login IP addresses • Switch user roles between Employee and Manager • Inspect & revoke bookings',
     onlineBadge: (o, t) => `Currently Online: ${o} / ${t} accounts`,
     sec1Title: (c) =>
-      `1. User Accounts, Online Status & Login IP Monitoring (${c})`,
+      `1. User Accounts, Role Assignment (Employee / Manager) & Login IP Monitor (${c})`,
     sec1Sub:
-      'Automatically flags a security reminder when an account logs in from more than 2 distinct IP addresses',
+      'System Admin can switch user roles between EMPLOYEE and MANAGER directly in the table below.',
+    adminRolePolicyNote:
+      '* Security Policy: SYS_ADMIN accounts must be provisioned directly in Database Seed or via Backend API/CLI and cannot be granted via web UI.',
     colCode: 'Account ID',
     colName: 'Full Name & Username',
-    colRole: 'Role & Department',
+    colRole: 'Role Assignment & Department',
     colIps: 'Login IP History',
     colStatus: 'Session Status',
     colAction: 'Admin Actions',
+    roleAdminLockedBadge: 'SYS_ADMIN (DB/Backend Provisioned • Locked)',
+    roleOptionEmployee: 'EMPLOYEE — Staff Member',
+    roleOptionManager: 'MANAGER — Department Manager',
     multiIpAlert: (c) => `Notice: Logged in from ${c} distinct IP addresses`,
     onlineText: 'Online',
     offlineText: 'Offline',
@@ -206,18 +226,23 @@ const AUDIT_I18N: Record<
   ja: {
     headerTitle: 'IPセキュリティ監査・同時実行ログ・ユーザー管理センター',
     headerSub:
-      'ログインIP履歴を追跡（3つ以上の異なるIPで警告表示）• 予約詳細の確認および通知付き削除',
+      'ログインIP履歴追跡 • 社員(EMPLOYEE)とマネージャー(MANAGER)のロール変更 • 予約監視と強制取消',
     onlineBadge: (o, t) => `現在オンライン: ${o} / ${t} アカウント`,
     sec1Title: (c) =>
-      `1. ユーザーアカウント・オンライン状態・ログインIP監視 (${c})`,
+      `1. ユーザー管理・ロール権限切替 (社員 / マネージャー)・ログインIP監視 (${c})`,
     sec1Sub:
-      '同一アカウントで3つ以上の異なるIPアドレスからログインがあった場合、自動的に注意ラベルを表示します',
+      '管理者は一般ユーザーのロールを「社員 (EMPLOYEE)」または「マネージャー (MANAGER)」へ直接変更できます。',
+    adminRolePolicyNote:
+      '* セキュリティ規則：SYS_ADMIN アカウントはデータベースシードまたはバックエンド側でのみ事前作成され、Web画面から昇格させることはできません。',
     colCode: '識別コード',
     colName: '氏名＆アカウント',
-    colRole: 'ロール＆所属部署',
+    colRole: 'ロール権限＆所属部署',
     colIps: 'ログインIPアドレス履歴',
     colStatus: 'セッション状態',
     colAction: '管理者操作',
+    roleAdminLockedBadge: 'SYS_ADMIN (DB/Backend 事前定義 • 固定)',
+    roleOptionEmployee: 'EMPLOYEE — 一般社員',
+    roleOptionManager: 'MANAGER — マネージャー',
     multiIpAlert: (c) => `注意: ${c} 個の異なるIPアドレスからのログインを検知`,
     onlineText: 'オンライン',
     offlineText: 'オフライン',
@@ -263,6 +288,7 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
   isDark,
   onToggleBlockUser,
   onDeleteUserAccount,
+  onChangeUserRole,
   onAdminDeleteBookingWithNotification,
 }) => {
   const [searchKeyword, setSearchKeyword] = useState<string>('');
@@ -406,7 +432,7 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
         </div>
       )}
 
-      {/* BẢNG 1: QUẢN LÝ TÀI KHOẢN & GIÁM SÁT ĐỊA CHỈ IP ĐĂNG NHẬP */}
+      {/* BẢNG 1: QUẢN LÝ TÀI KHOẢN, ĐỔI ROLE (EMPLOYEE <-> MANAGER) & GIÁM SÁT IP */}
       <div
         className={`p-6 rounded-3xl border space-y-4 ${
           isDark
@@ -415,7 +441,7 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
-          <div>
+          <div className="space-y-1">
             <h2
               className={`text-sm font-bold flex items-center gap-2 ${
                 isDark ? 'text-white' : 'text-slate-900'
@@ -425,6 +451,10 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
               {t.sec1Title(managedUsers.length)}
             </h2>
             <p className="text-xs text-slate-400">{t.sec1Sub}</p>
+            <p className="text-[11px] font-bold text-rose-500 flex items-center gap-1.5 pt-0.5">
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>{t.adminRolePolicyNote}</span>
+            </p>
           </div>
         </div>
 
@@ -478,10 +508,42 @@ export const AuditLogPages: React.FC<AuditLogPagesProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                        {user.role}
-                      </span>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
+                      {user.role === 'SYS_ADMIN' ? (
+                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-black bg-rose-500/15 text-rose-500 border border-rose-500/30 inline-flex items-center gap-1">
+                          <Lock className="w-3 h-3" />
+                          {t.roleAdminLockedBadge}
+                        </span>
+                      ) : (
+                        <select
+                          value={user.role}
+                          onChange={(e) => {
+                            const nextRole = e.target.value as
+                              | 'EMPLOYEE'
+                              | 'MANAGER';
+                            if (onChangeUserRole) {
+                              onChangeUserRole(
+                                user.username,
+                                user.userEmail,
+                                nextRole
+                              );
+                              setAdminActionBanner(
+                                `Đã chuyển đổi vai trò của tài khoản @${user.username} (${user.userEmail}) sang [${nextRole}] thành công!`
+                              );
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-xl border text-xs font-extrabold outline-none transition ${
+                            user.role === 'MANAGER'
+                              ? 'bg-indigo-600/15 border-indigo-500/40 text-indigo-600 dark:text-indigo-300'
+                              : 'bg-teal-500/15 border-teal-500/40 text-teal-700 dark:text-teal-300'
+                          }`}
+                        >
+                          <option value="EMPLOYEE">
+                            {t.roleOptionEmployee}
+                          </option>
+                          <option value="MANAGER">{t.roleOptionManager}</option>
+                        </select>
+                      )}
+                      <div className="text-[11px] text-slate-400 mt-1">
                         {user.departmentName}
                       </div>
                     </td>

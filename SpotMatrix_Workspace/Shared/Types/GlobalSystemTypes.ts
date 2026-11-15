@@ -71,12 +71,22 @@ export interface BookingPayloadItem {
     | 'HOLDING'
     | 'CONFIRMED'
     | 'CHECKED_IN'
+    | 'EXPIRED_NO_SHOW'
     | 'AUTO_RELEASED'
     | 'CANCELLED';
   approvalStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   approvedByUsername?: string | null;
   approvedAtIso?: string | null;
   checkedInAtIso?: string | null;
+  checkedInTimestampMs?: number | null;
+  expiredAtIso?: string | null;
+  expiredAtTimestampMs?: number | null;
+  cancelledAtIso?: string | null;
+  cancelledAtTimestampMs?: number | null;
+  cancelledViaQr?: boolean;
+  rejectedAtIso?: string | null;
+  rejectedAtTimestampMs?: number | null;
+  qrToken?: string;
   attachedEquipmentIds?: string[];
   bookingMode?: HallBookingModeType;
   allowedDepartments?: string[];
@@ -178,10 +188,6 @@ export interface AuditConcurrencyLogItem {
   createdAtIso: string;
 }
 
-// ============================================================================
-// CẤU TRÚC TỔ CHỨC: PHÒNG BAN (1 NGƯỜI CHỈ 1 PHÒNG BAN) & NHÓM CON TRỰC THUỘC
-// ============================================================================
-
 export interface OrganizationDepartmentItem {
   departmentId: string;
   departmentCode: string;
@@ -207,10 +213,6 @@ export interface OrganizationGroupItem {
   memberEmails: string[];
   updatedAtIso: string;
 }
-
-// ============================================================================
-// NHẬT KÝ ĐĂNG NHẬP IP & CÀI ĐẶT BỀN VỮNG TOÀN HỆ THỐNG
-// ============================================================================
 
 export interface LoginIpRecordItem {
   logId: string;

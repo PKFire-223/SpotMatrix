@@ -14,6 +14,10 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
+  History,
+  ExternalLink,
+  XCircle,
+  TimerOff,
 } from 'lucide-react';
 import {
   BookingPayloadItem,
@@ -30,9 +34,12 @@ import {
   formatIsoDateString,
   generateRecurringOccurrenceDates,
   getRoleWeeklyQuotaConfig,
+  isBookingVisibleInActivePassBox,
+  validateOperatingHoursAndOrder,
   validateQrCheckinTimeWindow,
   validateSingleAndRecurringCollision,
 } from '../Function/Validators/BookingValidator';
+import { BookingHistoryPages } from './BookingHistoryPages';
 
 export interface BookingTimeWindowInput {
   dateIso: string;
@@ -70,7 +77,7 @@ export interface BookingCalendarPagesProps {
     timeWindow?: BookingTimeWindowInput
   ) => void;
   onCheckInBooking?: (bookingId: string, exactScanTimeText?: string) => void;
-  onCancelBooking?: (bookingId: string) => void;
+  onCancelBooking?: (bookingId: string, viaQrScan?: boolean, cancelTimeText?: string) => void;
   onUpdateNodeStatus?: (nodeId: string, nextStatus: SeatStatusType) => void;
   onRecordConcurrencyAudit?: (
     eventCategory:
@@ -129,6 +136,7 @@ interface BookingPageTranslationPack {
   qrRuleBold: string;
   weeklyQuotaTitle: (role: string) => string;
   weeklyQuotaUsed: (used: number, max: number) => string;
+  openHistoryBtn: (total: number) => string;
   formHeaderTitle: string;
   formHeaderBadge: string;
   field1RoomLabel: string;
@@ -152,6 +160,7 @@ interface BookingPageTranslationPack {
   noActiveEventWarning: (s: string, e: string, d: string) => string;
   startTimeLabel: string;
   endTimeLabel: string;
+  timeRuleHint: string;
   recurringLabel: string;
   recNone: string;
   recDaily: string;
@@ -173,10 +182,19 @@ interface BookingPageTranslationPack {
   statusCheckedIn: (time: string) => string;
   statusPendingApproval: string;
   statusApprovedWaitQr: string;
+  statusExpiredNoShow: string;
   reasonTagLabel: string;
   qrWindowReadyText: string;
   qrWindowWaitText: string;
-  scanQrBtn: string;
+  expiredAutoRevokeNote: string;
+  scanQrCheckinTabBtn: string;
+  scanQrCancelTabBtn: string;
+  testQuickCheckinBtn: string;
+  testQuickCancelQrBtn: string;
+  simulateOverdueBtn: string;
+  historyBannerTitle: string;
+  historyBannerSub: string;
+  historyBannerBtn: string;
   lockFooterText: (count: number) => string;
   scrollMoreBtn: string;
 }
@@ -185,12 +203,13 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
   vi: {
     pageTitle: 'Đặt lịch Phòng họp (Tầng 1–4) & Điều phối Hội trường La Mã (Tầng 5)',
     yourDeptLabel: 'Phòng ban của bạn:',
-    qrRuleText: 'Khung giờ cho phép quét mã QR Check-in:',
+    qrRuleText: 'Giờ mở cửa 07:00 – 23:00 • Khung quét mã QR Check-in:',
     qrRuleBold: 'Trước 30 phút đến Trễ tối đa 30 phút so với giờ bắt đầu.',
     weeklyQuotaTitle: (role) => `Hạn mức Đặt lịch Tuần (${role})`,
     weeklyQuotaUsed: (used, max) =>
       `Đã dùng ${used} / ${max >= 999 ? 'Không giới hạn' : `${max} lần/tuần`}`,
-    formHeaderTitle: 'Biểu mẫu Đăng ký Phòng họp & Hội trường Tầng 5',
+    openHistoryBtn: (total) => `Trang Lịch sử Đặt phòng (${total})`,
+    formHeaderTitle: 'Biểu mẫu Đăng ký Phòng họp & Hội trường Tầng 5 (07:00 – 23:00)',
     formHeaderBadge: 'Optimistic Lock • Chống trùng đa chiều',
     field1RoomLabel: '1. Chọn Phòng (Tầng 1–4) / Hội trường (Tầng 5)',
     hallOptGroupLabel: 'Tầng 5 — Hội trường Đấu Trường La Mã (2 Chế độ)',
@@ -213,8 +232,10 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     allowedDeptsShort: 'Phòng ban được tham gia:',
     noActiveEventWarning: (s, e, d) =>
       `Hiện khung giờ (${s} – ${e}) ngày ${d} KHÔNG CÓ SỰ KIỆN NÀO ĐƯỢC DUYỆT tại Hội trường! Nếu bấm đặt ghế, hệ thống sẽ chặn và thông báo phòng hiện không có sự kiện để tham gia.`,
-    startTimeLabel: 'Giờ bắt đầu (24h)',
-    endTimeLabel: 'Giờ kết thúc (24h)',
+    startTimeLabel: 'Giờ bắt đầu (07:00 – 22:30)',
+    endTimeLabel: 'Giờ kết thúc (07:30 – 23:00)',
+    timeRuleHint:
+      '* Quy định: Chỉ đặt phòng từ 07:00 sáng đến 23:00 đêm. Giờ bắt đầu bắt buộc phải nhỏ hơn giờ kết thúc tối thiểu 30 phút.',
     recurringLabel: 'Chu kỳ đặt lịch (Đơn lẻ / Định kỳ)',
     recNone: 'Đơn lẻ (1 buổi duy nhất)',
     recDaily: 'Hàng ngày (5 ngày liên tiếp)',
@@ -232,28 +253,40 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     submitHallSeat: (seat) => `Xác nhận Đặt Ghế Hội Trường ${seat}`,
     submitRoomApproved: (code) => `Xác nhận Đặt Phòng ${code} (Duyệt ngay)`,
     submitRoomPendingApproval: (code) => `Gửi Yêu cầu Xin Phép Đặt Phòng ${code} (Chờ duyệt)`,
-    ticketListHeader: 'Vé Đặt lịch & Quét Mã QR (Cửa sổ ±30 Phút)',
-    activeCountBadge: (c) => `${c} lịch hoạt động`,
+    ticketListHeader: 'Vé Đặt lịch & Quét Mã QR (Ẩn sau 3 Ngày)',
+    activeCountBadge: (c) => `${c} vé hiển thị`,
     hallEventBadge: 'SỰ KIỆN HỘI TRƯỜNG',
-    statusCheckedIn: (t) => `ĐÃ QUÉT (${t})`,
+    statusCheckedIn: (t) => `ĐÃ QUÉT QR (${t})`,
     statusPendingApproval: 'CHỜ PHÊ DUYỆT',
     statusApprovedWaitQr: 'ĐÃ DUYỆT • CHỜ QUÉT QR',
+    statusExpiredNoShow: 'TRẠNG THÁI 3: TRỄ HẠN • ĐÃ THU HỒI PHÒNG (-10Đ)',
     reasonTagLabel: 'Lý do xin phép:',
-    qrWindowReadyText: 'Đang trong khung ±30 phút: Có thể quét QR ngay!',
+    qrWindowReadyText: 'Đang trong khung ±30p: Mở Tab QR để quét nhận/hủy phòng!',
     qrWindowWaitText: 'Chỉ mở quét QR từ trước 30p đến trễ 30p so với giờ bắt đầu',
-    scanQrBtn: 'Quét mã QR',
+    expiredAutoRevokeNote:
+      'Quá thời gian cho phép mà không quét QR xác nhận dùng phòng: Hệ thống đã tự động thu hồi phòng, gửi thông báo và trừ 10 điểm tín nhiệm (Đơn này sẽ tự biến mất khỏi đây sau 3 ngày).',
+    scanQrCheckinTabBtn: 'Mở Tab QR Nhận Phòng',
+    scanQrCancelTabBtn: 'Mở Tab QR Hủy Phòng',
+    testQuickCheckinBtn: 'Test Quét Nhận Ngay',
+    testQuickCancelQrBtn: 'Test Quét Hủy QR',
+    simulateOverdueBtn: 'Test Quá Hạn QR (-10đ)',
+    historyBannerTitle: 'Lịch sử Đặt phòng Chi tiết (Đã quét QR • Đã hủy • Đã trễ hạn)',
+    historyBannerSub:
+      'Các đơn Đã quét QR và Trễ hạn sẽ tự ẩn khỏi khung trên sau 3 ngày. Bấm vào đây để xem toàn bộ lịch sử.',
+    historyBannerBtn: 'Mở Trang Lịch Sử Đặt Phòng →',
     lockFooterText: (c) => `Đang bảo vệ ${c} phiên bằng Optimistic Lock`,
     scrollMoreBtn: 'Xem tiếp',
   },
   en: {
     pageTitle: 'Meeting Room Booking (Floors 1–4) & Colosseum Hall Governance (Floor 5)',
     yourDeptLabel: 'Your Department:',
-    qrRuleText: 'QR Check-in Window:',
+    qrRuleText: 'Operating Hours 07:00 – 23:00 • QR Check-in Window:',
     qrRuleBold: 'From 30 minutes before to 30 minutes after start time.',
     weeklyQuotaTitle: (role) => `Weekly Booking Quota (${role})`,
     weeklyQuotaUsed: (used, max) =>
       `Used ${used} / ${max >= 999 ? 'Unlimited' : `${max} per week`}`,
-    formHeaderTitle: 'Room & Floor 5 Amphitheater Reservation Form',
+    openHistoryBtn: (total) => `Booking History Page (${total})`,
+    formHeaderTitle: 'Room & Floor 5 Amphitheater Reservation Form (07:00 – 23:00)',
     formHeaderBadge: 'Optimistic Lock • Conflict Guard',
     field1RoomLabel: '1. Select Room (Floors 1–4) / Amphitheater (Floor 5)',
     hallOptGroupLabel: 'Floor 5 — Colosseum Amphitheater (2 Modes)',
@@ -276,8 +309,10 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     allowedDeptsShort: 'Eligible Departments:',
     noActiveEventWarning: (s, e, d) =>
       `Time slot (${s} – ${e}) on ${d} currently has NO APPROVED EVENT in the Hall! Seat booking is locked until an event is approved.`,
-    startTimeLabel: 'Start Time (24h)',
-    endTimeLabel: 'End Time (24h)',
+    startTimeLabel: 'Start Time (07:00 – 22:30)',
+    endTimeLabel: 'End Time (07:30 – 23:00)',
+    timeRuleHint:
+      '* Rule: Bookings are strictly between 07:00 and 23:00. Start time must be earlier than end time by at least 30 minutes.',
     recurringLabel: 'Recurrence Cycle (Single / Recurring)',
     recNone: 'Single (1 session only)',
     recDaily: 'Daily (5 consecutive days)',
@@ -295,28 +330,40 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     submitHallSeat: (seat) => `Confirm Hall Seat Reservation ${seat}`,
     submitRoomApproved: (code) => `Confirm Room Booking ${code} (Instant Approval)`,
     submitRoomPendingApproval: (code) => `Submit Room Request ${code} with Reason (Pending Approval)`,
-    ticketListHeader: 'Active Passes & QR Check-in (±30m Window)',
-    activeCountBadge: (c) => `${c} active bookings`,
+    ticketListHeader: 'Active Passes & QR Check-in (3-Day Retention)',
+    activeCountBadge: (c) => `${c} visible passes`,
     hallEventBadge: 'HALL EVENT',
-    statusCheckedIn: (t) => `CHECKED IN (${t})`,
+    statusCheckedIn: (t) => `QR CHECKED IN (${t})`,
     statusPendingApproval: 'PENDING APPROVAL',
     statusApprovedWaitQr: 'APPROVED • AWAITING QR',
+    statusExpiredNoShow: 'STATE 3: EXPIRED NO-SHOW • REVOKED (-10 PTS)',
     reasonTagLabel: 'Permission Reason:',
-    qrWindowReadyText: 'Within ±30m window: Ready for QR scan now!',
+    qrWindowReadyText: 'Within ±30m window: Open QR Tab to Check-in or Cancel!',
     qrWindowWaitText: 'QR scan opens 30m before until 30m after start time',
-    scanQrBtn: 'Scan QR Pass',
+    expiredAutoRevokeNote:
+      'No QR check-in within allowed window: Room was automatically revoked, notification sent, and -10 Trust Score deducted (Hides after 3 days).',
+    scanQrCheckinTabBtn: 'Open Check-in QR Tab',
+    scanQrCancelTabBtn: 'Open Cancel QR Tab',
+    testQuickCheckinBtn: 'Test Instant Check-in',
+    testQuickCancelQrBtn: 'Test QR Cancel',
+    simulateOverdueBtn: 'Test Overdue (-10 pts)',
+    historyBannerTitle: 'Detailed Booking History (Checked-in • Cancelled • Expired)',
+    historyBannerSub:
+      'Checked-in and Expired passes hide from the active box after 3 days. Click below to inspect all historical records.',
+    historyBannerBtn: 'Open Booking History Page →',
     lockFooterText: (c) => `Protecting ${c} sessions via Optimistic Lock`,
     scrollMoreBtn: 'More',
   },
   ja: {
     pageTitle: '会議室予約 (1〜4階) ＆ コロッセオ大ホール管理 (5階)',
     yourDeptLabel: '所属部署:',
-    qrRuleText: 'QRチェックイン可能時間:',
+    qrRuleText: '利用可能時間 07:00〜23:00 • QRチェックイン枠:',
     qrRuleBold: '開始時刻の30分前から開始後30分まで受付。',
     weeklyQuotaTitle: (role) => `週間予約上限 (${role})`,
     weeklyQuotaUsed: (used, max) =>
       `利用済 ${used} / ${max >= 999 ? '無制限' : `週${max}回まで`}`,
-    formHeaderTitle: '会議室・5階大ホール予約申請フォーム',
+    openHistoryBtn: (total) => `予約履歴ページ (${total}件)`,
+    formHeaderTitle: '会議室・5階大ホール予約申請フォーム (07:00〜23:00)',
     formHeaderBadge: '楽観的ロック • 重複防止',
     field1RoomLabel: '1. 会議室 (1〜4階) / 大ホール (5階) を選択',
     hallOptGroupLabel: '5階 — コロッセオ大ホール (2モード制御)',
@@ -339,8 +386,10 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     allowedDeptsShort: '参加対象部署:',
     noActiveEventWarning: (s, e, d) =>
       `時間帯 (${s} – ${e})・日付 ${d} には承認済みのホールイベントがありません！イベントが承認されるまで座席予約はブロックされます。`,
-    startTimeLabel: '開始時刻 (24h)',
-    endTimeLabel: '終了時刻 (24h)',
+    startTimeLabel: '開始時刻 (07:00 – 22:30)',
+    endTimeLabel: '終了時刻 (07:30 – 23:00)',
+    timeRuleHint:
+      '* 規則：予約時間は07:00〜23:00の間のみ有効です。開始時刻は終了時刻より30分以上前でなければなりません。',
     recurringLabel: '予約サイクル (単発 / 定期)',
     recNone: '単発予約 (1回のみ)',
     recDaily: '毎日 (5日間連続)',
@@ -358,16 +407,27 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     submitHallSeat: (seat) => `ホール座席 ${seat} の予約を確定`,
     submitRoomApproved: (code) => `会議室 ${code} の予約を確定 (即時承認)`,
     submitRoomPendingApproval: (code) => `申請理由を添えて会議室 ${code} を予約申請 (承認待ち)`,
-    ticketListHeader: '予約チケット＆QRチェックイン (前後30分枠)',
-    activeCountBadge: (c) => `${c} 件の有効予約`,
+    ticketListHeader: '予約チケット＆QRチェックイン (3日間表示)',
+    activeCountBadge: (c) => `${c} 件表示中`,
     hallEventBadge: 'ホール全体イベント',
     statusCheckedIn: (t) => `QR読取済 (${t})`,
     statusPendingApproval: '承認待ち',
     statusApprovedWaitQr: '承認済 • QR待機中',
+    statusExpiredNoShow: '状態3: 期限切れ • 自動回収済 (-10点)',
     reasonTagLabel: '申請理由:',
-    qrWindowReadyText: '前後30分枠内です：今すぐQRチェックイン可能！',
+    qrWindowReadyText: '前後30分枠内：別タブでQRを開いて入室/キャンセル可能！',
     qrWindowWaitText: 'QR読取は開始30分前〜開始30分後のみ有効です',
-    scanQrBtn: 'QR読取',
+    expiredAutoRevokeNote:
+      '期限内にQRチェックインが行われなかったため、会議室を自動解放し、信頼スコア-10点を減점しました（3日後に非表示になります）。',
+    scanQrCheckinTabBtn: '入室QRタブを開く',
+    scanQrCancelTabBtn: 'QRキャンセルタブ',
+    testQuickCheckinBtn: 'テスト即時入室',
+    testQuickCancelQrBtn: 'テストQR取消',
+    simulateOverdueBtn: '期限切れテスト(-10点)',
+    historyBannerTitle: '予約履歴ページ (QR読取済 • キャンセル済 • 期限切れ)',
+    historyBannerSub:
+      'QR読取済および期限切れのチケットは3日後に上の枠から非表示になります。全履歴の詳細は以下から確認できます。',
+    historyBannerBtn: '予約履歴ページを開く →',
     lockFooterText: (c) => `${c} 件の予約を楽観的ロックで保護中`,
     scrollMoreBtn: '続きを見る',
   },
@@ -387,10 +447,15 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   onCreateNewBooking,
   onCheckInBooking,
   onCancelBooking,
+  onPenalizeNoShowBooking,
 }) => {
   const todayIso = useMemo(() => formatIsoDateString(new Date()), []);
   const bookingScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const t = BOOKING_I18N[webLanguage] || BOOKING_I18N.vi;
+
+  const [viewMode, setViewMode] = useState<'CALENDAR_FORM' | 'HISTORY_PAGE'>(
+    'CALENDAR_FORM'
+  );
 
   const [selectedRoomCode, setSelectedRoomCode] = useState<string>(
     selectedNode?.nodeCode || 'M1-01'
@@ -448,7 +513,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
   const isFloor5HallSelected =
     selectedRoomCode === 'H-01' || /^H01-[A-C]\d+$/i.test(selectedRoomCode);
 
-  // Xác định khi nào đơn đặt phòng cần xin phép phê duyệt (Nhân viên đặt phòng chuẩn Tầng 1-4, hoặc Quản lý thuê cả Hội trường Tầng 5)
   const requiresApprovalPermission = useMemo(() => {
     if (isFloor5HallSelected) {
       return hallBookingMode === 'HALL_EVENT_RENTAL' && userRole !== 'SYS_ADMIN';
@@ -471,6 +535,8 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       (b: BookingPayloadItem) =>
         b.userEmail.toLowerCase() === userEmail.toLowerCase() &&
         b.bookingStatus !== 'CANCELLED' &&
+        b.bookingStatus !== 'EXPIRED_NO_SHOW' &&
+        b.bookingStatus !== 'AUTO_RELEASED' &&
         b.approvalStatus !== 'REJECTED'
     );
     return {
@@ -478,6 +544,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       usedBookings: activeMyBookings.length,
     };
   }, [userRole, userEmail, bookingsList]);
+
+  // Lọc danh sách vé hiển thị trong khung Hình 3:
+  // - Đơn bị từ chối (REJECTED) hoặc đã hủy (CANCELLED) biến mất ngay khỏi đây
+  // - Đơn Đã quét QR (CHECKED_IN) và Trễ hạn (EXPIRED_NO_SHOW) hiển thị tại đây và tự biến mất sau 3 ngày
+  const visiblePassBoxBookings = useMemo(() => {
+    const nowMs = Date.now();
+    return bookingsList.filter((bk) => isBookingVisibleInActivePassBox(bk, nowMs));
+  }, [bookingsList]);
 
   const handleToggleAllowedDepartment = (deptName: string) => {
     setAllowedDepartments((prev: string[]) =>
@@ -502,9 +576,47 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     }
   };
 
+  // Mở Tab riêng hiển thị Mã QR Nhận phòng hoặc Mã QR Hủy phòng (dùng cho màn hình Kiosk trước cửa phòng)
+  const handleOpenStandaloneQrKioskTab = (
+    booking: BookingPayloadItem,
+    mode: 'CHECKIN' | 'CANCEL'
+  ) => {
+    const token =
+      booking.qrToken ||
+      `QR-SMX-${booking.nodeId.toUpperCase()}-${booking.bookingId.toUpperCase()}-${mode}`;
+    const params = new URLSearchParams({
+      mode,
+      bookingId: booking.bookingId,
+      room: booking.nodeId,
+      user: booking.userEmail,
+      time: `${booking.startTimeIso} - ${booking.endTimeIso}`,
+      date: booking.bookingDateIso || todayIso,
+      purpose: booking.purposeNote,
+      token,
+    });
+    const url = `/qr-checkin?${params.toString()}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleSubmitBooking = (e: React.FormEvent) => {
     e.preventDefault();
     setValidationBanner(null);
+
+    // 1. Kiểm tra nghiêm ngặt khung giờ 07:00 – 23:00 và startTime < endTime
+    const timeCheck = validateOperatingHoursAndOrder(startTimeIso, endTimeIso);
+    if (!timeCheck.isValid) {
+      setValidationBanner({
+        type: 'ERROR',
+        message:
+          webLanguage === 'en'
+            ? timeCheck.errorReasonEn || 'Invalid booking hours (07:00 – 23:00).'
+            : webLanguage === 'ja'
+            ? timeCheck.errorReasonJa || '予約時間が無効です (07:00〜23:00)。'
+            : timeCheck.errorReasonVi ||
+              'Giờ đặt phòng không hợp lệ (Chỉ từ 07:00 đến 23:00 và giờ đặt phải nhỏ hơn giờ trả)!',
+      });
+      return;
+    }
 
     if (requiresApprovalPermission && !approvalRequestReason.trim()) {
       setValidationBanner({
@@ -586,16 +698,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     });
   };
 
-  const handleVerifyAndScanQr = (booking: BookingPayloadItem) => {
-    const check = validateQrCheckinTimeWindow(booking, new Date());
-    if (!check.canScan) {
-      setValidationBanner({
-        type: 'ERROR',
-        message: check.reasonText,
-      });
-      return;
-    }
-
+  const handleTestInstantCheckin = (booking: BookingPayloadItem) => {
     if (onCheckInBooking) {
       const nowStr = `${new Date().toLocaleTimeString(
         'vi-VN'
@@ -603,14 +706,41 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
       onCheckInBooking(booking.bookingId, nowStr);
       setValidationBanner({
         type: 'SUCCESS',
-        message: `Quét mã QR hợp lệ cho vé ${booking.bookingId} (${booking.nodeId})! ${check.reasonText}`,
+        message: `[Test Quét QR Nhận Phòng Thành Công] Đã xác nhận dùng phòng cho vé ${booking.bookingId} (${booking.nodeId}) lúc ${nowStr} và cộng +2 điểm Tín nhiệm!`,
       });
     }
   };
 
+  const handleTestInstantQrCancel = (booking: BookingPayloadItem) => {
+    if (onCancelBooking) {
+      const nowStr = `${new Date().toLocaleTimeString(
+        'vi-VN'
+      )} • Ngày ${new Date().toLocaleDateString('vi-VN')}`;
+      onCancelBooking(booking.bookingId, true, nowStr);
+      setValidationBanner({
+        type: 'SUCCESS',
+        message: `[Test Quét QR Hủy Phòng Thành Công] Đã hủy đặt phòng ${booking.nodeId} (Mã vé: ${booking.bookingId}) bằng mã QR và chuyển vào Trang Lịch sử Đặt phòng!`,
+      });
+    }
+  };
+
+  if (viewMode === 'HISTORY_PAGE') {
+    return (
+      <BookingHistoryPages
+        bookingsList={bookingsList}
+        userEmail={userEmail}
+        userRole={userRole}
+        webLanguage={webLanguage}
+        isDark={isDark}
+        onBackToBookingCalendar={() => setViewMode('CALENDAR_FORM')}
+        onOpenQrKioskTab={handleOpenStandaloneQrKioskTab}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header Thông tin Hạn mức Role & Quy tắc Hội trường Tầng 5 */}
+      {/* Header Thông tin Hạn mức Role & Nút Mở Trang Lịch sử Đặt phòng */}
       <div
         className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark
@@ -632,24 +762,35 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           </p>
         </div>
 
-        <div
-          className={`px-4 py-2.5 rounded-2xl border text-xs font-bold flex items-center gap-3 ${
-            isDark
-              ? 'bg-slate-950 border-slate-800'
-              : 'bg-indigo-50/70 border-indigo-100'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 text-indigo-600" />
-          <div>
-            <p className="text-[10px] uppercase text-slate-400 font-extrabold">
-              {t.weeklyQuotaTitle(userRole)}
-            </p>
-            <p className="font-extrabold">
-              {t.weeklyQuotaUsed(
-                quotaInfo.usedBookings,
-                quotaInfo.maxBookingsPerWeek
-              )}
-            </p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setViewMode('HISTORY_PAGE')}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-500 hover:to-teal-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-md transition"
+          >
+            <History className="w-4 h-4" />
+            <span>{t.openHistoryBtn(bookingsList.length)}</span>
+          </button>
+
+          <div
+            className={`px-4 py-2 rounded-2xl border text-xs font-bold flex items-center gap-3 ${
+              isDark
+                ? 'bg-slate-950 border-slate-800'
+                : 'bg-indigo-50/70 border-indigo-100'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-600" />
+            <div>
+              <p className="text-[10px] uppercase text-slate-400 font-extrabold">
+                {t.weeklyQuotaTitle(userRole)}
+              </p>
+              <p className="font-extrabold">
+                {t.weeklyQuotaUsed(
+                  quotaInfo.usedBookings,
+                  quotaInfo.maxBookingsPerWeek
+                )}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -909,59 +1050,69 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="text-xs font-bold block mb-1.5">
-                {t.startTimeLabel}
-              </label>
-              <input
-                type="time"
-                value={startTimeIso}
-                onChange={(e) => setStartTimeIso(e.target.value)}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-100'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              />
-            </div>
+          {/* Khung chọn Giờ Bắt đầu & Giờ Kết thúc (Chuẩn 07:00 – 23:00, start < end) */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold block mb-1.5">
+                  {t.startTimeLabel}
+                </label>
+                <input
+                  type="time"
+                  min="07:00"
+                  max="22:30"
+                  value={startTimeIso}
+                  onChange={(e) => setStartTimeIso(e.target.value)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-100'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                />
+              </div>
 
-            <div>
-              <label className="text-xs font-bold block mb-1.5">
-                {t.endTimeLabel}
-              </label>
-              <input
-                type="time"
-                value={endTimeIso}
-                onChange={(e) => setEndTimeIso(e.target.value)}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-100'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              />
-            </div>
+              <div>
+                <label className="text-xs font-bold block mb-1.5">
+                  {t.endTimeLabel}
+                </label>
+                <input
+                  type="time"
+                  min="07:30"
+                  max="23:00"
+                  value={endTimeIso}
+                  onChange={(e) => setEndTimeIso(e.target.value)}
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-100'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                />
+              </div>
 
-            <div>
-              <label className="text-xs font-bold block mb-1.5">
-                {t.recurringLabel}
-              </label>
-              <select
-                value={recurringOption}
-                onChange={(e) =>
-                  setRecurringOption(e.target.value as RecurringOptionType)
-                }
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800 text-slate-100'
-                    : 'bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              >
-                <option value="NONE">{t.recNone}</option>
-                <option value="DAILY">{t.recDaily}</option>
-                <option value="WEEKLY">{t.recWeekly}</option>
-              </select>
+              <div>
+                <label className="text-xs font-bold block mb-1.5">
+                  {t.recurringLabel}
+                </label>
+                <select
+                  value={recurringOption}
+                  onChange={(e) =>
+                    setRecurringOption(e.target.value as RecurringOptionType)
+                  }
+                  className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-slate-100'
+                      : 'bg-slate-50 border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <option value="NONE">{t.recNone}</option>
+                  <option value="DAILY">{t.recDaily}</option>
+                  <option value="WEEKLY">{t.recWeekly}</option>
+                </select>
+              </div>
             </div>
+            <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
+              {t.timeRuleHint}
+            </p>
           </div>
 
           <div>
@@ -981,7 +1132,6 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
             />
           </div>
 
-          {/* Ô NHẬP LÝ DO XIN PHÉP ĐẶT PHÒNG KHI NHÂN VIÊN ĐẶT PHÒNG HOẶC QUẢN LÝ THUÊ HỘI TRƯỜNG CHỜ XÁC NHẬN */}
           {requiresApprovalPermission && (
             <div
               className={`p-4 rounded-2xl border space-y-2 ${
@@ -1032,7 +1182,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           </button>
         </form>
 
-        {/* Cột Phải: Danh sách Vé Đặt phòng & Quét Mã QR Check-in (Đúng khung ±30 phút) */}
+        {/* Cột Phải: Danh sách Vé Đặt phòng & Quét Mã QR (Hình 3: Tự động thu hồi trễ hạn, Ẩn sau 3 ngày & Chuyển đến Trang Lịch sử) */}
         <div
           className={`lg:col-span-5 p-6 rounded-3xl border flex flex-col justify-between space-y-4 ${
             isDark
@@ -1047,28 +1197,39 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 <h2 className="text-sm font-extrabold">{t.ticketListHeader}</h2>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-400">
-                {t.activeCountBadge(bookingsList.length)}
+                {t.activeCountBadge(visiblePassBoxBookings.length)}
               </span>
             </div>
 
             <div className="relative">
               <div
                 ref={bookingScrollContainerRef}
-                className="space-y-3 max-h-[410px] overflow-y-auto pr-1 pb-12 scroll-smooth"
+                className="space-y-3 max-h-[430px] overflow-y-auto pr-1 pb-12 scroll-smooth"
               >
-                {bookingsList.map((bk: BookingPayloadItem) => {
+                {visiblePassBoxBookings.map((bk: BookingPayloadItem) => {
                   const qrWindowStatus = validateQrCheckinTimeWindow(
                     bk,
                     new Date()
                   );
                   const isCheckedIn = bk.bookingStatus === 'CHECKED_IN';
                   const isPending = bk.approvalStatus === 'PENDING_APPROVAL';
+                  const isExpiredNoShow =
+                    bk.bookingStatus === 'EXPIRED_NO_SHOW' ||
+                    bk.bookingStatus === 'AUTO_RELEASED';
 
                   return (
                     <div
                       key={bk.bookingId}
                       className={`p-4 rounded-2xl border space-y-2.5 transition ${
-                        isDark
+                        isExpiredNoShow
+                          ? isDark
+                            ? 'bg-rose-950/25 border-rose-500/50'
+                            : 'bg-rose-50/90 border-rose-300'
+                          : isCheckedIn
+                          ? isDark
+                            ? 'bg-teal-950/20 border-teal-500/40'
+                            : 'bg-teal-50/60 border-teal-200'
+                          : isDark
                           ? 'bg-slate-950/75 border-slate-800 hover:border-indigo-500/40'
                           : 'bg-slate-50/90 border-slate-200/90 hover:border-indigo-300'
                       }`}
@@ -1076,7 +1237,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-indigo-600 text-white">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-lg text-[11px] font-black text-white ${
+                                isExpiredNoShow ? 'bg-rose-600' : 'bg-indigo-600'
+                              }`}
+                            >
                               {bk.nodeId}
                             </span>
                             {bk.bookingMode === 'HALL_EVENT_RENTAL' && (
@@ -1084,7 +1249,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                                 {t.hallEventBadge}
                               </span>
                             )}
-                            <span className="text-xs font-extrabold truncate max-w-[180px]">
+                            <span className="text-xs font-extrabold truncate max-w-[175px]">
                               {bk.purposeNote}
                             </span>
                           </div>
@@ -1105,26 +1270,32 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                         <div className="flex items-center gap-1.5 shrink-0">
                           <span
                             className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                              isCheckedIn
+                              isExpiredNoShow
+                                ? 'bg-rose-600 text-white'
+                                : isCheckedIn
                                 ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
                                 : isPending
                                 ? 'bg-amber-500/15 text-amber-600'
                                 : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
                             }`}
                           >
-                            {isCheckedIn
+                            {isExpiredNoShow
+                              ? t.statusExpiredNoShow
+                              : isCheckedIn
                               ? t.statusCheckedIn(bk.checkedInAtIso || todayIso)
                               : isPending
                               ? t.statusPendingApproval
                               : t.statusApprovedWaitQr}
                           </span>
 
-                          {onCancelBooking && (
+                          {onCancelBooking && !isExpiredNoShow && (
                             <button
                               type="button"
-                              onClick={() => onCancelBooking(bk.bookingId)}
+                              onClick={() =>
+                                onCancelBooking(bk.bookingId, false)
+                              }
                               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-500/10 transition"
-                              title="Cancel"
+                              title="Hủy đặt phòng"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1134,45 +1305,98 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
 
                       {bk.approvalRequestReason && (
                         <div className="text-[11px] text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-xl">
-                          <strong>{t.reasonTagLabel}</strong> “{bk.approvalRequestReason}”
+                          <strong>{t.reasonTagLabel}</strong> “
+                          {bk.approvalRequestReason}”
                         </div>
                       )}
 
-                      {bk.bookingMode === 'HALL_EVENT_RENTAL' &&
-                        bk.allowedDepartments &&
-                        bk.allowedDepartments.length > 0 && (
-                          <div className="text-[11px] text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 px-2.5 py-1.5 rounded-lg">
-                            {t.allowedDeptsShort}{' '}
-                            <strong>{bk.allowedDepartments.join(', ')}</strong>
+                      {isExpiredNoShow && (
+                        <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-[11px] font-bold text-rose-700 dark:text-rose-300 flex items-start gap-2">
+                          <TimerOff className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>{t.expiredAutoRevokeNote}</span>
+                        </div>
+                      )}
+
+                      {!isCheckedIn && !isExpiredNoShow && !isPending && (
+                        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={`text-[11px] font-semibold ${
+                                qrWindowStatus.canScan
+                                  ? 'text-teal-600 dark:text-teal-400'
+                                  : 'text-amber-600 dark:text-amber-400'
+                              }`}
+                            >
+                              {qrWindowStatus.canScan
+                                ? t.qrWindowReadyText
+                                : t.qrWindowWaitText}
+                            </span>
                           </div>
-                        )}
 
-                      {!isCheckedIn && (
-                        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2">
-                          <span
-                            className={`text-[11px] font-semibold ${
-                              qrWindowStatus.canScan
-                                ? 'text-teal-600 dark:text-teal-400'
-                                : 'text-amber-600 dark:text-amber-400'
-                            }`}
-                          >
-                            {qrWindowStatus.canScan
-                              ? t.qrWindowReadyText
-                              : t.qrWindowWaitText}
-                          </span>
+                          {/* Dãy nút Mở Tab Riêng hiện QR Nhận Phòng & QR Hủy Phòng */}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleOpenStandaloneQrKioskTab(bk, 'CHECKIN')
+                              }
+                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1 shadow-sm transition"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                              <span>{t.scanQrCheckinTabBtn}</span>
+                              <ExternalLink className="w-3 h-3 opacity-80" />
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleVerifyAndScanQr(bk)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shrink-0 ${
-                              qrWindowStatus.canScan
-                                ? 'bg-teal-600 hover:bg-teal-500 text-white shadow-sm'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-amber-500/20'
-                            }`}
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            <span>{t.scanQrBtn}</span>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleOpenStandaloneQrKioskTab(bk, 'CANCEL')
+                              }
+                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600/15 hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white border border-rose-500/30 flex items-center gap-1 transition"
+                            >
+                              <QrCode className="w-3.5 h-3.5" />
+                              <span>{t.scanQrCancelTabBtn}</span>
+                              <ExternalLink className="w-3 h-3 opacity-80" />
+                            </button>
+                          </div>
+
+                          {/* Ô Test Nhanh: Giả sử vừa quét QR Nhận phòng / Hủy phòng / Quá hạn thu hồi */}
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleTestInstantCheckin(bk)}
+                              className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-500/15 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white transition flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>{t.testQuickCheckinBtn}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleTestInstantQrCancel(bk)}
+                              className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-amber-500/15 hover:bg-amber-600 text-amber-700 dark:text-amber-300 hover:text-white transition flex items-center gap-1"
+                            >
+                              <XCircle className="w-3 h-3" />
+                              <span>{t.testQuickCancelQrBtn}</span>
+                            </button>
+
+                            {onPenalizeNoShowBooking && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onPenalizeNoShowBooking(
+                                    bk.bookingId,
+                                    bk.userEmail,
+                                    bk.nodeId
+                                  )
+                                }
+                                className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-rose-500/15 hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white transition flex items-center gap-1"
+                              >
+                                <TimerOff className="w-3 h-3" />
+                                <span>{t.simulateOverdueBtn}</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1180,9 +1404,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 })}
               </div>
 
-              {bookingsList.length > 2 && (
+              {visiblePassBoxBookings.length > 2 && (
                 <div
-                  className={`pointer-events-none absolute bottom-0 inset-x-0 h-14 rounded-b-2xl flex items-end justify-between px-3 pb-1.5 bg-gradient-to-t ${
+                  className={`pointer-events-none absolute bottom-0 inset-x-0 h-12 rounded-b-2xl flex items-end justify-between px-3 pb-1 bg-gradient-to-t ${
                     isDark
                       ? 'from-slate-900 via-slate-900/90 to-transparent'
                       : 'from-white via-white/95 to-transparent'
@@ -1190,7 +1414,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 >
                   <span className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20 backdrop-blur-md">
                     <Sparkles className="w-3 h-3" />
-                    {t.lockFooterText(bookingsList.length)}
+                    {t.lockFooterText(visiblePassBoxBookings.length)}
                   </span>
 
                   <div className="pointer-events-auto flex items-center gap-1">
@@ -1221,6 +1445,32 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Ô Chuyển đến Trang Lịch sử Đặt phòng (Xem chi tiết Đã quét QR, Đã hủy, Đã trễ hạn) */}
+          <div
+            className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
+              isDark
+                ? 'bg-indigo-950/30 border-indigo-500/40'
+                : 'bg-indigo-50/80 border-indigo-200'
+            }`}
+          >
+            <div className="space-y-0.5">
+              <p className="text-xs font-extrabold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <History className="w-4 h-4 shrink-0" />
+                <span>{t.historyBannerTitle}</span>
+              </p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                {t.historyBannerSub}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setViewMode('HISTORY_PAGE')}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shrink-0 shadow-sm transition"
+            >
+              {t.historyBannerBtn}
+            </button>
           </div>
         </div>
       </div>

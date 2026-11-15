@@ -10,3 +10,4 @@ export const aiRouter = Router();
 aiRouter.get('/recommend', handleRecommendOptimalWorkspace);
 aiRouter.get('/synthesize', handleSynthesizeDashboardAiReport);
 aiRouter.post('/chat', handleAskGeminiCoPilot);
+aiRouter.post('/gemini-chat', handleAskGeminiCoPilot);

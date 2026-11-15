@@ -16,6 +16,7 @@ import {
   OrganizationGroupItem,
   UserRoleType,
   UserTrustProfileItem,
+  WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
 
 export interface DepartmentGroupsPanelProps {
@@ -24,11 +25,141 @@ export interface DepartmentGroupsPanelProps {
   allMembers: UserTrustProfileItem[];
   userEmail: string;
   userRole: UserRoleType;
+  webLanguage?: WebLanguageCodeType;
   isDark: boolean;
   onOpenCreateGroupForDept: (departmentName: string) => void;
   onOpenEditGroup: (group: OrganizationGroupItem) => void;
   onDeleteGroup: (groupId: string) => void;
   onToggleGroupMember: (groupId: string, targetUserEmail: string) => void;
+}
+
+const GROUPS_PANEL_I18N: Record<
+  WebLanguageCodeType,
+  {
+    headerTitle: (dept: string, count: number) => string;
+    headerSub: string;
+    searchPlaceholder: string;
+    createSubGroupBtn: string;
+    emptyGroupsText: (dept: string) => string;
+    editGroupTitle: string;
+    deleteGroupTitle: string;
+    leaderLabel: string;
+    membersCountLabel: (c: number) => string;
+    noMembersYet: string;
+    removeFromGroupTitle: string;
+    manageGroupMembersBtn: string;
+    modalTitle: (grpName: string) => string;
+    modalSub: (deptName: string) => string;
+    modalRuleText: string;
+    modalSearchPlaceholder: string;
+    otherDeptLabel: string;
+    otherDeptLockedBadge: string;
+    sameDeptLabel: (dept: string) => string;
+    alreadyInGroupBtn: string;
+    addToGroupBtn: string;
+    doneBtn: string;
+  }
+> = {
+  vi: {
+    headerTitle: (dept, count) =>
+      `Các Nhóm Chuyên biệt trực thuộc Phòng ban “${dept}” (${count})`,
+    headerSub:
+      'Nhóm là đơn vị con của Phòng ban • Thành viên trong cùng 1 Phòng ban có thể tham gia 1 hoặc nhiều Nhóm, nhưng không chung Nhóm với người khác Phòng ban.',
+    searchPlaceholder: 'Tìm tên nhóm, mã nhóm...',
+    createSubGroupBtn: 'Tạo Nhóm Con Mới',
+    emptyGroupsText: (dept) =>
+      `Hiện chưa có nhóm chuyên môn nào hiển thị trong phòng ban “${dept}”.`,
+    editGroupTitle: 'Chỉnh sửa Nhóm',
+    deleteGroupTitle: 'Xóa Nhóm',
+    leaderLabel: 'Trưởng nhóm phụ trách:',
+    membersCountLabel: (c) => `Thành viên trong nhóm (${c} người):`,
+    noMembersYet: 'Chưa có thành viên',
+    removeFromGroupTitle: 'Gỡ khỏi nhóm',
+    manageGroupMembersBtn: '+ Thêm / Quản lý Thành viên Nhóm',
+    modalTitle: (grpName) => `Chỉ định Thành viên vào Nhóm: ${grpName}`,
+    modalSub: (deptName) => `Phòng ban chủ quản: ${deptName}`,
+    modalRuleText: '• Chỉ thành viên thuộc phòng ban này mới được vào nhóm.',
+    modalSearchPlaceholder:
+      'Tìm kiếm nhân viên theo họ tên, email hoặc phòng ban...',
+    otherDeptLabel: 'Đang thuộc phòng ban:',
+    otherDeptLockedBadge: 'Khác phòng ban • Không thể chỉ định',
+    sameDeptLabel: (dept) => `Cùng phòng ban (${dept})`,
+    alreadyInGroupBtn: 'Đã trong nhóm (Bấm để gỡ)',
+    addToGroupBtn: '+ Thêm vào nhóm',
+    doneBtn: 'Hoàn tất',
+  },
+  en: {
+    headerTitle: (dept, count) =>
+      `Specialized Sub-Groups in Department “${dept}” (${count})`,
+    headerSub:
+      'Sub-groups belong to a single Department • Members in the same Department can join one or multiple Sub-groups, but cannot mix across different Departments.',
+    searchPlaceholder: 'Search group name, code...',
+    createSubGroupBtn: 'New Sub-Group',
+    emptyGroupsText: (dept) =>
+      `No specialized sub-groups are currently listed in department “${dept}”.`,
+    editGroupTitle: 'Edit Sub-Group',
+    deleteGroupTitle: 'Delete Sub-Group',
+    leaderLabel: 'Squad Leader:',
+    membersCountLabel: (c) => `Group Members (${c}):`,
+    noMembersYet: 'No members assigned yet',
+    removeFromGroupTitle: 'Remove from group',
+    manageGroupMembersBtn: '+ Add / Manage Group Members',
+    modalTitle: (grpName) => `Assign Members to Sub-Group: ${grpName}`,
+    modalSub: (deptName) => `Parent Department: ${deptName}`,
+    modalRuleText:
+      '• Only employees belonging to this department can join this sub-group.',
+    modalSearchPlaceholder: 'Search employee by name, email, or department...',
+    otherDeptLabel: 'Assigned to department:',
+    otherDeptLockedBadge: 'Different Department • Locked',
+    sameDeptLabel: (dept) => `Same Department (${dept})`,
+    alreadyInGroupBtn: 'In Group (Click to remove)',
+    addToGroupBtn: '+ Add to Group',
+    doneBtn: 'Done',
+  },
+  ja: {
+    headerTitle: (dept, count) =>
+      `部署「${dept}」所属の専門サブグループ (${count})`,
+    headerSub:
+      'グループは部署の下位組織です • 同一部署の社員は複数の専門グループに参加できますが、他部署の社員と混在することはできません。',
+    searchPlaceholder: 'グループ名・コードで検索...',
+    createSubGroupBtn: '新規サブグループ作成',
+    emptyGroupsText: (dept) =>
+      `現在、部署「${dept}」には表示可能な専門サブグループがありません。`,
+    editGroupTitle: 'グループを編集',
+    deleteGroupTitle: 'グループを削除',
+    leaderLabel: '担当グループリーダー:',
+    membersCountLabel: (c) => `グループ所属メンバー (${c}名):`,
+    noMembersYet: 'メンバー未登録',
+    removeFromGroupTitle: 'グループから外す',
+    manageGroupMembersBtn: '+ グループメンバー追加・管理',
+    modalTitle: (grpName) => `グループへのメンバー配属: ${grpName}`,
+    modalSub: (deptName) => `管轄部署: ${deptName}`,
+    modalRuleText: '• この部署に所属する社員のみグループに参加できます。',
+    modalSearchPlaceholder: '氏名、メール、または部署名で社員を検索...',
+    otherDeptLabel: '現在の所属部署:',
+    otherDeptLockedBadge: '他部署所属 • 指定不可',
+    sameDeptLabel: (dept) => `同一部署 (${dept})`,
+    alreadyInGroupBtn: '参加中 (クリックで解除)',
+    addToGroupBtn: '+ グループに追加',
+    doneBtn: '完了',
+  },
+};
+
+export function formatPersonDisplayNameForLocale(
+  rawName: string,
+  lang: WebLanguageCodeType
+): string {
+  if (lang === 'vi') return rawName;
+  if (lang === 'en') {
+    return rawName
+      .replace('(Quản lý)', '(Manager)')
+      .replace('(Nhân viên)', '(Employee)')
+      .replace('(Chưa phân bổ)', '(Unassigned)');
+  }
+  return rawName
+    .replace('(Quản lý)', '(マネージャー)')
+    .replace('(Nhân viên)', '(社員)')
+    .replace('(Chưa phân bổ)', '(未配属)');
 }
 
 export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
@@ -37,6 +168,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
   allMembers,
   userEmail,
   userRole,
+  webLanguage = 'vi',
   isDark,
   onOpenCreateGroupForDept,
   onOpenEditGroup,
@@ -44,13 +176,16 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
   onToggleGroupMember,
 }) => {
   const isSysAdmin = userRole === 'SYS_ADMIN';
+  // Quy tắc RBAC: Chỉ Quản lý (MANAGER) và Admin (SYS_ADMIN) mới có quyền Tạo/Sửa/Xóa Nhóm; Nhân viên (EMPLOYEE) không tạo được
+  const canManageGroups = userRole === 'SYS_ADMIN' || userRole === 'MANAGER';
+  const t = GROUPS_PANEL_I18N[webLanguage] || GROUPS_PANEL_I18N.vi;
+
   const [groupSearchQuery, setGroupSearchQuery] = useState<string>('');
   const [activeAddMemberGroupId, setActiveAddMemberGroupId] = useState<
     string | null
   >(null);
   const [memberModalSearch, setMemberModalSearch] = useState<string>('');
 
-  // Lọc danh sách nhóm con thuộc đúng Phòng ban đang chọn + quyền hiển thị theo Role
   const departmentGroups = useMemo(() => {
     const q = groupSearchQuery.trim().toLowerCase();
     return groupsList.filter((g: OrganizationGroupItem) => {
@@ -59,8 +194,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
         parentDepartment.departmentName.trim().toLowerCase();
       if (!sameDept) return false;
 
-      // Nhân viên và Quản lý chỉ nhìn thấy nhóm mình đang tham gia; Admin thấy toàn bộ nhóm
-      if (!isSysAdmin) {
+      if (userRole === 'EMPLOYEE') {
         const isMyGroup =
           g.memberEmails.some(
             (em: string) =>
@@ -81,12 +215,11 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
   }, [
     groupsList,
     parentDepartment.departmentName,
-    isSysAdmin,
+    userRole,
     userEmail,
     groupSearchQuery,
   ]);
 
-  // Quy tắc ẩn Admin: Role khác không nhìn thấy tài khoản SYS_ADMIN trong danh sách
   const visibleMembersForRole = useMemo(() => {
     return allMembers.filter(
       (m: UserTrustProfileItem) => isSysAdmin || m.role !== 'SYS_ADMIN'
@@ -120,24 +253,22 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
         <div>
           <h4 className="text-xs font-extrabold uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center gap-1.5">
             <Layers className="w-4 h-4" />
-            Các Nhóm Chuyên biệt trực thuộc Phòng ban “
-            {parentDepartment.departmentName}” ({departmentGroups.length})
+            {t.headerTitle(
+              parentDepartment.departmentName,
+              departmentGroups.length
+            )}
           </h4>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            Nhóm là đơn vị con của Phòng ban • Thành viên trong cùng 1 Phòng ban
-            có thể tham gia 1 hoặc nhiều Nhóm, nhưng không chung Nhóm với người
-            khác Phòng ban.
-          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">{t.headerSub}</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative w-52">
+          <div className="relative w-56">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={groupSearchQuery}
               onChange={(e) => setGroupSearchQuery(e.target.value)}
-              placeholder="Tìm tên nhóm, mã nhóm..."
+              placeholder={t.searchPlaceholder}
               className={`w-full pl-8 pr-7 py-1.5 rounded-xl border text-xs font-semibold outline-none ${
                 isDark
                   ? 'bg-slate-950 border-slate-800 text-white'
@@ -155,16 +286,16 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
             )}
           </div>
 
-          {isSysAdmin && (
+          {canManageGroups && (
             <button
               type="button"
               onClick={() =>
                 onOpenCreateGroupForDept(parentDepartment.departmentName)
               }
-              className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Tạo Nhóm Con Mới</span>
+              <span>{t.createSubGroupBtn}</span>
             </button>
           )}
         </div>
@@ -178,13 +309,11 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
               : 'border-slate-200 bg-slate-50/60'
           }`}
         >
-          Hiện chưa có nhóm chuyên môn nào hiển thị trong phòng ban “
-          {parentDepartment.departmentName}”.
+          {t.emptyGroupsText(parentDepartment.departmentName)}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {departmentGroups.map((grp: OrganizationGroupItem) => {
-            // Lọc thành viên trong nhóm thuộc đúng phòng ban và tuân thủ quy tắc ẩn Admin với role khác
             const groupMembers = visibleMembersForRole.filter(
               (m: UserTrustProfileItem) =>
                 grp.memberEmails.some(
@@ -221,13 +350,13 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                       </p>
                     </div>
 
-                    {isSysAdmin && (
+                    {canManageGroups && (
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => onOpenEditGroup(grp)}
                           className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-200/50 dark:hover:bg-slate-800"
-                          title="Chỉnh sửa Nhóm"
+                          title={t.editGroupTitle}
                         >
                           <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
                         </button>
@@ -235,7 +364,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                           type="button"
                           onClick={() => onDeleteGroup(grp.groupId)}
                           className="p-1.5 rounded-lg border border-rose-500/20 text-rose-500 hover:bg-rose-500/10"
-                          title="Xóa Nhóm"
+                          title={t.deleteGroupTitle}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -244,24 +373,23 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                   </div>
 
                   <div className="text-[11px] flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                    <span className="text-slate-400">
-                      Trưởng nhóm phụ trách:
-                    </span>
+                    <span className="text-slate-400">{t.leaderLabel}</span>
                     <strong className="text-teal-600 dark:text-teal-400">
-                      {grp.leaderName}
+                      {formatPersonDisplayNameForLocale(
+                        grp.leaderName,
+                        webLanguage
+                      )}
                     </strong>
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] font-bold text-slate-400">
-                      <span>
-                        Thành viên trong nhóm ({groupMembers.length} người):
-                      </span>
+                      <span>{t.membersCountLabel(groupMembers.length)}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {groupMembers.length === 0 ? (
                         <span className="text-[11px] italic text-slate-400">
-                          Chưa có thành viên
+                          {t.noMembersYet}
                         </span>
                       ) : (
                         groupMembers.map((mem: UserTrustProfileItem) => (
@@ -274,11 +402,16 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                             }`}
                           >
                             <Users className="w-3 h-3 text-teal-500" />
-                            <span>{mem.fullName}</span>
+                            <span>
+                              {formatPersonDisplayNameForLocale(
+                                mem.fullName,
+                                webLanguage
+                              )}
+                            </span>
                             <span className="text-[9px] opacity-60">
                               ({mem.role})
                             </span>
-                            {isSysAdmin && (
+                            {canManageGroups && (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -288,7 +421,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                                   )
                                 }
                                 className="ml-0.5 text-slate-400 hover:text-rose-500"
-                                title="Gỡ khỏi nhóm"
+                                title={t.removeFromGroupTitle}
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -300,7 +433,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                   </div>
                 </div>
 
-                {isSysAdmin && (
+                {canManageGroups && (
                   <div className="pt-2.5 border-t border-slate-200/60 dark:border-slate-800 flex justify-end">
                     <button
                       type="button"
@@ -311,7 +444,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                       className="px-3 py-1.5 rounded-xl bg-teal-600/15 hover:bg-teal-600 hover:text-white text-teal-600 dark:text-teal-300 text-xs font-extrabold flex items-center gap-1.5 transition"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
-                      <span>+ Thêm / Quản lý Thành viên Nhóm</span>
+                      <span>{t.manageGroupMembersBtn}</span>
                     </button>
                   </div>
                 )}
@@ -321,8 +454,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
         </div>
       )}
 
-      {/* MODAL CHỌN THÀNH VIÊN VÀO NHÓM CON (KIỂM TRA CÙNG PHÒNG BAN, LÀM XÁM NGƯỜI KHÁC PHÒNG BAN) */}
-      {activeModalGroup && isSysAdmin && (
+      {activeModalGroup && canManageGroups && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             className={`w-full max-w-xl p-6 rounded-3xl border shadow-2xl space-y-4 ${
@@ -334,14 +466,13 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="text-sm font-black">
-                  Chỉ định Thành viên vào Nhóm: {activeModalGroup.groupName}
+                  {t.modalTitle(activeModalGroup.groupName)}
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Phòng ban chủ quản:{' '}
                   <strong className="text-teal-500">
-                    {activeModalGroup.departmentName}
+                    {t.modalSub(activeModalGroup.departmentName)}
                   </strong>{' '}
-                  • Chỉ thành viên thuộc phòng ban này mới được vào nhóm.
+                  {t.modalRuleText}
                 </p>
               </div>
               <button
@@ -359,7 +490,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                 type="text"
                 value={memberModalSearch}
                 onChange={(e) => setMemberModalSearch(e.target.value)}
-                placeholder="Tìm kiếm nhân viên theo họ tên, email hoặc phòng ban..."
+                placeholder={t.modalSearchPlaceholder}
                 className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
@@ -379,7 +510,6 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                     candidate.userEmail.trim().toLowerCase()
                 );
 
-                // Nếu khác phòng ban -> Hiển thị chữ màu xám nhạt và khóa không cho thêm vào nhóm
                 if (!isSameDept) {
                   return (
                     <div
@@ -392,16 +522,20 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                     >
                       <div>
                         <p className="text-xs font-bold">
-                          {candidate.fullName} ({candidate.role})
+                          {formatPersonDisplayNameForLocale(
+                            candidate.fullName,
+                            webLanguage
+                          )}{' '}
+                          ({candidate.role})
                         </p>
                         <p className="text-[11px]">
-                          {candidate.userEmail} • Đang thuộc phòng ban:{' '}
+                          {candidate.userEmail} • {t.otherDeptLabel}{' '}
                           <strong>{candidate.departmentName}</strong>
                         </p>
                       </div>
                       <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-slate-300/40 dark:bg-slate-800 text-slate-500 flex items-center gap-1 shrink-0">
                         <Lock className="w-3 h-3" />
-                        Khác phòng ban • Không thể chỉ định
+                        {t.otherDeptLockedBadge}
                       </span>
                     </div>
                   );
@@ -419,15 +553,18 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold">
-                          {candidate.fullName}
+                          {formatPersonDisplayNameForLocale(
+                            candidate.fullName,
+                            webLanguage
+                          )}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-500">
                           {candidate.role}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-400">
-                        {candidate.userEmail} • Cùng phòng ban (
-                        {candidate.departmentName})
+                        {candidate.userEmail} •{' '}
+                        {t.sameDeptLabel(candidate.departmentName)}
                       </p>
                     </div>
 
@@ -448,12 +585,12 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                       {isAlreadyInGroup ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Đã trong nhóm (Bấm để gỡ)</span>
+                          <span>{t.alreadyInGroupBtn}</span>
                         </>
                       ) : (
                         <>
                           <UserPlus className="w-3.5 h-3.5" />
-                          <span>+ Thêm vào nhóm</span>
+                          <span>{t.addToGroupBtn}</span>
                         </>
                       )}
                     </button>
@@ -468,7 +605,7 @@ export const DepartmentGroupsPanel: React.FC<DepartmentGroupsPanelProps> = ({
                 onClick={() => setActiveAddMemberGroupId(null)}
                 className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-extrabold"
               >
-                Hoàn tất
+                {t.doneBtn}
               </button>
             </div>
           </div>

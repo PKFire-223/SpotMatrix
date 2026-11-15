@@ -549,12 +549,50 @@ function createSeatBadgeSprite(seatCode: string, isBooked: boolean): THREE.Sprit
 }
 
 const STANDARD_TIME_SLOTS = [
-  { start: '08:00', end: '10:00', idx: 1 },
-  { start: '10:00', end: '12:00', idx: 2 },
-  { start: '13:00', end: '15:00', idx: 3 },
-  { start: '15:00', end: '17:00', idx: 4 },
-  { start: '17:00', end: '19:00', idx: 5 },
+  { start: '07:00', end: '09:00', idx: 1 },
+  { start: '09:00', end: '11:00', idx: 2 },
+  { start: '11:00', end: '13:00', idx: 3 },
+  { start: '13:00', end: '15:00', idx: 4 },
+  { start: '15:00', end: '17:00', idx: 5 },
+  { start: '17:00', end: '19:00', idx: 6 },
+  { start: '19:00', end: '21:00', idx: 7 },
+  { start: '21:00', end: '23:00', idx: 8 },
 ];
+
+function translateRoomLabelByLocale(
+  rawLabel: string,
+  nodeCode: string,
+  floorLevel: number,
+  lang: WebLanguageCodeType
+): string {
+  if (lang === 'vi') return rawLabel;
+  if (nodeCode === 'H-01' || floorLevel === 5) {
+    return lang === 'en'
+      ? 'Colosseum Main Amphitheater H-01 (Floor 5)'
+      : 'コロッセオ大ホール H-01 (5階)';
+  }
+  const suffix = nodeCode.split('-')[1] || '01';
+  if (lang === 'en') {
+    const enMap: Record<string, string> = {
+      '01': 'Partner Focus Room',
+      '02': 'Sprint Team Room',
+      '03': 'Executive Boardroom',
+      '04': 'Creative Round-Table Hub',
+      '05': 'Collab Round-Table Pod',
+      '06': 'VIP Council Suite',
+    };
+    return `${enMap[suffix] || 'Meeting Room'} ${nodeCode} (Floor ${floorLevel})`;
+  }
+  const jaMap: Record<string, string> = {
+    '01': 'パートナー小会議室',
+    '02': 'スプリントチーム会議室',
+    '03': '大型ボードルーム',
+    '04': 'クリエイティブ円卓ルーム',
+    '05': 'ディスカッション円卓ルーム',
+    '06': 'VIP特別会議室',
+  };
+  return `${jaMap[suffix] || '会議室'} ${nodeCode} (${floorLevel}階)`;
+}
 
 const DEFAULT_CAMERA_SPHERICAL = {
   theta: 0.46,
@@ -2260,7 +2298,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                             fontSize="11.5"
                             fontWeight="800"
                           >
-                            {room.nodeLabel.slice(0, 28)}
+                            {translateRoomLabelByLocale(room.nodeLabel, room.nodeCode, room.floorLevel, webLanguage).slice(0, 28)}
                           </text>
                         </g>
                       );
@@ -2292,8 +2330,19 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                   isDark ? 'text-white' : 'text-slate-900'
                 }`}
               >
-                {activeRightPanelNode?.nodeLabel ||
-                  'Hội trường Đấu Trường La Mã (Tầng 5)'}
+                {activeRightPanelNode
+                  ? translateRoomLabelByLocale(
+                      activeRightPanelNode.nodeLabel,
+                      activeRightPanelNode.nodeCode,
+                      activeRightPanelNode.floorLevel,
+                      webLanguage
+                    )
+                  : translateRoomLabelByLocale(
+                      'Hội trường Đấu Trường La Mã (Tầng 5)',
+                      'H-01',
+                      5,
+                      webLanguage
+                    )}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
                 {t.capacityLabel}: {activeRightPanelNode?.capacityCount || 30}{' '}

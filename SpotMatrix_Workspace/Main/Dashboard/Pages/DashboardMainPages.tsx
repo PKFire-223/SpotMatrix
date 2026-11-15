@@ -440,7 +440,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleSendChatQuestion = (e: React.FormEvent) => {
+  const handleSendChatQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     const question = chatInput.trim();
     if (!question) return;
@@ -451,17 +451,11 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     });
     const freeRooms = workspaceNodes
       .filter((n: WorkspaceNodeItem) => n.status === 'AVAILABLE')
-      .slice(0, 4)
-      .map((n: WorkspaceNodeItem) => n.nodeCode)
+      .slice(0, 5)
+      .map((n: WorkspaceNodeItem) => `${n.nodeCode} (${n.capacityCount}P)`)
       .join(', ');
 
-    const replyText =
-      webLanguage === 'en'
-        ? `Based on live 5-floor telemetry: rooms [${freeRooms}] are currently available (${metrics.availableRooms}/${metrics.totalRooms} free). Floor 5 Colosseum Amphitheater (H-01) supports whole-hall event rental and ±30 min QR seat check-in.`
-        : webLanguage === 'ja'
-        ? `リアルタイム5階データに基づく回答：現在 [${freeRooms}] などの会議室が空室です（全${metrics.totalRooms}室中${metrics.availableRooms}室が空室）。5階コロッセオ大ホール(H-01)はイベント貸切および開始前後30分以内のQRチェックインに対応しています。`
-        : `Dựa trên dữ liệu thời gian thực 5 tầng: Các phòng [${freeRooms}] đang trống và sẵn sàng đặt ngay (Tổng: ${metrics.availableRooms}/${metrics.totalRooms} phòng trống). Hội trường La Mã Tầng 5 (H-01) đang mở chế độ kiểm tra sự kiện & quét QR trong khung ±30 phút.`;
-
+    setChatInput('');
     setChatHistory((prev) => [
       ...prev,
       {
@@ -470,14 +464,73 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         text: question,
         time: nowTime,
       },
+    ]);
+
+    const contextSummary = `Tổng phòng trống: ${metrics.availableRooms}/${metrics.totalRooms} (${freeRooms}). Lịch hoạt động: ${metrics.activeBookingsCount}. Thiết bị tốt: ${metrics.healthyEquipments}/${metrics.totalEquipments}. Điểm tín nhiệm TB: ${metrics.avgTrust}/100.`;
+
+    let liveReply = '';
+    try {
+      const apiRes = await fetch('/api/v1/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          promptText: question,
+          workspaceContextText: contextSummary,
+          webLanguage,
+        }),
+      });
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        if (json?.replyText) liveReply = String(json.replyText).trim();
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!liveReply) {
+      try {
+        const cloudRes = await fetch('https://text.pollinations.ai/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'openai',
+            messages: [
+              {
+                role: 'system',
+                content: `Bạn là AURA-X, trợ lý thông minh của hệ thống SpotMatrix. Trả lời ngắn gọn, tự nhiên, đúng trọng tâm câu hỏi. Dữ liệu hệ thống: ${contextSummary}`,
+              },
+              { role: 'user', content: question },
+            ],
+            temperature: 0.65,
+          }),
+        });
+        if (cloudRes.ok) {
+          const cJson = await cloudRes.json();
+          liveReply = cJson?.choices?.[0]?.message?.content?.trim() || '';
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!liveReply) {
+      liveReply =
+        webLanguage === 'en'
+          ? `Live 5-floor telemetry for "${question}": rooms [${freeRooms}] are currently available (${metrics.availableRooms}/${metrics.totalRooms} free).`
+          : webLanguage === 'ja'
+          ? `「${question}」への回答：現在 [${freeRooms}] などが空室です（全${metrics.totalRooms}室中${metrics.availableRooms}室が空室）。`
+          : `Phản hồi cho "${question}": Hiện có ${metrics.availableRooms}/${metrics.totalRooms} phòng đang trống (gợi ý: ${freeRooms}) và ${metrics.healthyEquipments}/${metrics.totalEquipments} thiết bị vận hành tốt.`;
+    }
+
+    setChatHistory((prev) => [
+      ...prev,
       {
         id: `AI-${Date.now() + 1}`,
         sender: 'AI',
-        text: replyText,
+        text: liveReply.replace(/[*#`]/g, ''),
         time: nowTime,
       },
     ]);
-    setChatInput('');
   };
 
   const canApproveRequests =

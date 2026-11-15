@@ -601,6 +601,79 @@ const SpotMatrixMascot3DStage: React.FC<{
   );
 };
 
+// Bộ kết xuất Markdown sang JSX sắc nét (Xử lý ### tiêu đề, **in đậm**, `code` mà không hiện ký tự thô)
+function renderInlineMarkdownSegments(lineText: string): React.ReactNode[] {
+  const parts = lineText.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={idx} className="font-extrabold text-indigo-600 dark:text-cyan-300">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={idx}
+          className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-cyan-300 font-mono text-[11px] font-bold"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+function renderFormattedAiMarkdown(contentText: string, isUser: boolean): React.ReactNode {
+  if (isUser) {
+    return <div className="whitespace-pre-line leading-relaxed font-semibold">{contentText}</div>;
+  }
+
+  const lines = contentText.split('\n');
+  return (
+    <div className="space-y-1.5 leading-relaxed font-medium">
+      {lines.map((rawLine, lIdx) => {
+        const line = rawLine.trimEnd();
+        if (!line.trim()) {
+          return <div key={lIdx} className="h-1" />;
+        }
+        if (line.startsWith('### ')) {
+          return (
+            <h4
+              key={lIdx}
+              className="text-xs sm:text-[13px] font-black text-indigo-600 dark:text-cyan-300 pt-1 pb-0.5 border-b border-indigo-500/15"
+            >
+              {renderInlineMarkdownSegments(line.replace(/^###\s+/, ''))}
+            </h4>
+          );
+        }
+        if (line.startsWith('## ') || line.startsWith('# ')) {
+          return (
+            <h3
+              key={lIdx}
+              className="text-xs sm:text-sm font-black text-indigo-600 dark:text-cyan-300 pt-1"
+            >
+              {renderInlineMarkdownSegments(line.replace(/^#+\s+/, ''))}
+            </h3>
+          );
+        }
+        if (/^\s*[-•*]\s+/.test(line)) {
+          const cleanBullet = line.replace(/^\s*[-•*]\s+/, '');
+          return (
+            <div key={lIdx} className="flex items-start gap-1.5 pl-1">
+              <span className="text-cyan-500 font-black mt-0.5">•</span>
+              <div className="flex-1">{renderInlineMarkdownSegments(cleanBullet)}</div>
+            </div>
+          );
+        }
+        return <div key={lIdx}>{renderInlineMarkdownSegments(line)}</div>;
+      })}
+    </div>
+  );
+}
+
 export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = ({
   workspaceNodes,
   bookingsList,
@@ -809,12 +882,65 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     const kb = roleScopedKnowledgeBase;
     const sections: string[] = [];
 
+    // 0. NHẬN DIỆN CÂU HỎI "BẠN LÀ AI", CHÀO HỎI & GIAO TIẾP TỰ NHIÊN
+    const isAskingWhoAreYou =
+      q.includes('bạn là ai') ||
+      q.includes('ban la ai') ||
+      q.includes('mày là ai') ||
+      q.includes('ai vậy') ||
+      q.includes('tên gì') ||
+      q.includes('tên bạn') ||
+      q.includes('giới thiệu bản thân') ||
+      q.includes('who are you') ||
+      q.includes('what is your name') ||
+      q.includes('あなたは誰');
+
+    const isGreetingOnly =
+      /^(xin chào|chào|chào bạn|hi|hello|hey|alo|good morning|good afternoon|こんにちは|こんばんは)[!,.?\s]*$/i.test(
+        rawQuery.trim()
+      );
+
+    if (isAskingWhoAreYou) {
+      if (webLanguage === 'en') {
+        return `### 🤖 I am AURA-X — Your Live 3D AI Assistant on SpotMatrix
+Hello **${userProfile.fullName}** (\`@${userProfile.username}\`)! I am **AURA-X**, the built-in 3D WebGL Artificial Intelligence designed exclusively for the **SpotMatrix 5-Floor Workspace & Colosseum Hall Platform**.
+
+- **What I know about your session**: You are signed in with the **\`${userProfile.role}\`** role in the **${userProfile.departmentName}** department (Trust Score: **${userProfile.trustScore}/100 pts**).
+- **How I can help you right now**:
+  - **Live Workspace Telemetry**: Check real-time availability across all **25 rooms** (currently **${kb.freeRooms.length}/25 free**), Floor 5 Colosseum Hall (\`H-01\`) events, and **30 4K/Audio devices**.
+  - **Multimodal File & Image Analysis**: Click the Image or Paperclip icons below to send me screenshots, floorplans, code, or documents to analyze.
+  - **Open-Domain Intelligence**: Ask me anything outside the website — software architecture (React, TypeScript, Three.js, Node.js, MongoDB, Java), math, drafting emails, or general knowledge!`;
+      }
+      if (webLanguage === 'ja') {
+        return `### 🤖 私は SpotMatrix 専用の 3D AI アシスタント「AURA-X」です
+こんにちは、**${userProfile.fullName}** さん（\`@${userProfile.username}\`）！私は **SpotMatrix 5階建て空間・コロッセオ大ホール管理システム** のために開発された 3D WebGL AI アシスタント **AURA-X** です。
+
+- **現在のアカウント連携**: ロール **\`${userProfile.role}\`** • 所属部署 **${userProfile.departmentName}** • 信頼スコア **${userProfile.trustScore}/100点**。
+- **サポートできる機能**:
+  - **社内リアルタイムデータ検索**: 全25室の空室状況（現在 **${kb.freeRooms.length}/25室が空室**）、5階大ホール \`H-01\` のイベント、全30台の機器ステータスを即座に回答します。
+  - **画像・ファイル添付分析**: 下のボタンから画像やドキュメント・コードファイルを送信して要約・解析できます。
+  - **外部知識・技術相談**: プログラミング、数学、メール作成、翻訳など、Webサイト外のあらゆる質問にも柔軟にお答えします！`;
+      }
+      return `### 🤖 Xin chào! Tôi là AURA-X — Trợ lý AI 3D Độc quyền của SpotMatrix
+Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AURA-X**, Trí tuệ Nhân tạo 3D tương tác thời gian thực được tích hợp trực tiếp bên trong nền tảng **Quản lý Không gian & Đặt phòng họp Nội bộ 5 Tầng SpotMatrix**.
+
+- **Ngữ cảnh tài khoản của bạn**: Bạn đang đăng nhập với vai trò **\`${userProfile.role}\`** thuộc phòng ban **${userProfile.departmentName}** (Điểm tín nhiệm: **${userProfile.trustScore}/100đ**).
+- **Tôi có thể giúp gì cho bạn?**
+  - **Tra cứu dữ liệu nội bộ tức thì**: Kiểm tra **${kb.freeRooms.length}/25 phòng đang trống** (Tầng 1–4 & Hội trường La Mã Tầng 5 \`H-01\`), lịch đặt cá nhân của bạn (**${kb.myBookings.length} vé**), trạng thái 30 thiết bị 4K/Audio và cơ cấu phòng ban.
+  - **Đọc hiểu Hình ảnh & Tệp tin đính kèm**: Bạn có thể gửi ảnh chụp màn hình, tài liệu hoặc file code qua nút đính kèm bên dưới để tôi phân tích.
+  - **Trò chuyện & Giải đáp mọi kiến thức bên ngoài**: Bạn có thể hỏi tôi bất kỳ chủ đề nào ngoài trang web (lập trình React/TypeScript/Java/Node.js, thuật toán, toán học, soạn email, dịch thuật hay trò chuyện tự nhiên)!`;
+    }
+
+    if (isGreetingOnly) {
+      return `Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Chúc bạn một ngày làm việc hiệu quả tại phòng ban **${userProfile.departmentName}**. Hiện tòa nhà đang có **${kb.freeRooms.length}/25 phòng họp trống** — bạn muốn tôi kiểm tra phòng trống, tra cứu lịch cá nhân hay giải đáp câu hỏi nào hôm nay?`;
+    }
+
     // A. NẾU CÓ ĐÍNH KÈM HÌNH ẢNH HOẶC FILE -> PHÂN TÍCH CHI TIẾT TỆP TRƯỚC
     if (attachedItems.length > 0) {
       const fileLines = attachedItems.map((att, idx) => {
         const sizeKb = (att.sizeBytes / 1024).toFixed(1);
         if (att.base64DataUrl) {
-          return `${idx + 1}. **Hình ảnh \`${att.fileName}\`** (${
+          return `- **Hình ảnh \`${att.fileName}\`** (${
             att.imageDimensions || 'HD'
           } • ${sizeKb} KB): Đã nhận diện trực quan thành công. Bạn có thể dùng hình ảnh này làm tư liệu trình chiếu trên màn hình 4K tại các phòng Boardroom hoặc làm mẫu tham chiếu cho sự kiện Hội trường H-01.`;
         }
@@ -822,11 +948,11 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
         const snippet = (att.textContentPreview || '')
           .slice(0, 260)
           .replace(/\s+/g, ' ');
-        return `${idx + 1}. **Tệp dữ liệu \`${att.fileName}\`** (${sizeKb} KB • ~${lineCount} dòng):\n   - Trích xuất nội dung: *"${snippet}..."*`;
+        return `- **Tệp dữ liệu \`${att.fileName}\`** (${sizeKb} KB • ~${lineCount} dòng): Trích xuất nội dung: "${snippet}..."`;
       });
 
       sections.push(
-        `### 📎 Phân tích Học sâu Tệp & Hình ảnh Đính kèm\n${fileLines.join('\n')}`
+        `### 📎 Phân tích Tệp & Hình ảnh Đính kèm\n${fileLines.join('\n')}`
       );
     }
 
@@ -842,32 +968,32 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       if (op === '+') resVal = a + b;
       else if (op === '-') resVal = a - b;
       else if (op === '*' || op === 'x') resVal = a * b;
-      else if (op === '/' || op === ':') resVal = b !== 0 ? Number((a / b).toFixed(4)) : 'Không xác định (Chia cho 0)';
+      else if (op === '/' || op === ':')
+        resVal = b !== 0 ? Number((a / b).toFixed(4)) : 'Không xác định (Chia cho 0)';
       else if (op === '^') resVal = Math.pow(a, b);
 
       sections.push(
-        `### 🧮 Kết quả Tính toán & Giải đáp Trực tiếp\n- Biểu thức của bạn: **\`${a} ${op} ${b} = ${resVal}\`**\n- Gợi ý ứng dụng nội bộ: Nếu bạn đang tính toán số lượng chỗ ngồi cho **${resVal} thành viên**, hệ thống hiện có các phòng họp sức chứa tương ứng trên Tầng 1–4 hoặc Hội trường La Mã H-01 (30 ghế).`
+        `### 🧮 Kết quả Tính toán\n- Biểu thức của bạn: **\`${a} ${op} ${b} = ${resVal}\`**`
       );
     }
 
     // C. KIỂM TRA CÂU HỎI VỀ THÔNG TIN TÀI KHOẢN CÁ NHÂN ("tôi là ai", "tài khoản của tôi", "lịch của tôi", "điểm tín nhiệm")
     if (
-      q.includes('tôi') ||
-      q.includes('của mình') ||
+      q.includes('tôi là ai') ||
       q.includes('tài khoản') ||
-      q.includes('quyền') ||
-      q.includes('lịch') ||
-      q.includes('booking') ||
-      q.includes('my ') ||
-      q.includes('信') ||
-      q.includes('予約')
+      q.includes('của tôi') ||
+      q.includes('lịch của mình') ||
+      q.includes('điểm tín nhiệm') ||
+      q.includes('trust score') ||
+      q.includes('my account') ||
+      q.includes('my booking')
     ) {
       const myBookingBullets =
         kb.myBookings.length > 0
           ? kb.myBookings
               .map(
                 (b) =>
-                  `  • **[${b.nodeId}] ${b.purposeNote}** (${b.startTimeIso} – ${
+                  `- **[${b.nodeId}] ${b.purposeNote}** (${b.startTimeIso} – ${
                     b.endTimeIso
                   }, ngày ${b.bookingDateIso || 'Hôm nay'}) — Trạng thái: **${
                     b.approvalStatus === 'PENDING_APPROVAL'
@@ -882,7 +1008,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
                   }**`
               )
               .join('\n')
-          : '  • Hiện tại bạn chưa có lịch đặt phòng cá nhân nào đang chờ.';
+          : '- Hiện tại bạn chưa có lịch đặt phòng cá nhân nào đang chờ.';
 
       sections.push(
         `### 👤 Dữ liệu Riêng theo Tài khoản \`@${userProfile.username}\` (${userProfile.role})\n- **Họ tên & Email**: ${userProfile.fullName} (\`${userProfile.userEmail}\`)\n- **Phòng ban duy nhất**: **${userProfile.departmentName}** (Quản lý: ${
@@ -891,13 +1017,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
           kb.myGroups.length > 0
             ? kb.myGroups.map((g) => `\`${g.groupCode}\` (${g.groupName})`).join(', ')
             : 'Chưa tham gia nhóm con'
-        }\n- **Điểm tín nhiệm (Trust Score)**: **${userProfile.trustScore}/100đ** (${
-          userProfile.role === 'SYS_ADMIN'
-            ? 'Hạn mức 25 lần/tuần • Tự động duyệt 100%'
-            : userProfile.role === 'MANAGER'
-            ? 'Hạn mức 8 lần/tuần • Phòng họp Tầng 1-4 tự duyệt, thuê Hội trường H-01 chờ Admin duyệt'
-            : 'Hạn mức 3 lần/tuần • Đặt phòng Tầng 1-4 cần nêu lý do chờ Quản lý/Admin duyệt'
-        })\n- **Danh sách lịch đặt của riêng bạn (${kb.myBookings.length})**:\n${myBookingBullets}`
+        }\n- **Điểm tín nhiệm (Trust Score)**: **${userProfile.trustScore}/100đ**\n- **Danh sách lịch đặt của riêng bạn (${kb.myBookings.length})**:\n${myBookingBullets}`
       );
     }
 
@@ -918,7 +1038,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
           const freeOnFl = kb.freeRooms
             .filter((r) => r.floorLevel === fl)
             .map((r) => `${r.nodeCode} (${r.capacityCount}P)`);
-          return `  • **Tầng ${fl}**: ${
+          return `- **Tầng ${fl}**: ${
             freeOnFl.length > 0 ? freeOnFl.join(', ') : 'Đã kín lịch'
           }`;
         })
@@ -939,7 +1059,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
           : 'Hiện chưa có sự kiện được duyệt thuê (Ghế H01-A1..C12 đang khóa).';
 
       sections.push(
-        `### 🏢 Trạng thái Thời gian thực 25 Không gian (Tầng 1 – Tầng 5)\n- **Tổng quan**: Đang trống **${kb.freeRooms.length}/25** vị trí • Đang họp/Đã đặt: **${kb.busyRooms.length}** • Đang giữ/Chờ duyệt: **${kb.holdingRooms.length}**\n- **Danh sách phòng họp trống theo tầng**:\n${byFloorSummary}\n- **Hội trường Đấu trường La Mã Tầng 5 (\`H-01\` • 30 ghế vòm)**: ${hallStatusText}`
+        `### 🏢 Trạng thái Thời gian thực 25 Không gian (Tầng 1 – Tầng 5)\n- **Tổng quan**: Đang trống **${kb.freeRooms.length}/25** vị trí • Đang họp/Đã đặt: **${kb.busyRooms.length}** • Đang giữ/Chờ duyệt: **${kb.holdingRooms.length}**\n${byFloorSummary}\n- **Hội trường Đấu trường La Mã Tầng 5 (\`H-01\` • 30 ghế vòm)**: ${hallStatusText}`
       );
     }
 
@@ -959,9 +1079,9 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
         .slice(0, 5)
         .map(
           (e) =>
-            `  • \`${e.equipmentCode}\` — **${e.equipmentName}** tại phòng **${
+            `- \`${e.equipmentCode}\` — **${e.equipmentName}** tại phòng **${
               e.assignedNodeId || 'M1-01'
-            }** (${e.status === 'BROKEN' ? '⚠️ Đang bảo trì' : '✅ Hoạt động tốt'})`
+            }** (${e.status === 'BROKEN' ? 'Đang bảo trì' : 'Hoạt động tốt'})`
         )
         .join('\n');
 
@@ -970,7 +1090,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
           equipmentsList.length - kb.brokenEquips.length
         }/${equipmentsList.length}** thiết bị hoạt động tốt (${
           kb.brokenEquips.length
-        } thiết bị báo bảo trì).\n- **Thiết bị tiêu biểu**:\n${sampleEquips}`
+        } thiết bị báo bảo trì).\n${sampleEquips}`
       );
     }
 
@@ -979,38 +1099,37 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       q.includes('ip') ||
       q.includes('audit') ||
       q.includes('bảo mật') ||
-      q.includes('nhật ký') ||
-      q.includes('admin')
+      q.includes('nhật ký')
     ) {
       if (isSysAdmin) {
         const recentAuditText = auditLogs
           .slice(0, 3)
           .map(
             (a) =>
-              `  • \`[${a.eventCategory}]\` **${a.actorEmail}** (${
+              `- \`[${a.eventCategory}]\` **${a.actorEmail}** (${
                 a.ipAddress || '113.161.72.104'
               }): ${a.detailMessage}`
           )
           .join('\n');
         sections.push(
-          `### 🛡️ Báo cáo Kiểm toán & Bảo mật Đa IP (Quyền Tối cao \`SYS_ADMIN\`)\n- **Cảnh báo Đa IP**: Hệ thống ghi nhận tài khoản \`sysadmin@spotmatrix.vn\` đăng nhập từ 3 IP (TP.HCM, Hà Nội, Đà Nẵng) và \`employee.dev@spotmatrix.vn\` từ 2 IP.\n- **Đơn đang chờ phê duyệt toàn hệ thống**: **${kb.pendingApprovalsForReview.length}** yêu cầu.\n- **Nhật ký đồng thời gần nhất**:\n${recentAuditText}`
+          `### 🛡️ Báo cáo Kiểm toán & Bảo mật Đa IP (Quyền \`SYS_ADMIN\`)\n- **Cảnh báo Đa IP**: Hệ thống ghi nhận tài khoản \`sysadmin@spotmatrix.vn\` đăng nhập từ 3 IP và \`employee.dev@spotmatrix.vn\` từ 2 IP.\n- **Đơn đang chờ phê duyệt**: **${kb.pendingApprovalsForReview.length}** yêu cầu.\n${recentAuditText}`
         );
       } else {
         sections.push(
-          `### 🔒 Phân quyền Bảo mật theo Tài khoản\n- Tài khoản của bạn đang ở vai trò **\`${userProfile.role}\`**. Theo quy tắc bảo mật của SpotMatrix, dữ liệu Nhật ký IP đăng nhập của toàn công ty và danh sách tài khoản \`SYS_ADMIN\` được ẩn hoàn toàn khỏi vai trò \`${userProfile.role}\`.`
+          `### 🔒 Phân quyền Bảo mật theo Tài khoản\n- Tài khoản của bạn đang ở vai trò **\`${userProfile.role}\`**. Theo quy tắc bảo mật của SpotMatrix, dữ liệu Nhật ký IP đăng nhập của toàn công ty được ẩn khỏi vai trò \`${userProfile.role}\`.`
         );
       }
     }
 
-    // G. NẾU LÀ CÂU HỎI KIẾN THỨC BÊN NGOÀI WEB (LẬP TRÌNH, CÔNG NGHỆ, VIẾT EMAIL, TƯ VẤN...)
+    // G. TRẢ LỜI LINH HOẠT CHO CÂU HỎI TỰ DO KHI ĐANG OFFLINE
     if (sections.length === 0) {
       sections.push(
-        `### 🌐 Giải đáp Chuyên sâu từ AURA-X (Kiến thức Mở rộng & Trợ lý Doanh nghiệp)\nĐối với câu hỏi của bạn: **“${rawQuery}”**, tôi xin tổng hợp câu trả lời có cấu trúc như sau:\n\n1. **Phân tích cốt lõi**:\n   - Nếu bạn đang cần giải quyết bài toán kỹ thuật, kiến trúc phần mềm (React, TypeScript, Three.js WebGL, Node.js, MongoDB, thuật toán đồng thời Optimistic Locking) hoặc soạn thảo nội dung cuộc họp công ty, nguyên tắc quan trọng nhất là tách biệt rõ tầng dữ liệu, kiểm soát trạng thái bất biến và xác thực đầu vào chặt chẽ.\n2. **Hướng dẫn thực thi đề xuất**:\n   - **Bước 1**: Xác định mục tiêu chính và phạm vi nhân sự tham gia (Phòng ban \`${userProfile.departmentName}\` hoặc nhóm chuyên môn).\n   - **Bước 2**: Chuẩn bị tài liệu/hình ảnh (bạn có thể bấm nút **Đính kèm Ảnh/File** ngay bên dưới để tôi đọc và tóm tắt nội dung file trực tiếp).\n   - **Bước 3**: Liên kết với lịch họp nội bộ — hiện tại tòa nhà đang có **${kb.freeRooms.length}/25 phòng trống** (gợi ý nhanh: **${
+        `### 💡 Phản hồi từ AURA-X cho câu hỏi: “${rawQuery}”\n- Mình là **AURA-X**, trợ lý AI đồng hành cùng bạn (**${userProfile.fullName}** • Phòng ban \`${userProfile.departmentName}\`).\n- Về nội dung **“${rawQuery}”** bạn vừa hỏi: mình sẵn sàng trao đổi trực tiếp, giải đáp kiến thức chuyên môn, hỗ trợ viết lách, dịch thuật hoặc kiểm tra nhanh **${kb.freeRooms.length}/25 phòng họp đang trống** (gợi ý: **${
           kb.freeRooms
             .slice(0, 3)
             .map((r) => `${r.nodeCode} (${r.capacityCount} chỗ)`)
             .join(', ') || 'M1-01'
-        }**) sẵn sàng để bạn đặt lịch thảo luận ngay.`
+        }**) bất cứ lúc nào bạn cần!`
       );
     }
 
@@ -1026,7 +1145,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       return;
     }
 
-    const cleanSpeech = textToSpeak.replace(/[*#`_~>-]/g, ' ');
+    const cleanSpeech = textToSpeak.replace(/[*#_~>-]/g, ' ');
     const utterance = new SpeechSynthesisUtterance(cleanSpeech);
     utterance.lang =
       webLanguage === 'en'
@@ -1080,8 +1199,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     setPendingAttachments([]);
     setAiMood('THINKING');
 
-    // Chuẩn bị ngữ cảnh dữ liệu đã phân quyền theo đúng tài khoản cho Backend AI
-    const scopedContextString = `Tài khoản: ${userProfile.fullName} (@${
+    const scopedContextString = `Tài khoản đang đăng nhập: ${userProfile.fullName} (@${
       userProfile.username
     }, Email: ${userProfile.userEmail}, Role: ${
       userProfile.role
@@ -1091,16 +1209,21 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
 Tổng số phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25 (${roleScopedKnowledgeBase.freeRooms
       .map((r) => `${r.nodeCode}:${r.capacityCount}P`)
       .join(', ')}).
-Lịch đặt của người dùng này: ${roleScopedKnowledgeBase.myBookings
+Lịch đặt của người dùng này (${roleScopedKnowledgeBase.myBookings.length} vé): ${roleScopedKnowledgeBase.myBookings
       .map(
         (b) =>
-          `${b.nodeId} (${b.startTimeIso}-${b.endTimeIso}, ${b.purposeNote}, status:${b.approvalStatus})`
+          `${b.nodeId} (${b.startTimeIso}-${b.endTimeIso}, ${b.purposeNote}, status:${b.bookingStatus}/${b.approvalStatus})`
       )
-      .join('; ')}.`;
+      .join('; ')}.
+Thiết bị hoạt động tốt: ${
+      equipmentsList.length - roleScopedKnowledgeBase.brokenEquips.length
+    }/${equipmentsList.length}.`;
 
     let finalReply = '';
+
+    // 1. Thử gọi qua Backend API (/api/v1/ai/chat)
     try {
-      const response = await fetch('/api/v1/ai/gemini-chat', {
+      const response = await fetch('/api/v1/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1115,13 +1238,79 @@ Lịch đặt của người dùng này: ${roleScopedKnowledgeBase.myBookings
       if (response.ok) {
         const data = await response.json();
         if (data?.replyText && typeof data.replyText === 'string') {
-          finalReply = data.replyText;
+          finalReply = data.replyText.trim();
         }
       }
     } catch {
-      // Sử dụng bộ suy luận Hybrid Trained AI cục bộ khi không có khóa Gemini ngoại tuyến
+      // Nếu Backend chưa bật, chuyển ngay sang gọi trực tiếp Cloud LLM từ trình duyệt
     }
 
+    // 2. Nếu chưa có phản hồi (VD chỉ chạy Vite frontend), gọi trực tiếp Live Cloud LLM từ trình duyệt (Không cần API Key)
+    if (!finalReply) {
+      try {
+        const historyLines = messages
+          .slice(-5)
+          .map(
+            (m) =>
+              `${m.sender === 'USER' ? 'User' : 'AURA-X'}: ${m.contentText}`
+          )
+          .join('\n');
+
+        const attachmentNotes = currentAttachments
+          .map((att) =>
+            att.textContentPreview
+              ? `\n[File "${att.fileName}"]:\n${att.textContentPreview}`
+              : `\n[Image attached: "${att.fileName}" (${att.imageDimensions || 'HD'})]`
+          )
+          .join('\n');
+
+        const langInstruction =
+          webLanguage === 'en'
+            ? 'Reply naturally and helpfully in English.'
+            : webLanguage === 'ja'
+            ? '自然で親しみやすい日本語で回答してください。'
+            : 'Trả lời tự nhiên, thông minh, linh hoạt và thân thiện bằng tiếng Việt.';
+
+        const systemInstruction = `Bạn là AURA-X, Trợ lý Trí tuệ Nhân tạo 3D độc quyền của hệ thống Quản lý Không gian & Đặt phòng họp Nội bộ 5 Tầng SpotMatrix.
+- ${langInstruction}
+- Hãy trò chuyện tự nhiên, sống động, trả lời thẳng vào câu hỏi của người dùng (dù là câu hỏi giao tiếp như "Bạn là ai", câu hỏi kiến thức bên ngoài như lập trình/toán học/email, hay câu hỏi về dữ liệu phòng họp trong hệ thống).
+- Tuyệt đối không dùng văn mẫu cứng nhắc. Dùng định dạng Markdown gọn đẹp (### cho tiêu đề ngắn, **in đậm** cho ý chính, - cho gạch đầu dòng).
+- Dữ liệu thời gian thực của tài khoản đang đăng nhập:
+${scopedContextString}
+${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : ''}`;
+
+        const cloudRes = await fetch('https://text.pollinations.ai/openai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'openai',
+            messages: [
+              { role: 'system', content: systemInstruction },
+              {
+                role: 'user',
+                content: `${text || 'Hãy phân tích tệp đính kèm.'}${attachmentNotes}`,
+              },
+            ],
+            temperature: 0.65,
+          }),
+        });
+
+        if (cloudRes.ok) {
+          const cloudData = (await cloudRes.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          const liveContent =
+            cloudData?.choices?.[0]?.message?.content?.trim() || '';
+          if (liveContent.length > 0) {
+            finalReply = liveContent;
+          }
+        }
+      } catch {
+        // Nếu máy tính mất mạng hoàn toàn, chuyển sang bộ NLU hội thoại thông minh cục bộ
+      }
+    }
+
+    // 3. Nếu ngoại tuyến hoàn toàn -> Dùng bộ NLU hội thoại thông minh cục bộ
     if (!finalReply) {
       finalReply = synthesizeStructuredAiAnswer(text, currentAttachments);
     }
@@ -1394,10 +1583,8 @@ Lịch đặt của người dùng này: ${roleScopedKnowledgeBase.myBookings
                       </div>
                     )}
 
-                    {/* Nội dung câu trả lời có định dạng dòng rõ ràng */}
-                    <div className="whitespace-pre-line leading-relaxed font-medium">
-                      {msg.contentText}
-                    </div>
+                    {/* Nội dung câu trả lời được kết xuất Markdown sang JSX sắc nét */}
+                    {renderFormattedAiMarkdown(msg.contentText, isUser)}
                   </div>
                 </div>
               );
