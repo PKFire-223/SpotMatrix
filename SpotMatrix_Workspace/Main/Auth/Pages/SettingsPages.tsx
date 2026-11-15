@@ -196,7 +196,7 @@ const SETTINGS_I18N: Record<
     ipWarnDesc:
       'Tài khoản của bạn vừa có lịch sử truy cập từ các địa chỉ IP khác nhau. Hãy kiểm tra xem có phải bạn đang dùng nhiều thiết bị/mạng khác nhau hay không.',
     revokeOtherIpsBtn: 'Đăng xuất các IP khác (Chỉ giữ phiên hiện tại)',
-    simulateNewIpBtn: '+ Mô phỏng đăng nhập IP mới',
+    simulateNewIpBtn: 'Mô phỏng đăng nhập IP mới',
     langHeading: 'Ngôn ngữ Giao diện Trang Web & Giọng đọc Tóm tắt AI',
     langSub:
       'Khi đổi ngôn ngữ, toàn bộ thanh điều hướng, tiêu đề cài đặt và giọng đọc phát tiếng của AI lúc tóm tắt sẽ tự động chuyển theo ngôn ngữ đã chọn và lưu bền vững.',
@@ -248,7 +248,7 @@ const SETTINGS_I18N: Record<
     ipWarnDesc:
       'Your account has been accessed from multiple different IP addresses recently. Please verify if these sessions belong to you.',
     revokeOtherIpsBtn: 'Revoke Other IPs (Keep Current Session Only)',
-    simulateNewIpBtn: '+ Simulate New IP Login',
+    simulateNewIpBtn: 'Simulate New IP Login',
     langHeading: 'Website Interface Language & AI Voice Summary Locale',
     langSub:
       'Switching language updates navigation menus, settings labels, and the AI Assistant speech synthesis voice (saved persistently across all pages).',
@@ -299,7 +299,7 @@ const SETTINGS_I18N: Record<
     ipWarnDesc:
       '複数の異なるIPアドレスからこのアカウントへのアクセス履歴があります。ご自身の端末かご確認ください。',
     revokeOtherIpsBtn: '他のIPセッションを解除 (現在のIPのみ維持)',
-    simulateNewIpBtn: '+ 新しいIPログインをシミュレート',
+    simulateNewIpBtn: '新しいIPログインをシミュレート',
     langHeading: 'Webサイト表示言語 ＆ AI要約読み上げ音声 (TTS)',
     langSub:
       '言語を切り替えると、ナビゲーション、設定画面、およびAIアシスタントの音声読み上げ言語が連動して切り替わり、永続保存されます。',

@@ -75,7 +75,7 @@ const GROUPS_PANEL_I18N: Record<
     membersCountLabel: (c) => `Thành viên trong nhóm (${c} người):`,
     noMembersYet: 'Chưa có thành viên',
     removeFromGroupTitle: 'Gỡ khỏi nhóm',
-    manageGroupMembersBtn: '+ Thêm / Quản lý Thành viên Nhóm',
+    manageGroupMembersBtn: 'Thêm / Quản lý Thành viên Nhóm',
     modalTitle: (grpName) => `Chỉ định Thành viên vào Nhóm: ${grpName}`,
     modalSub: (deptName) => `Phòng ban chủ quản: ${deptName}`,
     modalRuleText: '• Chỉ thành viên thuộc phòng ban này mới được vào nhóm.',
@@ -85,7 +85,7 @@ const GROUPS_PANEL_I18N: Record<
     otherDeptLockedBadge: 'Khác phòng ban • Không thể chỉ định',
     sameDeptLabel: (dept) => `Cùng phòng ban (${dept})`,
     alreadyInGroupBtn: 'Đã trong nhóm (Bấm để gỡ)',
-    addToGroupBtn: '+ Thêm vào nhóm',
+    addToGroupBtn: 'Thêm vào nhóm',
     doneBtn: 'Hoàn tất',
   },
   en: {
@@ -103,7 +103,7 @@ const GROUPS_PANEL_I18N: Record<
     membersCountLabel: (c) => `Group Members (${c}):`,
     noMembersYet: 'No members assigned yet',
     removeFromGroupTitle: 'Remove from group',
-    manageGroupMembersBtn: '+ Add / Manage Group Members',
+    manageGroupMembersBtn: 'Add / Manage Group Members',
     modalTitle: (grpName) => `Assign Members to Sub-Group: ${grpName}`,
     modalSub: (deptName) => `Parent Department: ${deptName}`,
     modalRuleText:
@@ -113,7 +113,7 @@ const GROUPS_PANEL_I18N: Record<
     otherDeptLockedBadge: 'Different Department • Locked',
     sameDeptLabel: (dept) => `Same Department (${dept})`,
     alreadyInGroupBtn: 'In Group (Click to remove)',
-    addToGroupBtn: '+ Add to Group',
+    addToGroupBtn: 'Add to Group',
     doneBtn: 'Done',
   },
   ja: {
@@ -131,7 +131,7 @@ const GROUPS_PANEL_I18N: Record<
     membersCountLabel: (c) => `グループ所属メンバー (${c}名):`,
     noMembersYet: 'メンバー未登録',
     removeFromGroupTitle: 'グループから外す',
-    manageGroupMembersBtn: '+ グループメンバー追加・管理',
+    manageGroupMembersBtn: 'グループメンバー追加・管理',
     modalTitle: (grpName) => `グループへのメンバー配属: ${grpName}`,
     modalSub: (deptName) => `管轄部署: ${deptName}`,
     modalRuleText: '• この部署に所属する社員のみグループに参加できます。',
@@ -140,7 +140,7 @@ const GROUPS_PANEL_I18N: Record<
     otherDeptLockedBadge: '他部署所属 • 指定不可',
     sameDeptLabel: (dept) => `同一部署 (${dept})`,
     alreadyInGroupBtn: '参加中 (クリックで解除)',
-    addToGroupBtn: '+ グループに追加',
+    addToGroupBtn: 'グループに追加',
     doneBtn: '完了',
   },
 };

@@ -99,7 +99,8 @@ export type NotificationCategoryType =
   | 'FLOORPLAN_UPDATE'
   | 'AI_SUGGESTION'
   | 'SYSTEM_POLICY'
-  | 'TRUST_SCORE_ALERT';
+  | 'TRUST_SCORE_ALERT'
+  | 'EQUIPMENT_FAULT_ALERT';
 
 export interface NotificationRecordItem {
   notificationId: string;
@@ -112,10 +113,16 @@ export interface NotificationRecordItem {
   approvalBookingId?: string;
   approvalHandledStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
   approvalHandledBy?: string;
+  faultReportId?: string;
   createdAtIso: string;
 }
 
-export type EquipmentStatusType = 'AVAILABLE' | 'IN_USE' | 'BROKEN';
+export type EquipmentStatusType =
+  | 'AVAILABLE'
+  | 'IN_USE'
+  | 'REPORTED_BROKEN'
+  | 'MAINTENANCE'
+  | 'BROKEN';
 
 export interface SharedEquipmentItem {
   equipmentId: string;
@@ -138,6 +145,47 @@ export interface SharedEquipmentItem {
   weeklyUsageHours?: number;
   monthlyUsageHours?: number;
   healthPercent?: number;
+  lastReportedReason?: string | null;
+  lastReportedBy?: string | null;
+  lastMaintenanceNote?: string | null;
+}
+
+export interface EquipmentFaultReportItem {
+  reportId: string;
+  equipmentId: string;
+  equipmentCode: string;
+  equipmentName: string;
+  roomCode: string;
+  reporterEmail: string;
+  reporterName: string;
+  reporterRole: UserRoleType;
+  faultReason: string;
+  reportStatus:
+    | 'PENDING_ADMIN'
+    | 'CONFIRMED_BROKEN'
+    | 'IN_MAINTENANCE'
+    | 'RESOLVED_READY'
+    | 'REJECTED';
+  handledByEmail?: string | null;
+  handledNote?: string | null;
+  aiDiagnosisNote?: string | null;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface TrustScoreHistoryRecordItem {
+  recordId: string;
+  userEmail: string;
+  fullName: string;
+  deltaPoints: number;
+  balanceAfter: number;
+  eventType:
+    | 'MONTHLY_BONUS_20'
+    | 'QR_CHECKIN_REWARD'
+    | 'NO_SHOW_PENALTY'
+    | 'INITIAL_GRANT';
+  reasonText: string;
+  createdAtIso: string;
 }
 
 export interface UserTrustProfileItem {

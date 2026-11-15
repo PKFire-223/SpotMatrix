@@ -19,18 +19,18 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 w-80 sm:w-96 rounded-2xl border p-4 shadow-lg transition-all duration-300 ${
+      className={`fixed top-16 right-6 z-50 w-80 sm:w-96 rounded-2xl border p-4 shadow-xl transition-all duration-300 ${
         isDark
-          ? 'bg-slate-900/95 border-slate-700/80 text-slate-100 shadow-black/40'
-          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-300/50'
+          ? 'bg-slate-900/95 border-slate-700/80 text-slate-100 shadow-black/50'
+          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-300/60'
       }`}
     >
       <div className="flex items-start gap-3">
         <div
           className={`p-2 rounded-xl border shrink-0 mt-0.5 ${
             isDark
-              ? 'bg-slate-800 border-slate-700 text-slate-300'
-              : 'bg-slate-100 border-slate-200/80 text-slate-700'
+              ? 'bg-slate-800 border-slate-700 text-indigo-400'
+              : 'bg-slate-100 border-slate-200/80 text-indigo-600'
           }`}
         >
           <Bell className="w-4 h-4" />
@@ -39,7 +39,7 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Thông báo thời gian thực • Vừa xong
+              Thông báo Hệ thống • Vừa xong
             </span>
             <button
               type="button"
@@ -62,9 +62,9 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
                 onDismissPopup();
                 onOpenNotificationPage();
               }}
-              className="font-semibold text-slate-700 dark:text-slate-300 hover:underline"
+              className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              Xem trong Trung tâm Thông báo →
+              Xem trong Trung tâm Thông báo
             </button>
           </div>
         </div>

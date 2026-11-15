@@ -16,11 +16,15 @@ import {
   Search,
   Lock,
   ArrowRight,
+  Wrench,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   BookingPayloadItem,
   OrganizationDepartmentItem,
   OrganizationGroupItem,
+  SharedEquipmentItem,
+  WorkspaceNodeItem,
   UserRoleType,
   UserTrustProfileItem,
   WebLanguageCodeType,
@@ -36,6 +40,8 @@ export interface OrganizationPagesProps {
   groupsList: OrganizationGroupItem[];
   trustProfiles: UserTrustProfileItem[];
   bookingsList: BookingPayloadItem[];
+  equipmentsList?: SharedEquipmentItem[];
+  workspaceNodes?: WorkspaceNodeItem[];
   userEmail: string;
   userRole: UserRoleType;
   userDepartment: string;
@@ -51,6 +57,11 @@ export interface OrganizationPagesProps {
   onDeleteGroup: (groupId: string) => void;
   onToggleGroupMember: (groupId: string, targetUserEmail: string) => void;
   onNavigateToHallBooking?: () => void;
+  onSubmitEquipmentFaultReport?: (
+    equipmentId: string,
+    roomCode: string,
+    faultReason: string
+  ) => void;
 }
 
 const STANDARD_FLOOR_LOCATIONS = [
@@ -191,7 +202,7 @@ const ORG_I18N: Record<
   vi: {
     title: 'Cơ cấu Tổ chức — Quản lý Phòng ban & Các Nhóm Chuyên biệt Trực thuộc',
     roleBadgeAdmin: 'SYS_ADMIN • Toàn quyền Tạo / Sửa / Xóa Phòng ban & Nhóm',
-    roleBadgeManager: 'MANAGER • Được phép Tạo Phòng ban & Quản lý Nhóm',
+    roleBadgeManager: 'MANAGER • Được phép Tạo & Chỉnh sửa Nhóm (Không sửa Phòng ban)',
     roleBadgeEmployee: 'EMPLOYEE • Chế độ Chỉ Xem (Nhân viên không được tạo Phòng ban)',
     subTitle:
       'Bấm vào từng Phòng ban để chuyển sang Trang Chi tiết Phòng ban riêng biệt • Chỉ Quản lý (MANAGER) và Admin (SYS_ADMIN) mới có quyền tạo Phòng ban.',
@@ -209,7 +220,7 @@ const ORG_I18N: Record<
     floorZoneLabel: 'Khu vực Tầng Hoạt động:',
     membersCount: (c) => `${c} nhân sự`,
     groupsCount: (c) => `${c} nhóm chuyên biệt`,
-    addMemberBtn: '+ Thêm Thành viên',
+    addMemberBtn: 'Thêm Thành viên',
     searchEmpPlaceholder: 'Tìm nhân viên theo tên, email...',
     noGroupYet: 'Chưa vào nhóm',
     matrixTitle:
@@ -235,7 +246,7 @@ const ORG_I18N: Record<
   en: {
     title: 'Organization Structure — Departments & Specialized Sub-Groups',
     roleBadgeAdmin: 'SYS_ADMIN • Full Create / Edit / Delete Access',
-    roleBadgeManager: 'MANAGER • Authorized to Create Departments & Manage Groups',
+    roleBadgeManager: 'MANAGER • Authorized to Create & Edit Sub-Groups (Dept Read-Only)',
     roleBadgeEmployee: 'EMPLOYEE • Read-Only Mode (Employees cannot create Departments)',
     subTitle:
       'Click any Department card to open its dedicated Department Detail Page • Only Managers and System Admins can create or modify Departments.',
@@ -253,7 +264,7 @@ const ORG_I18N: Record<
     floorZoneLabel: 'Primary Floor Zone:',
     membersCount: (c) => `${c} members`,
     groupsCount: (c) => `${c} sub-groups`,
-    addMemberBtn: '+ Add Member',
+    addMemberBtn: 'Add Member',
     searchEmpPlaceholder: 'Search employee by name, email...',
     noGroupYet: 'No group yet',
     matrixTitle:
@@ -279,7 +290,7 @@ const ORG_I18N: Record<
   ja: {
     title: '組織構造 — 部署管理および所属専門グループ',
     roleBadgeAdmin: 'SYS_ADMIN • 全部署＆グループ作成・編集・削除権限',
-    roleBadgeManager: 'MANAGER • 部署作成および専門グループ管理が可能',
+    roleBadgeManager: 'MANAGER • 所属部署の専門グループ作成・編集が可能（部署変更は不可）',
     roleBadgeEmployee: 'EMPLOYEE • 閲覧専用モード（一般社員は部署を作成できません）',
     subTitle:
       '各部署カードをクリックすると専用の「部署詳細ページ」へ移動します • 部署の作成・編集はマネージャー(MANAGER)と管理者(SYS_ADMIN)のみ可能です。',
@@ -297,7 +308,7 @@ const ORG_I18N: Record<
     floorZoneLabel: '主要活動フロア:',
     membersCount: (c) => `${c} 名の社員`,
     groupsCount: (c) => `${c} 専門グループ`,
-    addMemberBtn: '+ メンバー追加',
+    addMemberBtn: 'メンバー追加',
     searchEmpPlaceholder: '氏名、メールアドレスで社員を検索...',
     noGroupYet: '未参加',
     matrixTitle:
@@ -327,6 +338,8 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   groupsList,
   trustProfiles,
   bookingsList,
+  equipmentsList = [],
+  workspaceNodes = [],
   userEmail,
   userRole,
   userDepartment,
@@ -339,10 +352,30 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   onDeleteGroup,
   onToggleGroupMember,
   onNavigateToHallBooking,
+  onSubmitEquipmentFaultReport,
 }) => {
   const isSysAdmin = userRole === 'SYS_ADMIN';
-  // Quy tắc RBAC: Chỉ Quản lý (MANAGER) và Admin (SYS_ADMIN) mới có thể tác động tạo/chỉnh sửa Phòng ban & Nhóm. Nhân viên (EMPLOYEE) không tạo được!
+  // Quy tắc RBAC chuẩn:
+  // - SYS_ADMIN: Có quyền tạo/sửa/đổi tên cả Phòng ban và Nhóm.
+  // - MANAGER: Không được tạo/sửa/đổi tên Phòng ban, nhưng có quyền tạo Nhóm và chỉnh sửa tên Nhóm cho phòng ban của mình.
+  // - EMPLOYEE: Chỉ có quyền xem (Read-only).
+  const canManageDepartments = isSysAdmin;
   const canCreateOrEditOrg = userRole === 'SYS_ADMIN' || userRole === 'MANAGER';
+
+  // State cho Modal Báo lỗi Thiết bị Phòng họp (Nhân viên & Quản lý chọn Phòng -> chọn Thiết bị -> nhập Lý do lỗi -> gửi Admin)
+  const [isFaultModalOpen, setIsFaultModalOpen] = useState<boolean>(false);
+  const [faultRoomCode, setFaultRoomCode] = useState<string>('M1-01');
+  const [faultEquipmentId, setFaultEquipmentId] = useState<string>('');
+  const [faultReasonInput, setFaultReasonInput] = useState<string>('');
+  const [faultSuccessBanner, setFaultSuccessBanner] = useState<string | null>(
+    null
+  );
+
+  const equipmentsInSelectedFaultRoom = useMemo(() => {
+    return equipmentsList.filter(
+      (eq) => (eq.assignedNodeId || '').toUpperCase() === faultRoomCode.toUpperCase()
+    );
+  }, [equipmentsList, faultRoomCode]);
   const t = ORG_I18N[webLanguage] || ORG_I18N.vi;
 
   const [activeTab, setActiveTab] = useState<'DEPARTMENTS' | 'MEMBER_MATRIX'>(
@@ -427,7 +460,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   >('INDIGO');
 
   const openCreateDepartmentModal = () => {
-    if (!canCreateOrEditOrg) return;
+    if (!canManageDepartments) return;
     setEditingDept(null);
     setDeptCodeInput(`DEPT-${Math.floor(Math.random() * 90 + 10)}`);
     setDeptNameInput('');
@@ -441,7 +474,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   };
 
   const openEditDepartmentModal = (dept: OrganizationDepartmentItem) => {
-    if (!canCreateOrEditOrg) return;
+    if (!canManageDepartments) return;
     setEditingDept(dept);
     setDeptCodeInput(dept.departmentCode);
     setDeptNameInput(dept.departmentName);
@@ -458,7 +491,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
   const handleSaveDepartmentForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCreateOrEditOrg || !deptNameInput.trim()) return;
+    if (!canManageDepartments || !deptNameInput.trim()) return;
 
     const selectedMgr = allCompanyMembers.find(
       (m) =>
@@ -514,10 +547,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   const openCreateGroupModal = (preselectedDeptName?: string) => {
     if (!canCreateOrEditOrg) return;
     const targetDeptName =
-      preselectedDeptName ||
-      activeOpenedDepartment?.departmentName ||
-      departmentsList[0]?.departmentName ||
-      'Product & Engineering';
+      userRole === 'MANAGER'
+        ? userDepartment
+        : preselectedDeptName ||
+          activeOpenedDepartment?.departmentName ||
+          departmentsList[0]?.departmentName ||
+          'Product & Engineering';
     const deptMembers = allCompanyMembers.filter(
       (m) =>
         m.departmentName.trim().toLowerCase() ===
@@ -755,27 +790,60 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 )}
               </div>
 
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultRoom = workspaceNodes[0]?.nodeCode || 'M1-01';
+                  setFaultRoomCode(defaultRoom);
+                  const firstEq = equipmentsList.find(
+                    (e) => (e.assignedNodeId || '').toUpperCase() === defaultRoom
+                  );
+                  setFaultEquipmentId(firstEq?.equipmentId || '');
+                  setFaultReasonInput('');
+                  setIsFaultModalOpen(true);
+                }}
+                className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-indigo-500'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-400 shadow-sm'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5 text-indigo-500" />
+                <span>
+                  {webLanguage === 'en'
+                    ? 'Report Room Equipment Fault'
+                    : webLanguage === 'ja'
+                    ? '会議室設備の故障を報告'
+                    : 'Báo lỗi Thiết bị Phòng họp'}
+                </span>
+              </button>
+
+              {canManageDepartments && (
+                <button
+                  type="button"
+                  onClick={openCreateDepartmentModal}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{t.createDeptBtn}</span>
+                </button>
+              )}
+
               {canCreateOrEditOrg ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={openCreateDepartmentModal}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>{t.createDeptBtn}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openCreateGroupModal()}
-                    className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>{t.createGroupBtn}</span>
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => openCreateGroupModal()}
+                  className={`px-3.5 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1.5 transition ${
+                    isDark
+                      ? 'bg-slate-800 border-slate-700 text-slate-100 hover:bg-slate-700'
+                      : 'bg-slate-100 border-slate-200 text-slate-800 hover:bg-slate-200'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>{t.createGroupBtn}</span>
+                </button>
               ) : (
-                <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-bold flex items-center gap-1.5">
+                <span className="px-3 py-1.5 rounded-xl bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-bold flex items-center gap-1.5">
                   <Lock className="w-3.5 h-3.5" />
                   <span>{t.employeeReadOnlyHint}</span>
                 </span>
@@ -830,7 +898,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                           </p>
                         </div>
 
-                        {canCreateOrEditOrg && (
+                        {canManageDepartments && (
                           <div
                             className="flex items-center gap-1.5"
                             onClick={(e) => e.stopPropagation()}
@@ -904,7 +972,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {canCreateOrEditOrg && (
+                          {canManageDepartments && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1518,6 +1586,194 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-md"
               >
                 {t.saveBtn}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {faultSuccessBanner && (
+        <div className="p-4 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {faultSuccessBanner}
+          </span>
+          <button
+            type="button"
+            onClick={() => setFaultSuccessBanner(null)}
+            className="underline text-[11px]"
+          >
+            OK
+          </button>
+        </div>
+      )}
+
+      {/* MODAL BÁO LỖI THIẾT BỊ PHÒNG HỌP (CHỌN PHÒNG -> HIỆN THIẾT BỊ -> NHẬP LÝ DO -> GỬI ADMIN) */}
+      {isFaultModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const targetEqId =
+                faultEquipmentId ||
+                equipmentsInSelectedFaultRoom[0]?.equipmentId ||
+                '';
+              if (!targetEqId || !faultReasonInput.trim()) return;
+              if (onSubmitEquipmentFaultReport) {
+                onSubmitEquipmentFaultReport(
+                  targetEqId,
+                  faultRoomCode,
+                  faultReasonInput.trim()
+                );
+              }
+              setIsFaultModalOpen(false);
+              setFaultSuccessBanner(
+                `Đã gửi báo cáo lỗi thiết bị tại phòng ${faultRoomCode} đến System Admin xét duyệt!`
+              );
+            }}
+            className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4 ${
+              isDark
+                ? 'bg-slate-900 border-slate-800 text-slate-100'
+                : 'bg-white border-slate-200 text-slate-800'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                <div>
+                  <h3 className="text-sm font-black">
+                    {webLanguage === 'en'
+                      ? 'Report Meeting Room Equipment Fault'
+                      : webLanguage === 'ja'
+                      ? '会議室設備の故障・不具合報告'
+                      : 'Báo lỗi Thiết bị Phòng họp (Gửi Admin Xác nhận)'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {webLanguage === 'en'
+                      ? 'Select room -> select device -> describe fault reason for Admin review'
+                      : webLanguage === 'ja'
+                      ? '会議室を選択 → 対象機器を選択 → 故障理由を記入して送信'
+                      : 'Chọn phòng họp -> Chọn thiết bị trong phòng -> Nêu lý do lỗi để gửi Admin'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFaultModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1.5">
+                1. Chọn Phòng họp phát hiện thiết bị lỗi
+              </label>
+              <select
+                value={faultRoomCode}
+                onChange={(e) => {
+                  const nextRoom = e.target.value;
+                  setFaultRoomCode(nextRoom);
+                  const firstEq = equipmentsList.find(
+                    (eq) =>
+                      (eq.assignedNodeId || '').toUpperCase() ===
+                      nextRoom.toUpperCase()
+                  );
+                  setFaultEquipmentId(firstEq?.equipmentId || '');
+                }}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              >
+                {(workspaceNodes.length > 0
+                  ? workspaceNodes
+                  : [{ nodeCode: 'M1-01', nodeLabel: 'Phòng họp M1-01' }]
+                ).map((rm) => (
+                  <option key={rm.nodeCode} value={rm.nodeCode}>
+                    {rm.nodeCode} — {rm.nodeLabel}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1.5">
+                2. Chọn Thiết bị trong phòng {faultRoomCode} ({equipmentsInSelectedFaultRoom.length} thiết bị)
+              </label>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {equipmentsInSelectedFaultRoom.map((eq) => {
+                  const selected =
+                    (faultEquipmentId ||
+                      equipmentsInSelectedFaultRoom[0]?.equipmentId) ===
+                    eq.equipmentId;
+                  return (
+                    <button
+                      key={eq.equipmentId}
+                      type="button"
+                      onClick={() => setFaultEquipmentId(eq.equipmentId)}
+                      className={`w-full p-3 rounded-2xl border text-left text-xs flex items-center justify-between gap-2 transition ${
+                        selected
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                          : isDark
+                          ? 'bg-slate-950 border-slate-800 text-slate-200 hover:border-slate-700'
+                          : 'bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        <p className="font-extrabold">{eq.equipmentName}</p>
+                        <p
+                          className={`text-[11px] font-mono ${
+                            selected ? 'text-indigo-100' : 'text-slate-400'
+                          }`}
+                        >
+                          Mã: {eq.equipmentCode} • Trạng thái hiện tại: {eq.status}
+                        </p>
+                      </div>
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1.5">
+                3. Lý do lỗi / Tình trạng hư hỏng phát hiện
+              </label>
+              <textarea
+                rows={3}
+                required
+                value={faultReasonInput}
+                onChange={(e) => setFaultReasonInput(e.target.value)}
+                placeholder="Nhập chi tiết lỗi phát hiện (VD: Màn hình không nhận tín hiệu HDMI, Máy chiếu bị mờ bóng, Micro mất tiếng...)"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium ${
+                  isDark
+                    ? 'bg-slate-950 border-slate-800 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsFaultModalOpen(false)}
+                className={`px-4 py-2 rounded-xl border text-xs font-bold ${
+                  isDark
+                    ? 'bg-slate-800 border-slate-700 text-slate-300'
+                    : 'bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-sm"
+              >
+                Gửi Báo Lỗi đến Admin
               </button>
             </div>
           </form>

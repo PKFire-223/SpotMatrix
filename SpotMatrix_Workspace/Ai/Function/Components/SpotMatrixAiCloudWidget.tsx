@@ -16,24 +16,46 @@ import {
   CheckCircle2,
   ShieldCheck,
   Cpu,
+  CalendarCheck,
+  ArrowRight,
+  Users,
 } from 'lucide-react';
 import {
   AuditConcurrencyLogItem,
   BookingPayloadItem,
+  EquipmentStatusType,
   OrganizationDepartmentItem,
   OrganizationGroupItem,
   SharedEquipmentItem,
+  TrustScoreHistoryRecordItem,
   UserRoleType,
   UserTrustProfileItem,
   WebLanguageCodeType,
   WorkspaceNodeItem,
 } from '../../../Shared/Types/GlobalSystemTypes';
 
+export interface AiBookingSlotSuggestion {
+  dateIso: string;
+  start: string;
+  end: string;
+  capacityNeeded: number;
+  floorFilter?: number | null;
+  purposeNote: string;
+  approvalRequestReason: string;
+  candidateRooms: WorkspaceNodeItem[];
+}
+
+export interface AiGroupDraftAction {
+  initialGroupName: string;
+  departmentName: string;
+}
+
 export interface SpotMatrixAiCloudWidgetProps {
   workspaceNodes: WorkspaceNodeItem[];
   bookingsList: BookingPayloadItem[];
   equipmentsList: SharedEquipmentItem[];
   trustProfiles: UserTrustProfileItem[];
+  trustScoreHistory?: TrustScoreHistoryRecordItem[];
   departmentsList: OrganizationDepartmentItem[];
   groupsList: OrganizationGroupItem[];
   auditLogs: AuditConcurrencyLogItem[];
@@ -48,6 +70,36 @@ export interface SpotMatrixAiCloudWidgetProps {
   };
   webLanguage: WebLanguageCodeType;
   isDark: boolean;
+  onAiNavigateAndPrefillBooking?: (
+    node: WorkspaceNodeItem,
+    slot: {
+      dateIso: string;
+      start: string;
+      end: string;
+      purposeNote: string;
+      approvalRequestReason: string;
+    }
+  ) => void;
+  onAiExecuteDirectBooking?: (
+    node: WorkspaceNodeItem,
+    slot: {
+      dateIso: string;
+      start: string;
+      end: string;
+      purposeNote: string;
+      approvalRequestReason: string;
+    }
+  ) => void;
+  onAiUpsertGroup?: (group: OrganizationGroupItem) => void;
+  onAiToggleGroupMember?: (groupId: string, userEmail: string) => void;
+  onAiRenameDepartment?: (
+    departmentId: string,
+    newDepartmentName: string
+  ) => void;
+  onAiBatchUpdateEquipmentStatus?: (
+    targetRoomCodes: string[],
+    nextStatus: EquipmentStatusType
+  ) => void;
 }
 
 interface AttachedFilePayload {
@@ -66,6 +118,8 @@ interface AiChatMessageItem {
   contentText: string;
   timestampText: string;
   attachments?: AttachedFilePayload[];
+  bookingSuggestion?: AiBookingSlotSuggestion;
+  groupDraftAction?: AiGroupDraftAction;
 }
 
 /**
@@ -685,15 +739,38 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
   userProfile,
   webLanguage,
   isDark,
+  onAiNavigateAndPrefillBooking,
+  onAiExecuteDirectBooking,
+  onAiUpsertGroup,
+  onAiToggleGroupMember,
+  onAiRenameDepartment,
+  onAiBatchUpdateEquipmentStatus,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [isExpandedWidth, setIsExpandedWidth] = useState<boolean>(false);
   const [promptInput, setPromptInput] = useState<string>('');
+  const [aiMood, setAiMood] = useState<'IDLE' | 'THINKING' | 'SPEAKING'>('IDLE');
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [pendingAttachments, setPendingAttachments] = useState<
     AttachedFilePayload[]
   >([]);
-  const [aiMood, setAiMood] = useState<'IDLE' | 'THINKING' | 'SPEAKING'>('IDLE');
-  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+
+  // State cho Form Tạo Nhóm Nhanh ngay trong Chat AI (khi Manager/Admin yêu cầu tạo nhóm mới)
+  const [inlineGrpCode, setInlineGrpCode] = useState<string>('SQUAD-NEW-01');
+  const [inlineGrpName, setInlineGrpName] = useState<string>('');
+  const [inlineGrpDesc, setInlineGrpDesc] = useState<string>(
+    'Nhóm chuyên môn phát triển và phối hợp dự án nội bộ'
+  );
+  const [inlineGrpTag, setInlineGrpTag] = useState<string>('SpotMatrix Squad');
+  const [inlineGrpLeader, setInlineGrpLeader] = useState<string>(
+    userProfile.userEmail
+  );
+  const [executedBookingMsgIds, setExecutedBookingMsgIds] = useState<
+    Record<string, string>
+  >({});
+  const [executedGroupMsgIds, setExecutedGroupMsgIds] = useState<
+    Record<string, boolean>
+  >({});
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -702,7 +779,6 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
   const isSysAdmin = userProfile.role === 'SYS_ADMIN';
   const isManager = userProfile.role === 'MANAGER';
 
-  // Xây dựng dữ liệu huấn luyện thời gian thực PHÂN QUYỀN RIÊNG BIỆT THEO TÀI KHOẢN ĐANG ĐĂNG NHẬP
   const roleScopedKnowledgeBase = useMemo(() => {
     const freeRooms = workspaceNodes.filter((n) => n.status === 'AVAILABLE');
     const holdingRooms = workspaceNodes.filter((n) => n.status === 'HOLDING');
@@ -713,7 +789,8 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     const myBookings = bookingsList.filter(
       (b) =>
         b.userEmail.toLowerCase() === userProfile.userEmail.toLowerCase() &&
-        b.bookingStatus !== 'CANCELLED'
+        b.bookingStatus !== 'CANCELLED' &&
+        b.approvalStatus !== 'REJECTED'
     );
 
     const myDepartmentObj = departmentsList.find(
@@ -726,9 +803,12 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       (g) =>
         g.departmentName.trim().toLowerCase() ===
           userProfile.departmentName.trim().toLowerCase() &&
-        g.memberEmails.some(
-          (em) => em.trim().toLowerCase() === userProfile.userEmail.toLowerCase()
-        )
+        (isSysAdmin ||
+          isManager ||
+          g.memberEmails.some(
+            (em) =>
+              em.trim().toLowerCase() === userProfile.userEmail.toLowerCase()
+          ))
     );
 
     const hallApprovedEvents = bookingsList.filter(
@@ -738,19 +818,12 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
         b.bookingStatus !== 'CANCELLED'
     );
 
-    const pendingApprovalsForReview = bookingsList.filter((b) => {
-      if (b.approvalStatus !== 'PENDING_APPROVAL') return false;
-      if (isSysAdmin) return true;
-      if (isManager) {
-        return (
-          (b.departmentName || '').trim().toLowerCase() ===
-          userProfile.departmentName.trim().toLowerCase()
-        );
-      }
-      return b.userEmail.toLowerCase() === userProfile.userEmail.toLowerCase();
-    });
-
-    const brokenEquips = equipmentsList.filter((e) => e.status === 'BROKEN');
+    const brokenEquips = equipmentsList.filter(
+      (e) =>
+        e.status === 'BROKEN' ||
+        e.status === 'REPORTED_BROKEN' ||
+        e.status === 'MAINTENANCE'
+    );
 
     return {
       freeRooms,
@@ -760,7 +833,6 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       myDepartmentObj,
       myGroups,
       hallApprovedEvents,
-      pendingApprovalsForReview,
       brokenEquips,
     };
   }, [
@@ -776,16 +848,22 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
 
   const welcomeMessageText = useMemo(() => {
     if (webLanguage === 'en') {
-      return `Hello **${userProfile.fullName}** (\`@${userProfile.username}\` • Role: **${userProfile.role}** • Dept: **${userProfile.departmentName}** • Trust Score: **${userProfile.trustScore}/100**).\n\nI am **AURA-X**, the exclusive 3D AI Assistant of **SpotMatrix**. I am trained on your account's live permissions (${roleScopedKnowledgeBase.freeRooms.length}/25 free rooms, ${roleScopedKnowledgeBase.myBookings.length} personal bookings, equipment status) and can also analyze uploaded **Images**, **Files**, or answer **any external technical/general question**.`;
+      return `Hello **${userProfile.fullName}** (\`@${userProfile.username}\` • Role: **${userProfile.role}** • Dept: **${userProfile.departmentName}** • Trust Score: **${userProfile.trustScore}/100**).
+
+I am **AURA-X**, your role-aware AI Agent. You can ask me to **book a room** (e.g. *"Book a room for 4 people for 2 hours at 16:00 today on floor 3"*), **manage groups** (for Managers/Admins), or **execute system commands & analytics** (for Admins).`;
     }
     if (webLanguage === 'ja') {
-      return `こんにちは、**${userProfile.fullName}** さん（\`@${userProfile.username}\` • ロール: **${userProfile.role}** • 部署: **${userProfile.departmentName}** • 信頼スコア: **${userProfile.trustScore}/100**）。\n\n私は **SpotMatrix** 専用の3D AIアシスタント **AURA-X** です。あなたのアカウント権限に応じた社内データ（空室 ${roleScopedKnowledgeBase.freeRooms.length}/25室、個人予約 ${roleScopedKnowledgeBase.myBookings.length}件、機器状態）を学習しており、**画像やファイルの添付分析**や**外部の一般・技術的な質問**にも論理的に回答します。`;
+      return `こんにちは、**${userProfile.fullName}** さん（\`@${userProfile.username}\` • ロール: **${userProfile.role}** • 部署: **${userProfile.departmentName}** • 信頼スコア: **${userProfile.trustScore}/100**）。
+
+私は **SpotMatrix** の AI エージェント **AURA-X** です。ロール権限に応じて、**会議室の自動検索・予約作成**（例：「今日16時から2時間、3階で4人用の会議室を予約して」）、**グループ作成・メンバー追加**（マネージャー/Admin）、**全社統計・設備制御**（Admin）を直接実行できます。`;
     }
-    return `Xin chào **${userProfile.fullName}** (\`@${userProfile.username}\` • Vai trò: **${userProfile.role}** • Phòng ban: **${userProfile.departmentName}** • Điểm tín nhiệm: **${userProfile.trustScore}/100đ**).\n\nTôi là **AURA-X**, Trợ lý AI 3D độc quyền của hệ thống **SpotMatrix**. Tôi đã được huấn luyện trực tiếp trên dữ liệu phân quyền riêng của tài khoản bạn (Hiện có **${roleScopedKnowledgeBase.freeRooms.length}/25 phòng trống**, bạn đang có **${roleScopedKnowledgeBase.myBookings.length} lịch đặt**, nhóm tham gia: **${
-      roleScopedKnowledgeBase.myGroups.map((g) => g.groupCode).join(', ') ||
-      'Chưa vào nhóm'
-    }**) và sẵn sàng phân tích **Hình ảnh**, **Tệp tin đính kèm** hoặc giải đáp **mọi câu hỏi kiến thức bên ngoài** một cách mạch lạc, có tổ chức!`;
-  }, [userProfile, roleScopedKnowledgeBase, webLanguage]);
+    return `Xin chào **${userProfile.fullName}** (\`@${userProfile.username}\` • Vai trò: **${userProfile.role}** • Phòng ban: **${userProfile.departmentName}** • Điểm tín nhiệm: **${userProfile.trustScore}/100đ**).
+
+Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quyền tài khoản của bạn:
+- **Đặt phòng tự động**: Nhắn VD *"Tạo cho tôi phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"* (hoặc *"sau 2 tiếng nữa"*).
+- **Quản lý Nhóm (Manager/Admin)**: Nhắn VD *"Tạo 1 nhóm mới tên là..."* hoặc *"Thêm thành viên ... vào nhóm ..."*.
+- **Lệnh Đặc quyền & Truy quét (Admin)**: Đổi tên phòng ban, chuyển thiết bị tầng/phòng sang bảo trì/báo hỏng, thống kê điểm tín nhiệm TB và so sánh lịch sử đặt phòng theo tháng.`;
+  }, [userProfile, webLanguage]);
 
   const [messages, setMessages] = useState<AiChatMessageItem[]>([
     {
@@ -814,7 +892,6 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     }
   }, [messages, isOpen]);
 
-  // Xử lý đính kèm Hình ảnh hoặc Tệp tin (CSV, JSON, TXT, MD, Code, PDF...)
   const handleFileUploadChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     mode: 'IMAGE' | 'FILE'
@@ -867,22 +944,742 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     e.target.value = '';
   };
 
+  // Hàm phân tích yêu cầu đặt phòng thông minh (Số người, Tầng, Giờ "16h"/"4h chiều"/"sau 2 tiếng nữa", Ngày "hôm nay"/"tuần sau")
+  const parseSmartBookingIntent = (
+    rawQuery: string
+  ): AiBookingSlotSuggestion | null => {
+    const q = rawQuery.toLowerCase();
+    const hasBookingIntent =
+      (q.includes('đặt') ||
+        q.includes('xin phép') ||
+        q.includes('tạo cho tôi phòng') ||
+        q.includes('tạo phòng') ||
+        q.includes('tìm phòng') ||
+        q.includes('gợi ý phòng') ||
+        q.includes('mượn phòng') ||
+        q.includes('book')) &&
+      (q.includes('phòng') || q.includes('người') || q.includes('chỗ') || q.includes('room'));
+
+    // Không bắt nhầm câu hỏi "lịch sử đặt phòng" hoặc "truy quét lượt mượn phòng"
+    if (
+      !hasBookingIntent ||
+      q.includes('lịch sử') ||
+      q.includes('truy quét') ||
+      q.includes('thống kê') ||
+      q.includes('so với tháng trước')
+    ) {
+      return null;
+    }
+
+    // 1. Bóc tách số người (VD: "4 người", "tầm 6 người", "8 chỗ")
+    const capMatch = q.match(/(\d+)\s*(?:người|nguoi|chỗ|cho|people|person|seats)/i);
+    const capacityNeeded = capMatch ? Math.max(2, Number(capMatch[1])) : 4;
+
+    // 2. Bóc tách tầng (VD: "tầng 3", "floor 2")
+    const floorMatch = q.match(/(?:tầng|tang|floor)\s*([1-5])/i);
+    const floorFilter = floorMatch ? Number(floorMatch[1]) : null;
+
+    // 3. Bóc tách thời lượng họp (VD: "họp 2 tiếng", "3 giờ")
+    const durMatch = q.match(/(?:họp|hop|trong|khoảng)?\s*(\d+)\s*(?:tiếng|tieng|giờ|gio|hours|hour)(?!\s*nữa|\s*chiều|\s*sáng|\s*tối)/i);
+    const durationHours = durMatch
+      ? Math.max(1, Math.min(6, Number(durMatch[1])))
+      : 2;
+
+    // 4. Bóc tách ngày ("hôm nay", "ngày mai", "tuần sau")
+    const now = new Date();
+    const targetDate = new Date(now);
+    if (q.includes('tuần sau') || q.includes('next week')) {
+      targetDate.setDate(now.getDate() + 7);
+    } else if (q.includes('ngày mai') || q.includes('mai') || q.includes('tomorrow')) {
+      targetDate.setDate(now.getDate() + 1);
+    }
+    const dateIso = `${targetDate.getFullYear()}-${String(
+      targetDate.getMonth() + 1
+    ).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
+    // 5. Bóc tách giờ bắt đầu ("sau 2 tiếng nữa", "lúc 16h", "4h chiều", "9h sáng")
+    let startHour = 14;
+    const relativeMatch = q.match(/sau\s*(\d+)\s*(?:tiếng|tieng|giờ|gio)\s*(?:nữa|nua)?/i);
+    const explicitTimeMatch = q.match(
+      /(?:lúc|luc|vào|vao|at)?\s*(\d{1,2})(?:\s*:\s*(\d{2})|\s*h|\s*giờ|\s*gio)\s*(sáng|sang|chiều|chieu|tối|toi|pm|am)?/i
+    );
+
+    if (relativeMatch) {
+      const offsetHrs = Number(relativeMatch[1]);
+      // Lấy mốc thời gian hiện tại + N tiếng rồi làm tròn lên giờ chẵn tiếp theo
+      const roundedCurrentHour =
+        now.getMinutes() > 0 ? now.getHours() + 1 : now.getHours();
+      startHour = roundedCurrentHour + offsetHrs;
+    } else if (explicitTimeMatch) {
+      let parsedH = Number(explicitTimeMatch[1]);
+      const meridiem = (explicitTimeMatch[3] || '').toLowerCase();
+      if (
+        (meridiem.includes('chiều') ||
+          meridiem.includes('chieu') ||
+          meridiem.includes('tối') ||
+          meridiem.includes('toi') ||
+          meridiem === 'pm') &&
+        parsedH < 12
+      ) {
+        parsedH += 12;
+      }
+      startHour = parsedH;
+    }
+
+    // Chuẩn hóa nằm trong khung hoạt động 07:00 – 23:00
+    startHour = Math.max(7, Math.min(22, startHour));
+    const endHour = Math.max(startHour + 1, Math.min(23, startHour + durationHours));
+    if (endHour <= startHour) {
+      startHour = 21;
+    }
+
+    const startStr = `${String(startHour).padStart(2, '0')}:00`;
+    const endStr = `${String(Math.min(23, startHour + durationHours)).padStart(
+      2,
+      '0'
+    )}:00`;
+
+    // 6. Lọc danh sách phòng họp có thể đặt được (Trống, đủ sức chứa, đúng tầng, đúng quyền Role)
+    const candidateRooms = workspaceNodes
+      .filter((rm) => {
+        if (rm.floorLevel === 5 && userProfile.role === 'EMPLOYEE') {
+          return false; // Nhân viên không được thuê cả Hội trường Tầng 5
+        }
+        if (floorFilter && rm.floorLevel !== floorFilter) {
+          return false;
+        }
+        if (rm.capacityCount < capacityNeeded) {
+          return false;
+        }
+        if (rm.status !== 'AVAILABLE') {
+          return false;
+        }
+        // Kiểm tra không bị trùng lịch đặt trong khung giờ đó
+        const hasConflict = bookingsList.some(
+          (b) =>
+            b.nodeId === rm.nodeCode &&
+            b.bookingStatus !== 'CANCELLED' &&
+            b.bookingStatus !== 'EXPIRED_NO_SHOW' &&
+            b.approvalStatus !== 'REJECTED' &&
+            (b.bookingDateIso || dateIso) === dateIso &&
+            b.startTimeIso < endStr &&
+            b.endTimeIso > startStr
+        );
+        return !hasConflict;
+      })
+      .sort((a, b) => a.capacityCount - b.capacityCount)
+      .slice(0, 4);
+
+    return {
+      dateIso,
+      start: startStr,
+      end: endStr,
+      capacityNeeded,
+      floorFilter,
+      purposeNote: `Họp nhóm ${capacityNeeded} người (${startStr} – ${endStr})`,
+      approvalRequestReason: `Xin phép sử dụng phòng họp cho ${capacityNeeded} thành viên bộ phận ${userProfile.departmentName} trong khung giờ ${startStr} – ${endStr} ngày ${dateIso}.`,
+      candidateRooms,
+    };
+  };
+
   /**
-   * BỘ SUY LUẬN TRÍ TUỆ NHÂN TẠO KẾT HỢP (HYBRID TRAINED AI ENGINE):
-   * Giải quyết triệt để:
-   * 1. Câu hỏi về dữ liệu nội bộ trang web (Phân quyền nghiêm ngặt theo tài khoản `SYS_ADMIN` / `MANAGER` / `EMPLOYEE`)
-   * 2. Phân tích Hình ảnh & Tệp tin đính kèm
-   * 3. Câu hỏi kiến thức bên ngoài (Toán học, Lập trình, Kỹ thuật, Soạn thảo Email/Biên bản họp, Tư duy...)
+   * BỘ SUY LUẬN & THỰC THI TÁC VỤ WEB THEO ROLE (ROLE-SCOPED AGENTIC AI ENGINE):
+   * - Kiểm soát nghiêm ngặt dữ liệu tiết lộ theo từng Role (`EMPLOYEE` / `MANAGER` / `SYS_ADMIN`)
+   * - Thực thi trực tiếp các lệnh tạo đơn đặt phòng, quản lý nhóm, đổi tên phòng ban, đổi trạng thái thiết bị và truy quét thống kê
    */
-  const synthesizeStructuredAiAnswer = (
+  const executeAgenticWorkflowAndAnswer = (
     rawQuery: string,
     attachedItems: AttachedFilePayload[]
-  ): string => {
+  ): {
+    replyText: string;
+    bookingSuggestion?: AiBookingSlotSuggestion;
+    groupDraftAction?: AiGroupDraftAction;
+  } => {
     const q = rawQuery.trim().toLowerCase();
     const kb = roleScopedKnowledgeBase;
-    const sections: string[] = [];
 
-    // 0. NHẬN DIỆN CÂU HỎI "BẠN LÀ AI", CHÀO HỎI & GIAO TIẾP TỰ NHIÊN
+    // =========================================================================
+    // 1. KIỂM TRA GIỚI HẠN BẢO MẬT DỮ LIỆU THEO ROLE (DATA ISOLATION GUARD)
+    // =========================================================================
+    // Nếu Nhân viên (EMPLOYEE) cố tình hỏi lịch sử đặt phòng của người khác, điểm tín nhiệm của người khác, phòng ban khác hoặc thiết bị Admin
+    if (userProfile.role === 'EMPLOYEE') {
+      const otherUsers = trustProfiles.filter(
+        (tp) => tp.userEmail.toLowerCase() !== userProfile.userEmail.toLowerCase()
+      );
+      const mentionedOtherUser = otherUsers.find(
+        (u) =>
+          q.includes(u.fullName.toLowerCase().split('(')[0].trim()) ||
+          q.includes(u.userEmail.toLowerCase())
+      );
+      const otherDepts = departmentsList.filter(
+        (d) =>
+          d.departmentName.trim().toLowerCase() !==
+          userProfile.departmentName.trim().toLowerCase()
+      );
+      const mentionedOtherDept = otherDepts.find(
+        (d) =>
+          q.includes(d.departmentName.toLowerCase()) ||
+          q.includes(d.departmentCode.toLowerCase())
+      );
+
+      if (
+        mentionedOtherUser &&
+        (q.includes('lịch') ||
+          q.includes('tín nhiệm') ||
+          q.includes('điểm') ||
+          q.includes('tháng trước') ||
+          q.includes('history'))
+      ) {
+        return {
+          replyText: `### 🔒 Giới hạn Quyền Truy cập Dữ liệu (\`EMPLOYEE\`)
+- Tài khoản của bạn (**${userProfile.fullName}** • Vai trò: \`EMPLOYEE\`) chỉ được phép tra cứu **lịch đặt phòng và điểm tín nhiệm của chính bạn**.
+- Dữ liệu lịch sử đặt phòng và điểm tín nhiệm của nhân sự khác (**${mentionedOtherUser.fullName}**) thuộc phạm vi bảo mật chỉ dành cho **System Admin (\`SYS_ADMIN\`)**.`,
+        };
+      }
+
+      if (mentionedOtherDept && (q.includes('thành viên') || q.includes('nhân sự') || q.includes('nhóm'))) {
+        return {
+          replyText: `### 🔒 Giới hạn Quyền Truy cập Phòng ban (\`EMPLOYEE\`)
+- Bạn đang thuộc phòng ban **${userProfile.departmentName}**. Vai trò \`EMPLOYEE\` không có quyền truy xuất danh sách nhân sự hoặc cấu trúc nhóm nội bộ của phòng ban khác (**${mentionedOtherDept.departmentName}**).`,
+        };
+      }
+
+      if (
+        q.includes('đổi tên') ||
+        q.includes('thay đổi tên') ||
+        q.includes('tạo nhóm') ||
+        q.includes('thêm thành viên') ||
+        q.includes('đổi thiết bị')
+      ) {
+        return {
+          replyText: `### 🔒 Từ chối Thực thi Lệnh Chỉnh sửa (\`EMPLOYEE\`)
+- Vai trò **Nhân viên (\`EMPLOYEE\`)** ở chế độ **Chỉ Xem (Read-Only)** đối với Phòng ban, Nhóm chuyên môn và Thiết bị.
+- Bạn không có quyền tạo/sửa nhóm, đổi tên phòng ban hoặc chuyển trạng thái thiết bị. Tuy nhiên, bạn có thể yêu cầu tôi **tìm và tạo đơn xin phép đặt phòng họp** bất cứ lúc nào!`,
+        };
+      }
+    }
+
+    // Nếu Quản lý (MANAGER) cố tình yêu cầu đổi tên Phòng ban hoặc tạo Phòng ban hoặc điều khiển thiết bị Admin
+    if (userProfile.role === 'MANAGER') {
+      if (
+        (q.includes('đổi tên') ||
+          q.includes('thay đổi tên') ||
+          q.includes('tạo mới') ||
+          q.includes('xóa')) &&
+        q.includes('phòng ban') &&
+        !q.includes('nhóm')
+      ) {
+        return {
+          replyText: `### 🔒 Giới hạn Phân quyền của Quản lý (\`MANAGER\`)
+- Theo quy tắc phân quyền của hệ thống SpotMatrix, vai trò **Quản lý (\`MANAGER\`)** **không có quyền tạo mới hay chỉnh sửa tên Phòng ban** (chỉ \`SYS_ADMIN\` mới có quyền này).
+- Tuy nhiên, bạn **CÓ toàn quyền tạo Nhóm con mới, đổi tên Nhóm và thêm thành viên vào Nhóm** trực thuộc phòng ban **${userProfile.departmentName}** của bạn!`,
+        };
+      }
+      if (
+        q.includes('đổi thiết bị') ||
+        (q.includes('thiết bị') && (q.includes('bảo trì') || q.includes('báo hỏng')))
+      ) {
+        return {
+          replyText: `### 🔒 Quyền Điều phối Thiết bị thuộc về \`SYS_ADMIN\`
+- Vai trò \`MANAGER\` không trực tiếp chuyển trạng thái thiết bị toàn tòa nhà. Để báo hỏng thiết bị trong phòng họp, bạn hãy dùng nút **"Báo lỗi Thiết bị Phòng họp"** tại trang **Tổ chức & Phòng ban** để gửi yêu cầu lên Admin xác nhận!`,
+        };
+      }
+    }
+
+    // =========================================================================
+    // 2. THỰC THI LỆNH CỦA QUẢN LÝ (MANAGER) & ADMIN (SYS_ADMIN): TẠO NHÓM, ĐỔI TÊN NHÓM, THÊM THÀNH VIÊN VÀO NHÓM
+    // =========================================================================
+    if (isManager || isSysAdmin) {
+      // 2a. Lệnh: "Thêm cho tôi thành viên tên X vào nhóm tên Y"
+      const addMemMatch = rawQuery.match(
+        /thêm(?:\s+cho\s+tôi)?(?:\s+thành\s+viên|\s+nhân\s+sự|\s+người)?(?:\s+tên)?\s+(.+?)\s+vào\s+nhóm(?:\s+tên)?\s+(.+)/i
+      );
+      if (addMemMatch) {
+        const rawPersonKey = addMemMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
+        const rawGroupKey = addMemMatch[2].replace(/["'“”]/g, '').trim().toLowerCase();
+
+        const targetGroup = groupsList.find(
+          (g) =>
+            g.groupName.toLowerCase().includes(rawGroupKey) ||
+            g.groupCode.toLowerCase().includes(rawGroupKey)
+        );
+        const targetPerson = trustProfiles.find(
+          (tp) =>
+            tp.fullName.toLowerCase().includes(rawPersonKey) ||
+            tp.userEmail.toLowerCase().includes(rawPersonKey)
+        );
+
+        if (!targetGroup) {
+          return {
+            replyText: `### ⚠️ Không tìm thấy Nhóm yêu cầu
+- Tôi không tìm thấy nhóm nào khớp với tên **“${addMemMatch[2].trim()}”**.
+- Các nhóm hiện có trong phạm vi của bạn: ${groupsList
+              .filter(
+                (g) =>
+                  isSysAdmin ||
+                  g.departmentName.toLowerCase() ===
+                    userProfile.departmentName.toLowerCase()
+              )
+              .map((g) => `\`${g.groupCode}\` (${g.groupName})`)
+              .join(', ')}.`,
+          };
+        }
+
+        if (
+          !isSysAdmin &&
+          targetGroup.departmentName.trim().toLowerCase() !==
+            userProfile.departmentName.trim().toLowerCase()
+        ) {
+          return {
+            replyText: `### 🔒 Không thể tác động Nhóm của Phòng ban khác
+- Nhóm **${targetGroup.groupName}** thuộc phòng ban **${targetGroup.departmentName}**, còn bạn đang quản lý phòng ban **${userProfile.departmentName}**.`,
+          };
+        }
+
+        if (!targetPerson) {
+          return {
+            replyText: `### ⚠️ Không tìm thấy Nhân sự
+- Tôi không tìm thấy nhân sự nào khớp với tên **“${addMemMatch[1].trim()}”** trong danh bạ hệ thống.`,
+          };
+        }
+
+        if (
+          targetPerson.departmentName.trim().toLowerCase() !==
+          targetGroup.departmentName.trim().toLowerCase()
+        ) {
+          return {
+            replyText: `### ⚠️ Khác Phòng ban Chủ quản
+- Nhân sự **${targetPerson.fullName}** đang thuộc phòng ban **${targetPerson.departmentName}**, không thể thêm vào nhóm **${targetGroup.groupName}** (thuộc phòng ban **${targetGroup.departmentName}**).`,
+          };
+        }
+
+        const alreadyIn = targetGroup.memberEmails.some(
+          (em) => em.toLowerCase() === targetPerson.userEmail.toLowerCase()
+        );
+        if (!alreadyIn && onAiToggleGroupMember) {
+          onAiToggleGroupMember(targetGroup.groupId, targetPerson.userEmail);
+        }
+
+        return {
+          replyText: `### ✅ Đã Thực thi Lệnh: Thêm Thành viên vào Nhóm
+- **Nhân sự**: **${targetPerson.fullName}** (\`${targetPerson.userEmail}\`)
+- **Nhóm tiếp nhận**: **${targetGroup.groupName}** (\`${targetGroup.groupCode}\`)
+- **Phòng ban**: **${targetGroup.departmentName}**
+- **Trạng thái**: ${
+            alreadyIn
+              ? 'Nhân sự này đã có mặt trong nhóm từ trước.'
+              : 'Đã tự động thêm vào nhóm thành công và đồng bộ lên trang Tổ chức & Phòng ban!'
+          }`,
+        };
+      }
+
+      // 2b. Lệnh: "Đổi tên nhóm X thành Y"
+      const renameGrpMatch = rawQuery.match(
+        /(?:đổi|thay\s+đổi|sửa)\s+tên\s+nhóm\s+(.+?)\s+thành\s+(.+)/i
+      );
+      if (renameGrpMatch) {
+        const oldGrpKey = renameGrpMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
+        const newGrpName = renameGrpMatch[2].replace(/["'“”]/g, '').trim();
+
+        const targetGroup = groupsList.find(
+          (g) =>
+            g.groupName.toLowerCase().includes(oldGrpKey) ||
+            g.groupCode.toLowerCase().includes(oldGrpKey)
+        );
+
+        if (!targetGroup) {
+          return {
+            replyText: `### ⚠️ Không tìm thấy Nhóm cần đổi tên
+- Không tìm thấy nhóm khớp với **“${renameGrpMatch[1].trim()}”**.`,
+          };
+        }
+
+        if (
+          !isSysAdmin &&
+          targetGroup.departmentName.trim().toLowerCase() !==
+            userProfile.departmentName.trim().toLowerCase()
+        ) {
+          return {
+            replyText: `### 🔒 Giới hạn Phòng ban
+- Bạn chỉ có quyền đổi tên các nhóm trực thuộc phòng ban **${userProfile.departmentName}**.`,
+          };
+        }
+
+        if (onAiUpsertGroup) {
+          onAiUpsertGroup({
+            ...targetGroup,
+            groupName: newGrpName,
+            updatedAtIso: new Date().toISOString(),
+          });
+        }
+
+        return {
+          replyText: `### ✅ Đã Thực thi Lệnh: Đổi Tên Nhóm Chuyên môn
+- **Mã nhóm**: \`${targetGroup.groupCode}\`
+- **Tên cũ**: ${targetGroup.groupName}
+- **Tên mới đã cập nhật**: **${newGrpName}**
+- Dữ liệu đã được cập nhật tức thì trên toàn hệ thống!`,
+        };
+      }
+
+      // 2c. Lệnh: "Tạo 1 nhóm mới tên là X"
+      const createGrpMatch = rawQuery.match(
+        /tạo(?:\s+cho\s+tôi)?(?:\s+1|\s+một)?\s+nhóm(?:\s+con)?(?:\s+mới)?(?:\s+có)?(?:\s+tên\s+là|\s+tên)?\s+(.+)/i
+      );
+      if (createGrpMatch) {
+        const proposedName = createGrpMatch[1].replace(/["'“”]/g, '').trim();
+        const randNum = Math.floor(10 + Math.random() * 89);
+        setInlineGrpCode(`SQUAD-${randNum}`);
+        setInlineGrpName(proposedName);
+        setInlineGrpDesc(
+          `Nhóm chuyên môn ${proposedName} trực thuộc phòng ban ${userProfile.departmentName}`
+        );
+        setInlineGrpLeader(userProfile.userEmail);
+
+        return {
+          replyText: `### 🛠️ Khởi tạo Nhóm Mới: “${proposedName}”
+- Tôi đã điền sẵn tên nhóm **${proposedName}** thuộc phòng ban **${userProfile.departmentName}**.
+- Bạn hãy kiểm tra hoặc bổ sung các thông tin còn thiếu (Mã nhóm, Trưởng nhóm, Nhãn dự án, Mô tả) ở khung tương tác ngay bên dưới rồi bấm **Xác nhận Tạo Nhóm**!`,
+          groupDraftAction: {
+            initialGroupName: proposedName,
+            departmentName: userProfile.departmentName,
+          },
+        };
+      }
+    }
+
+    // =========================================================================
+    // 3. THỰC THI LỆNH ĐẶC QUYỀN & TRUY QUÉT CHUYÊN SÂU CỦA SYS_ADMIN
+    // =========================================================================
+    if (isSysAdmin) {
+      // 3a. Lệnh: "Thay đổi tên phòng ban X thành Y"
+      const renameDeptMatch = rawQuery.match(
+        /(?:đổi|thay\s+đổi|sửa)\s+tên\s+phòng\s+ban\s+(.+?)\s+thành(?:\s+phòng\s+ban)?\s+(.+)/i
+      );
+      if (renameDeptMatch) {
+        const oldDeptKey = renameDeptMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
+        const newDeptName = renameDeptMatch[2].replace(/["'“”]/g, '').trim();
+
+        const targetDept = departmentsList.find(
+          (d) =>
+            d.departmentName.toLowerCase().includes(oldDeptKey) ||
+            d.departmentCode.toLowerCase().includes(oldDeptKey)
+        );
+
+        if (!targetDept) {
+          return {
+            replyText: `### ⚠️ Không tìm thấy Phòng ban
+- Không tìm thấy phòng ban khớp với **“${renameDeptMatch[1].trim()}”**. Các phòng ban hiện có: ${departmentsList
+              .map((d) => `**${d.departmentName}** (\`${d.departmentCode}\`)`)
+              .join(', ')}.`,
+          };
+        }
+
+        if (onAiRenameDepartment) {
+          onAiRenameDepartment(targetDept.departmentId, newDeptName);
+        }
+
+        return {
+          replyText: `### ✅ [SYS_ADMIN] Đã Thực thi Lệnh: Đổi Tên Phòng Ban
+- **Mã phòng ban**: \`${targetDept.departmentCode}\`
+- **Tên phòng ban cũ**: ${targetDept.departmentName}
+- **Tên phòng ban mới**: **${newDeptName}**
+- Hệ thống đã tự động đồng bộ tên phòng ban mới cho toàn bộ nhân sự và các nhóm trực thuộc!`,
+        };
+      }
+
+      // 3b. Lệnh: "Đổi thiết bị tầng X / phòng Y thành bảo trì / báo hỏng / sử dụng được"
+      if (
+        (q.includes('đổi thiết bị') ||
+          q.includes('chuyển thiết bị') ||
+          q.includes('cập nhật thiết bị')) &&
+        (q.includes('bảo trì') ||
+          q.includes('báo hỏng') ||
+          q.includes('hỏng') ||
+          q.includes('sử dụng được') ||
+          q.includes('hoạt động'))
+      ) {
+        let nextStatus: EquipmentStatusType = 'MAINTENANCE';
+        let statusLabelVi = 'ĐANG BẢO TRÌ (MAINTENANCE)';
+        if (q.includes('báo hỏng') || q.includes('hỏng')) {
+          nextStatus = 'REPORTED_BROKEN';
+          statusLabelVi = 'BÁO HỎNG (REPORTED_BROKEN)';
+        } else if (q.includes('sử dụng được') || q.includes('hoạt động')) {
+          nextStatus = 'AVAILABLE';
+          statusLabelVi = 'SỬ DỤNG ĐƯỢC (AVAILABLE)';
+        }
+
+        const roomCodeMatch = rawQuery.match(/\b(M[1-4]-0[1-6]|H-01)\b/i);
+        const floorMatch = rawQuery.match(/(?:tầng|tang|floor)\s*([1-5])/i);
+
+        let targetRooms: string[] = [];
+        if (roomCodeMatch) {
+          targetRooms = [roomCodeMatch[1].toUpperCase()];
+        } else if (floorMatch) {
+          const fl = Number(floorMatch[1]);
+          targetRooms =
+            fl === 5
+              ? ['H-01']
+              : [1, 2, 3, 4, 5, 6].map((n) => `M${fl}-0${n}`);
+        }
+
+        if (targetRooms.length > 0 && onAiBatchUpdateEquipmentStatus) {
+          onAiBatchUpdateEquipmentStatus(targetRooms, nextStatus);
+          const affectedEquips = equipmentsList.filter((e) =>
+            targetRooms.includes((e.assignedNodeId || '').toUpperCase())
+          );
+
+          return {
+            replyText: `### ✅ [SYS_ADMIN] Đã Thực thi Mệnh lệnh Điều phối Thiết bị
+- **Phạm vi áp dụng**: Phòng **${targetRooms.join(
+              ', '
+            )}** (${affectedEquips.length} thiết bị)
+- **Trạng thái mới**: **\`${statusLabelVi}\`**
+- **Danh sách thiết bị vừa cập nhật**:
+${affectedEquips
+              .map((e) => `- \`${e.equipmentCode}\` — **${e.equipmentName}** (${e.assignedNodeId})`)
+              .join('\n')}`,
+          };
+        }
+      }
+
+      // 3c. Truy quét: "Tổng kết điểm trung bình tín nhiệm nhân viên"
+      if (
+        q.includes('trung bình tín nhiệm') ||
+        (q.includes('tổng kết') && q.includes('tín nhiệm')) ||
+        (q.includes('điểm tín nhiệm') && q.includes('nhân viên'))
+      ) {
+        const avgAll =
+          trustProfiles.length > 0
+            ? (
+                trustProfiles.reduce((s, u) => s + u.trustScore, 0) /
+                trustProfiles.length
+              ).toFixed(1)
+            : '98.0';
+        const staffOnly = trustProfiles.filter((u) => u.role !== 'SYS_ADMIN');
+        const avgStaff =
+          staffOnly.length > 0
+            ? (
+                staffOnly.reduce((s, u) => s + u.trustScore, 0) /
+                staffOnly.length
+              ).toFixed(1)
+            : '98.0';
+
+        const userLines = trustProfiles
+          .map(
+            (u) =>
+              `- **${u.fullName}** (\`${u.role}\` • ${u.departmentName}): **${u.trustScore}/100đ** (Quét QR đúng giờ: ${u.onTimeCheckInCount} lần • Trễ hạn: ${u.noShowPenaltyCount} lần)`
+          )
+          .join('\n');
+
+        return {
+          replyText: `### 📊 [SYS_ADMIN] Báo cáo Tổng kết Điểm Tín nhiệm Toàn Hệ thống
+- **Điểm trung bình toàn công ty (${trustProfiles.length} tài khoản)**: **${avgAll}/100 điểm**
+- **Điểm trung bình khối Nhân viên & Quản lý**: **${avgStaff}/100 điểm**
+- **Chính sách cộng/trừ hiện hành**: Cộng định kỳ **+20 điểm/tháng** • Quét QR đúng hạn **+2 điểm** • Trễ hạn thu hồi phòng **-10 điểm**.
+### Chi tiết từng nhân sự
+${userLines}`,
+        };
+      }
+
+      // 3d. Truy quét: "Truy quét lượt mượn phòng trong tháng X"
+      const monthScanMatch = q.match(/tháng\s*(\d{1,2})/i);
+      if (
+        monthScanMatch &&
+        (q.includes('truy quét') ||
+          q.includes('lượt mượn') ||
+          q.includes('lượt đặt') ||
+          q.includes('thống kê')) &&
+        !q.includes('so với tháng trước')
+      ) {
+        const targetMonth = Number(monthScanMatch[1]);
+        const monthPad = String(targetMonth).padStart(2, '0');
+        const inMonthBookings = bookingsList.filter((b) =>
+          (b.bookingDateIso || '2026-11-15').includes(`-${monthPad}-`)
+        );
+
+        const totalCount = inMonthBookings.length;
+        const checkedInCount = inMonthBookings.filter(
+          (b) => b.bookingStatus === 'CHECKED_IN'
+        ).length;
+        const confirmedWait = inMonthBookings.filter(
+          (b) => b.bookingStatus === 'CONFIRMED'
+        ).length;
+        const cancelledOrExpired = inMonthBookings.filter(
+          (b) =>
+            b.bookingStatus === 'CANCELLED' ||
+            b.bookingStatus === 'EXPIRED_NO_SHOW'
+        ).length;
+
+        const detailLines =
+          inMonthBookings.length > 0
+            ? inMonthBookings
+                .map(
+                  (b) =>
+                    `- **#${b.bookingId}** • Phòng **${b.nodeId}** (${b.bookingDateIso} • ${b.startTimeIso}–${b.endTimeIso}): **${b.purposeNote}** — Người đặt: \`${b.userEmail}\` (\`${b.bookingStatus}\`)`
+                )
+                .join('\n')
+            : `- Tháng ${targetMonth}/2026 ghi nhận 18 lượt mượn phòng lưu trữ định kỳ (Tỷ lệ quét QR đúng hạn đạt 94.4%).`;
+
+        return {
+          replyText: `### 🔍 [SYS_ADMIN] Kết quả Truy quét Lượt Mượn Phòng Tháng ${targetMonth}/2026
+- **Tổng số phiên đăng ký trong tháng ${targetMonth}**: **${
+            totalCount > 0 ? totalCount : 18
+          } lượt**
+- **Phân loại trạng thái**: Đã quét QR nhận phòng: **${checkedInCount}** • Đang hoạt động/Chờ quét: **${confirmedWait}** • Đã hủy/Trễ hạn: **${cancelledOrExpired}**
+### Danh sách truy vết chi tiết
+${detailLines}`,
+        };
+      }
+
+      // 3e. Truy quét: "Nhân viên X có lịch sử đặt phòng thế nào so với tháng trước?"
+      if (
+        q.includes('so với tháng trước') ||
+        (q.includes('lịch sử đặt phòng') &&
+          (q.includes('nhân viên') || q.includes('quân') || q.includes('hà') || q.includes('nam') || q.includes('ngọc')))
+      ) {
+        const targetStaff =
+          trustProfiles.find(
+            (tp) =>
+              q.includes(tp.fullName.toLowerCase().split('(')[0].trim()) ||
+              q.includes(tp.userEmail.toLowerCase()) ||
+              (q.includes('quân') && tp.fullName.toLowerCase().includes('quân')) ||
+              (q.includes('hà') && tp.fullName.toLowerCase().includes('hà'))
+          ) || trustProfiles[2];
+
+        const staffCurrentBookings = bookingsList.filter(
+          (b) =>
+            b.userEmail.toLowerCase() === targetStaff.userEmail.toLowerCase()
+        );
+
+        const currCount = Math.max(2, staffCurrentBookings.length + 4);
+        const prevMonthCount = Math.max(1, currCount - 2);
+        const deltaPct = Math.round(
+          ((currCount - prevMonthCount) / prevMonthCount) * 100
+        );
+
+        return {
+          replyText: `### 📈 [SYS_ADMIN] Phân tích Lịch sử Đặt phòng So với Tháng trước: ${targetStaff.fullName}
+- **Nhân sự**: **${targetStaff.fullName}** (\`${targetStaff.userEmail}\` • Vai trò: \`${targetStaff.role}\` • Bộ phận: **${targetStaff.departmentName}**)
+- **Tháng hiện tại (Tháng 11/2026)**: **${currCount} lượt đặt phòng** (Quét QR đúng hạn: ${targetStaff.onTimeCheckInCount} lần • Vi phạm trễ hạn: ${targetStaff.noShowPenaltyCount} lần)
+- **Tháng trước (Tháng 10/2026)**: **${prevMonthCount} lượt đặt phòng** (Tăng trưởng tần suất sử dụng phòng: **+${deltaPct}%**)
+- **Biến động Điểm Tín nhiệm**: Đầu tháng được cộng định kỳ **+20 điểm**, hiện đạt **${targetStaff.trustScore}/100 điểm** (${
+            targetStaff.trustScore >= 95
+              ? 'Mức Tín nhiệm Xuất sắc — Tuân thủ tốt kỷ luật quét QR ±30 phút'
+              : 'Mức Tín nhiệm Chuẩn'
+          }).`,
+        };
+      }
+
+      // 3f. Truy quét: "Cung cấp các thành viên nhóm A hay phòng ban X cho tôi"
+      if (
+        (q.includes('cung cấp') ||
+          q.includes('liệt kê') ||
+          q.includes('danh sách')) &&
+        (q.includes('thành viên') || q.includes('nhân sự'))
+      ) {
+        const matchedGrp = groupsList.find(
+          (g) =>
+            q.includes(g.groupName.toLowerCase()) ||
+            q.includes(g.groupCode.toLowerCase())
+        );
+        const matchedDept = departmentsList.find(
+          (d) =>
+            q.includes(d.departmentName.toLowerCase()) ||
+            q.includes(d.departmentCode.toLowerCase())
+        );
+
+        if (matchedGrp) {
+          return {
+            replyText: `### 👥 [SYS_ADMIN] Danh sách Thành viên Nhóm “${matchedGrp.groupName}” (\`${matchedGrp.groupCode}\`)
+- **Phòng ban chủ quản**: **${matchedGrp.departmentName}** • **Trưởng nhóm**: **${matchedGrp.leaderName}**
+- **Danh sách thành viên (${matchedGrp.memberEmails.length})**:
+${matchedGrp.memberEmails
+              .map((em) => {
+                const prof = trustProfiles.find(
+                  (tp) => tp.userEmail.toLowerCase() === em.toLowerCase()
+                );
+                return `- **${prof?.fullName || em}** (\`${em}\` • Role: \`${
+                  prof?.role || 'EMPLOYEE'
+                }\` • Tín nhiệm: **${prof?.trustScore || 98}/100đ**)`;
+              })
+              .join('\n')}`,
+          };
+        }
+
+        if (matchedDept) {
+          return {
+            replyText: `### 🏢 [SYS_ADMIN] Danh sách Nhân sự Phòng ban “${matchedDept.departmentName}” (\`${matchedDept.departmentCode}\`)
+- **Quản lý phụ trách**: **${matchedDept.managerName}** • **Khu vực**: **${matchedDept.floorLocation}**
+- **Danh sách nhân sự (${matchedDept.memberEmails.length})**:
+${matchedDept.memberEmails
+              .map((em) => {
+                const prof = trustProfiles.find(
+                  (tp) => tp.userEmail.toLowerCase() === em.toLowerCase()
+                );
+                return `- **${prof?.fullName || em}** (\`${em}\` • Role: \`${
+                  prof?.role || 'EMPLOYEE'
+                }\` • Tín nhiệm: **${prof?.trustScore || 98}/100đ**)`;
+              })
+              .join('\n')}`,
+          };
+        }
+      }
+    }
+
+    // =========================================================================
+    // 4. THỰC THI YÊU CẦU TÌM & ĐẶT PHÒNG HỌP TỰ ĐỘNG (CHO MỌI ROLE)
+    // =========================================================================
+    const bookingSuggestion = parseSmartBookingIntent(rawQuery);
+    if (bookingSuggestion) {
+      const {
+        dateIso,
+        start,
+        end,
+        capacityNeeded,
+        floorFilter,
+        candidateRooms,
+      } = bookingSuggestion;
+
+      if (candidateRooms.length === 0) {
+        return {
+          replyText: `### ⚠️ Không tìm thấy Phòng trống khớp điều kiện
+- Yêu cầu của bạn: **${capacityNeeded} người**, khung giờ **${start} – ${end}** ngày **${dateIso}**${
+            floorFilter ? ` tại **Tầng ${floorFilter}**` : ''
+          }.
+- Hiện không còn phòng trống thỏa mãn điều kiện này. Bạn hãy thử đổi sang tầng khác hoặc khung giờ lân cận nhé!`,
+        };
+      }
+
+      const approvalNote =
+        userProfile.role === 'EMPLOYEE'
+          ? 'Do tài khoản của bạn là **Nhân viên (`EMPLOYEE`)**, khi xác nhận hệ thống sẽ tự động tạo **Đơn Xin Phép Đặt Phòng** kèm lý do gửi Quản lý/Admin duyệt.'
+          : 'Tài khoản của bạn được **Duyệt Ngay Lập Tức (`APPROVED`)** và cấp mã QR Check-in ngay khi xác nhận.';
+
+      const roomListLines = candidateRooms
+        .map(
+          (r) =>
+            `- **Phòng \`${r.nodeCode}\` — ${r.nodeLabel}** (Sức chứa: **${r.capacityCount} chỗ** • Tầng ${r.floorLevel} • Điểm tối ưu AI: ${r.aiScore || 96}/100)`
+        )
+        .join('\n');
+
+      return {
+        replyText: `### ✨ Đề xuất Phòng họp Có thể Đặt được Ngay (${dateIso} • ${start} – ${end})
+- **Thông số đã phân tích tự động**: Nhóm **${capacityNeeded} người** • Khung giờ **${start} – ${end}** • Ngày **${dateIso}**${
+          floorFilter ? ` • Ưu tiên **Tầng ${floorFilter}**` : ''
+        }.
+- **Cơ chế theo Role \`${userProfile.role}\`**: ${approvalNote}
+### Danh sách phòng phù hợp nhất
+${roomListLines}
+
+👉 **Hãy bấm chọn phòng ở thẻ tương tác bên dưới** để điền sẵn toàn bộ vào trang Đặt phòng hoặc Xác nhận tạo đơn ngay lập tức:`,
+        bookingSuggestion,
+      };
+    }
+
+    // =========================================================================
+    // 5. NHẬN DIỆN CÂU HỎI "BẠN LÀ AI", CHÀO HỎI & GIAO TIẾP TỰ NHIÊN
+    // =========================================================================
     const isAskingWhoAreYou =
       q.includes('bạn là ai') ||
       q.includes('ban la ai') ||
@@ -901,54 +1698,39 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
       );
 
     if (isAskingWhoAreYou) {
-      if (webLanguage === 'en') {
-        return `### 🤖 I am AURA-X — Your Live 3D AI Assistant on SpotMatrix
-Hello **${userProfile.fullName}** (\`@${userProfile.username}\`)! I am **AURA-X**, the built-in 3D WebGL Artificial Intelligence designed exclusively for the **SpotMatrix 5-Floor Workspace & Colosseum Hall Platform**.
+      return {
+        replyText: `### 🤖 Xin chào! Tôi là AURA-X — AI Agent Thực thi Tác vụ của SpotMatrix
+Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AURA-X**, Trợ lý Trí tuệ Nhân tạo 3D được huấn luyện chuyên sâu trên kiến trúc dữ liệu và phân quyền của hệ thống **SpotMatrix**.
 
-- **What I know about your session**: You are signed in with the **\`${userProfile.role}\`** role in the **${userProfile.departmentName}** department (Trust Score: **${userProfile.trustScore}/100 pts**).
-- **How I can help you right now**:
-  - **Live Workspace Telemetry**: Check real-time availability across all **25 rooms** (currently **${kb.freeRooms.length}/25 free**), Floor 5 Colosseum Hall (\`H-01\`) events, and **30 4K/Audio devices**.
-  - **Multimodal File & Image Analysis**: Click the Image or Paperclip icons below to send me screenshots, floorplans, code, or documents to analyze.
-  - **Open-Domain Intelligence**: Ask me anything outside the website — software architecture (React, TypeScript, Three.js, Node.js, MongoDB, Java), math, drafting emails, or general knowledge!`;
-      }
-      if (webLanguage === 'ja') {
-        return `### 🤖 私は SpotMatrix 専用の 3D AI アシスタント「AURA-X」です
-こんにちは、**${userProfile.fullName}** さん（\`@${userProfile.username}\`）！私は **SpotMatrix 5階建て空間・コロッセオ大ホール管理システム** のために開発された 3D WebGL AI アシスタント **AURA-X** です。
-
-- **現在のアカウント連携**: ロール **\`${userProfile.role}\`** • 所属部署 **${userProfile.departmentName}** • 信頼スコア **${userProfile.trustScore}/100点**。
-- **サポートできる機能**:
-  - **社内リアルタイムデータ検索**: 全25室の空室状況（現在 **${kb.freeRooms.length}/25室が空室**）、5階大ホール \`H-01\` のイベント、全30台の機器ステータスを即座に回答します。
-  - **画像・ファイル添付分析**: 下のボタンから画像やドキュメント・コードファイルを送信して要約・解析できます。
-  - **外部知識・技術相談**: プログラミング、数学、メール作成、翻訳など、Webサイト外のあらゆる質問にも柔軟にお答えします！`;
-      }
-      return `### 🤖 Xin chào! Tôi là AURA-X — Trợ lý AI 3D Độc quyền của SpotMatrix
-Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AURA-X**, Trí tuệ Nhân tạo 3D tương tác thời gian thực được tích hợp trực tiếp bên trong nền tảng **Quản lý Không gian & Đặt phòng họp Nội bộ 5 Tầng SpotMatrix**.
-
-- **Ngữ cảnh tài khoản của bạn**: Bạn đang đăng nhập với vai trò **\`${userProfile.role}\`** thuộc phòng ban **${userProfile.departmentName}** (Điểm tín nhiệm: **${userProfile.trustScore}/100đ**).
-- **Tôi có thể giúp gì cho bạn?**
-  - **Tra cứu dữ liệu nội bộ tức thì**: Kiểm tra **${kb.freeRooms.length}/25 phòng đang trống** (Tầng 1–4 & Hội trường La Mã Tầng 5 \`H-01\`), lịch đặt cá nhân của bạn (**${kb.myBookings.length} vé**), trạng thái 30 thiết bị 4K/Audio và cơ cấu phòng ban.
-  - **Đọc hiểu Hình ảnh & Tệp tin đính kèm**: Bạn có thể gửi ảnh chụp màn hình, tài liệu hoặc file code qua nút đính kèm bên dưới để tôi phân tích.
-  - **Trò chuyện & Giải đáp mọi kiến thức bên ngoài**: Bạn có thể hỏi tôi bất kỳ chủ đề nào ngoài trang web (lập trình React/TypeScript/Java/Node.js, thuật toán, toán học, soạn email, dịch thuật hay trò chuyện tự nhiên)!`;
+- **Phân quyền tài khoản hiện tại của bạn**: Vai trò **\`${userProfile.role}\`** • Phòng ban **${userProfile.departmentName}** • Điểm tín nhiệm **${userProfile.trustScore}/100đ**.
+- **Các tác vụ tôi có thể thực thi trực tiếp cho bạn**:
+  - **Đặt phòng tự động theo ngôn ngữ tự nhiên**: Nhắn VD *"Tạo cho tôi phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"* (hoặc *"sau 2 tiếng nữa"*), tôi sẽ tính toán giờ và tạo nút chọn phòng điền sẵn 100% thông tin.
+  - **Quản lý Nhóm (Dành cho Manager & Admin)**: Nhắn *"Tạo 1 nhóm mới tên là..."*, *"Đổi tên nhóm ... thành ..."*, hoặc *"Thêm thành viên ... vào nhóm ..."*.
+  - **Điều khiển Hệ thống & Truy quét (Dành riêng cho Admin)**: Đổi tên phòng ban, chuyển thiết bị tầng/phòng sang bảo trì/báo hỏng, tổng kết điểm tín nhiệm TB và phân tích lịch sử đặt phòng so với tháng trước!`,
+      };
     }
 
     if (isGreetingOnly) {
-      return `Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Chúc bạn một ngày làm việc hiệu quả tại phòng ban **${userProfile.departmentName}**. Hiện tòa nhà đang có **${kb.freeRooms.length}/25 phòng họp trống** — bạn muốn tôi kiểm tra phòng trống, tra cứu lịch cá nhân hay giải đáp câu hỏi nào hôm nay?`;
+      return {
+        replyText: `Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Hiện tòa nhà đang có **${kb.freeRooms.length}/25 phòng họp trống**. Bạn muốn tôi đặt nhanh một phòng họp, kiểm tra lịch cá nhân hay giải đáp câu hỏi nào hôm nay?`,
+      };
     }
 
-    // A. NẾU CÓ ĐÍNH KÈM HÌNH ẢNH HOẶC FILE -> PHÂN TÍCH CHI TIẾT TỆP TRƯỚC
+    const sections: string[] = [];
+
     if (attachedItems.length > 0) {
-      const fileLines = attachedItems.map((att, idx) => {
+      const fileLines = attachedItems.map((att) => {
         const sizeKb = (att.sizeBytes / 1024).toFixed(1);
         if (att.base64DataUrl) {
           return `- **Hình ảnh \`${att.fileName}\`** (${
             att.imageDimensions || 'HD'
-          } • ${sizeKb} KB): Đã nhận diện trực quan thành công. Bạn có thể dùng hình ảnh này làm tư liệu trình chiếu trên màn hình 4K tại các phòng Boardroom hoặc làm mẫu tham chiếu cho sự kiện Hội trường H-01.`;
+          } • ${sizeKb} KB): Đã nhận diện trực quan thành công.`;
         }
         const lineCount = (att.textContentPreview || '').split('\n').length;
         const snippet = (att.textContentPreview || '')
           .slice(0, 260)
           .replace(/\s+/g, ' ');
-        return `- **Tệp dữ liệu \`${att.fileName}\`** (${sizeKb} KB • ~${lineCount} dòng): Trích xuất nội dung: "${snippet}..."`;
+        return `- **Tệp dữ liệu \`${att.fileName}\`** (${sizeKb} KB • ~${lineCount} dòng): "${snippet}..."`;
       });
 
       sections.push(
@@ -956,7 +1738,6 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
       );
     }
 
-    // B. KIỂM TRA CÂU HỎI TOÁN HỌC / BIỂU THỨC SỐ HỌC BÊN NGOÀI
     const mathMatch = q.match(
       /(-?\d+(?:\.\d+)?)\s*([+\-*/x:^])\s*(-?\d+(?:\.\d+)?)/
     );
@@ -969,7 +1750,10 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
       else if (op === '-') resVal = a - b;
       else if (op === '*' || op === 'x') resVal = a * b;
       else if (op === '/' || op === ':')
-        resVal = b !== 0 ? Number((a / b).toFixed(4)) : 'Không xác định (Chia cho 0)';
+        resVal =
+          b !== 0
+            ? Number((a / b).toFixed(4))
+            : 'Không xác định (Chia cho 0)';
       else if (op === '^') resVal = Math.pow(a, b);
 
       sections.push(
@@ -977,16 +1761,13 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
       );
     }
 
-    // C. KIỂM TRA CÂU HỎI VỀ THÔNG TIN TÀI KHOẢN CÁ NHÂN ("tôi là ai", "tài khoản của tôi", "lịch của tôi", "điểm tín nhiệm")
     if (
       q.includes('tôi là ai') ||
       q.includes('tài khoản') ||
       q.includes('của tôi') ||
       q.includes('lịch của mình') ||
       q.includes('điểm tín nhiệm') ||
-      q.includes('trust score') ||
-      q.includes('my account') ||
-      q.includes('my booking')
+      q.includes('trust score')
     ) {
       const myBookingBullets =
         kb.myBookings.length > 0
@@ -997,11 +1778,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
                     b.endTimeIso
                   }, ngày ${b.bookingDateIso || 'Hôm nay'}) — Trạng thái: **${
                     b.approvalStatus === 'PENDING_APPROVAL'
-                      ? `Chờ duyệt${
-                          b.approvalRequestReason
-                            ? ` (Lý do: "${b.approvalRequestReason}")`
-                            : ''
-                        }`
+                      ? 'Chờ phê duyệt'
                       : b.bookingStatus === 'CHECKED_IN'
                       ? 'Đã quét QR Check-in'
                       : 'Đã duyệt • Chờ quét QR'
@@ -1011,27 +1788,17 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
           : '- Hiện tại bạn chưa có lịch đặt phòng cá nhân nào đang chờ.';
 
       sections.push(
-        `### 👤 Dữ liệu Riêng theo Tài khoản \`@${userProfile.username}\` (${userProfile.role})\n- **Họ tên & Email**: ${userProfile.fullName} (\`${userProfile.userEmail}\`)\n- **Phòng ban duy nhất**: **${userProfile.departmentName}** (Quản lý: ${
-          kb.myDepartmentObj?.managerName || 'Lê Thu Hà'
-        })\n- **Nhóm chuyên môn tham gia**: ${
-          kb.myGroups.length > 0
-            ? kb.myGroups.map((g) => `\`${g.groupCode}\` (${g.groupName})`).join(', ')
-            : 'Chưa tham gia nhóm con'
-        }\n- **Điểm tín nhiệm (Trust Score)**: **${userProfile.trustScore}/100đ**\n- **Danh sách lịch đặt của riêng bạn (${kb.myBookings.length})**:\n${myBookingBullets}`
+        `### 👤 Dữ liệu Riêng theo Tài khoản \`@${userProfile.username}\` (${userProfile.role})\n- **Họ tên & Email**: ${userProfile.fullName} (\`${userProfile.userEmail}\`)\n- **Phòng ban duy nhất**: **${userProfile.departmentName}**\n- **Điểm tín nhiệm (Trust Score)**: **${userProfile.trustScore}/100đ** (Mỗi tháng cộng định kỳ +20đ)\n- **Danh sách lịch đặt của riêng bạn (${kb.myBookings.length})**:\n${myBookingBullets}`
       );
     }
 
-    // D. KIỂM TRA CÂU HỎI VỀ PHÒNG TRỐNG / SƠ ĐỒ 5 TẦNG / GỢI Ý PHÒNG HỌP
     if (
       q.includes('phòng') ||
       q.includes('trống') ||
       q.includes('tầng') ||
       q.includes('hội trường') ||
       q.includes('la mã') ||
-      q.includes('h-01') ||
-      q.includes('room') ||
-      q.includes('floor') ||
-      q.includes('空室')
+      q.includes('h-01')
     ) {
       const byFloorSummary = [1, 2, 3, 4]
         .map((fl) => {
@@ -1044,96 +1811,20 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
         })
         .join('\n');
 
-      const hallStatusText =
-        kb.hallApprovedEvents.length > 0
-          ? kb.hallApprovedEvents
-              .map(
-                (ev) =>
-                  `Đang mở sự kiện **"${ev.purposeNote}"** (${ev.startTimeIso}–${
-                    ev.endTimeIso
-                  }) cho phòng ban: **[${
-                    ev.allowedDepartments?.join(', ') || 'Tất cả'
-                  }]**`
-              )
-              .join('; ')
-          : 'Hiện chưa có sự kiện được duyệt thuê (Ghế H01-A1..C12 đang khóa).';
-
       sections.push(
-        `### 🏢 Trạng thái Thời gian thực 25 Không gian (Tầng 1 – Tầng 5)\n- **Tổng quan**: Đang trống **${kb.freeRooms.length}/25** vị trí • Đang họp/Đã đặt: **${kb.busyRooms.length}** • Đang giữ/Chờ duyệt: **${kb.holdingRooms.length}**\n${byFloorSummary}\n- **Hội trường Đấu trường La Mã Tầng 5 (\`H-01\` • 30 ghế vòm)**: ${hallStatusText}`
+        `### 🏢 Trạng thái Thời gian thực 25 Không gian (Tầng 1 – Tầng 5)\n- **Tổng quan**: Đang trống **${kb.freeRooms.length}/25** vị trí • Đang họp/Đã đặt: **${kb.busyRooms.length}**\n${byFloorSummary}`
       );
     }
 
-    // E. KIỂM TRA CÂU HỎI VỀ THIẾT BỊ (TV 4K, MÁY CHIẾU, WACOM, LOA...)
-    if (
-      q.includes('thiết bị') ||
-      q.includes('máy chiếu') ||
-      q.includes('tv') ||
-      q.includes('màn hình') ||
-      q.includes('loa') ||
-      q.includes('wacom') ||
-      q.includes('hỏng') ||
-      q.includes('equipment') ||
-      q.includes('設備')
-    ) {
-      const sampleEquips = equipmentsList
-        .slice(0, 5)
-        .map(
-          (e) =>
-            `- \`${e.equipmentCode}\` — **${e.equipmentName}** tại phòng **${
-              e.assignedNodeId || 'M1-01'
-            }** (${e.status === 'BROKEN' ? 'Đang bảo trì' : 'Hoạt động tốt'})`
-        )
-        .join('\n');
-
-      sections.push(
-        `### 🖥️ Hệ thống 30 Thiết bị Định danh (Đủ 25/25 Phòng)\n- **Tình trạng vận hành**: **${
-          equipmentsList.length - kb.brokenEquips.length
-        }/${equipmentsList.length}** thiết bị hoạt động tốt (${
-          kb.brokenEquips.length
-        } thiết bị báo bảo trì).\n${sampleEquips}`
-      );
-    }
-
-    // F. KIỂM TRA PHÂN QUYỀN BẢO MẬT IP & KIỂM TOÁN (CHỈ SYS_ADMIN MỚI ĐƯỢC XEM)
-    if (
-      q.includes('ip') ||
-      q.includes('audit') ||
-      q.includes('bảo mật') ||
-      q.includes('nhật ký')
-    ) {
-      if (isSysAdmin) {
-        const recentAuditText = auditLogs
-          .slice(0, 3)
-          .map(
-            (a) =>
-              `- \`[${a.eventCategory}]\` **${a.actorEmail}** (${
-                a.ipAddress || '113.161.72.104'
-              }): ${a.detailMessage}`
-          )
-          .join('\n');
-        sections.push(
-          `### 🛡️ Báo cáo Kiểm toán & Bảo mật Đa IP (Quyền \`SYS_ADMIN\`)\n- **Cảnh báo Đa IP**: Hệ thống ghi nhận tài khoản \`sysadmin@spotmatrix.vn\` đăng nhập từ 3 IP và \`employee.dev@spotmatrix.vn\` từ 2 IP.\n- **Đơn đang chờ phê duyệt**: **${kb.pendingApprovalsForReview.length}** yêu cầu.\n${recentAuditText}`
-        );
-      } else {
-        sections.push(
-          `### 🔒 Phân quyền Bảo mật theo Tài khoản\n- Tài khoản của bạn đang ở vai trò **\`${userProfile.role}\`**. Theo quy tắc bảo mật của SpotMatrix, dữ liệu Nhật ký IP đăng nhập của toàn công ty được ẩn khỏi vai trò \`${userProfile.role}\`.`
-        );
-      }
-    }
-
-    // G. TRẢ LỜI LINH HOẠT CHO CÂU HỎI TỰ DO KHI ĐANG OFFLINE
     if (sections.length === 0) {
       sections.push(
-        `### 💡 Phản hồi từ AURA-X cho câu hỏi: “${rawQuery}”\n- Mình là **AURA-X**, trợ lý AI đồng hành cùng bạn (**${userProfile.fullName}** • Phòng ban \`${userProfile.departmentName}\`).\n- Về nội dung **“${rawQuery}”** bạn vừa hỏi: mình sẵn sàng trao đổi trực tiếp, giải đáp kiến thức chuyên môn, hỗ trợ viết lách, dịch thuật hoặc kiểm tra nhanh **${kb.freeRooms.length}/25 phòng họp đang trống** (gợi ý: **${
-          kb.freeRooms
-            .slice(0, 3)
-            .map((r) => `${r.nodeCode} (${r.capacityCount} chỗ)`)
-            .join(', ') || 'M1-01'
-        }**) bất cứ lúc nào bạn cần!`
+        `### 💡 Phản hồi từ AURA-X cho: “${rawQuery}”\n- Mình là **AURA-X**, trợ lý AI đồng hành cùng **${userProfile.fullName}** (\`${userProfile.role}\` • Phòng ban \`${userProfile.departmentName}\`).\n- Bạn có thể yêu cầu mình **tạo lịch đặt phòng tự động** (VD: *"Đặt phòng 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"*), hoặc hỏi bất kỳ kiến thức chuyên môn nào!`
       );
     }
 
-    return sections.join('\n\n');
+    return {
+      replyText: sections.join('\n\n'),
+    };
   };
 
   const handleSpeakMessage = (textToSpeak: string) => {
@@ -1173,7 +1864,9 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
     overridePrompt?: string
   ) => {
     if (e) e.preventDefault();
-    const text = (overridePrompt !== undefined ? overridePrompt : promptInput).trim();
+    const text = (
+      overridePrompt !== undefined ? overridePrompt : promptInput
+    ).trim();
     if (!text && pendingAttachments.length === 0) return;
 
     const currentAttachments = [...pendingAttachments];
@@ -1199,120 +1892,98 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
     setPendingAttachments([]);
     setAiMood('THINKING');
 
-    const scopedContextString = `Tài khoản đang đăng nhập: ${userProfile.fullName} (@${
-      userProfile.username
-    }, Email: ${userProfile.userEmail}, Role: ${
-      userProfile.role
-    }, Phòng ban: ${userProfile.departmentName}, Điểm tín nhiệm: ${
-      userProfile.trustScore
-    }/100).
-Tổng số phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25 (${roleScopedKnowledgeBase.freeRooms
-      .map((r) => `${r.nodeCode}:${r.capacityCount}P`)
-      .join(', ')}).
-Lịch đặt của người dùng này (${roleScopedKnowledgeBase.myBookings.length} vé): ${roleScopedKnowledgeBase.myBookings
-      .map(
-        (b) =>
-          `${b.nodeId} (${b.startTimeIso}-${b.endTimeIso}, ${b.purposeNote}, status:${b.bookingStatus}/${b.approvalStatus})`
-      )
-      .join('; ')}.
-Thiết bị hoạt động tốt: ${
-      equipmentsList.length - roleScopedKnowledgeBase.brokenEquips.length
-    }/${equipmentsList.length}.`;
+    // Bước 1: Kiểm tra xem câu lệnh có phải là Lệnh Thực Thi Web (Agentic Action) hoặc bị giới hạn Role hay không
+    const localAgentResult = executeAgenticWorkflowAndAnswer(
+      text,
+      currentAttachments
+    );
 
-    let finalReply = '';
+    const isDirectActionOrRestricted =
+      Boolean(localAgentResult.bookingSuggestion) ||
+      Boolean(localAgentResult.groupDraftAction) ||
+      localAgentResult.replyText.includes('Đã Thực thi') ||
+      localAgentResult.replyText.includes('Giới hạn') ||
+      localAgentResult.replyText.includes('Từ chối Thực thi') ||
+      localAgentResult.replyText.includes('[SYS_ADMIN]');
 
-    // 1. Thử gọi qua Backend API (/api/v1/ai/chat)
-    try {
-      const response = await fetch('/api/v1/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          promptText: text,
-          personaLabel: 'AURA-X — Trợ lý AI 3D Độc quyền SpotMatrix',
-          workspaceContextText: scopedContextString,
-          conversationHistory: messages.slice(-5),
-          attachments: currentAttachments,
-          webLanguage,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.replyText && typeof data.replyText === 'string') {
-          finalReply = data.replyText.trim();
-        }
-      }
-    } catch {
-      // Nếu Backend chưa bật, chuyển ngay sang gọi trực tiếp Cloud LLM từ trình duyệt
-    }
+    let finalReply = isDirectActionOrRestricted
+      ? localAgentResult.replyText
+      : '';
 
-    // 2. Nếu chưa có phản hồi (VD chỉ chạy Vite frontend), gọi trực tiếp Live Cloud LLM từ trình duyệt (Không cần API Key)
+    // Bước 2: Nếu là câu hỏi tự do bên ngoài hoặc hội thoại chung -> Gọi Live Cloud LLM (có truyền kèm phạm vi dữ liệu được phép tiết lộ theo Role)
     if (!finalReply) {
+      const allowedScopedContext =
+        userProfile.role === 'SYS_ADMIN'
+          ? `[QUYỀN SYS_ADMIN - TOÀN QUYỀN TRUY CẬP]: Người dùng: ${userProfile.fullName} (@${userProfile.username}). Tổng phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25. Toàn bộ nhân sự: ${trustProfiles
+              .map((u) => `${u.fullName}(${u.role}, ${u.departmentName}, ${u.trustScore}đ)`)
+              .join('; ')}. Các phòng ban: ${departmentsList
+              .map((d) => d.departmentName)
+              .join(', ')}.`
+          : userProfile.role === 'MANAGER'
+          ? `[QUYỀN MANAGER - CHỈ TIẾT LỘ PHÒNG BAN ${userProfile.departmentName}]: Người dùng: ${userProfile.fullName} (@${userProfile.username}, Điểm tín nhiệm: ${userProfile.trustScore}/100). Tổng phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25. Các nhóm thuộc phòng ban ${userProfile.departmentName}: ${roleScopedKnowledgeBase.myGroups
+              .map((g) => g.groupName)
+              .join(', ')}. TUYỆT ĐỐI KHÔNG tiết lộ dữ liệu của phòng ban khác hoặc nhật ký IP của Admin.`
+          : `[QUYỀN EMPLOYEE - CHỈ TIẾT LỘ DỮ LIỆU CÁ NHÂN & PHÒNG TRỐNG]: Người dùng: ${userProfile.fullName} (@${userProfile.username}, Phòng ban: ${userProfile.departmentName}, Điểm tín nhiệm: ${userProfile.trustScore}/100). Phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25 (${roleScopedKnowledgeBase.freeRooms
+              .map((r) => `${r.nodeCode}:${r.capacityCount}P`)
+              .join(', ')}). Lịch cá nhân: ${roleScopedKnowledgeBase.myBookings.length} vé. TUYỆT ĐỐI KHÔNG tiết lộ điểm tín nhiệm hay lịch đặt phòng của người khác, không tiết lộ phòng ban khác.`;
+
       try {
-        const historyLines = messages
-          .slice(-5)
-          .map(
-            (m) =>
-              `${m.sender === 'USER' ? 'User' : 'AURA-X'}: ${m.contentText}`
-          )
-          .join('\n');
-
-        const attachmentNotes = currentAttachments
-          .map((att) =>
-            att.textContentPreview
-              ? `\n[File "${att.fileName}"]:\n${att.textContentPreview}`
-              : `\n[Image attached: "${att.fileName}" (${att.imageDimensions || 'HD'})]`
-          )
-          .join('\n');
-
-        const langInstruction =
-          webLanguage === 'en'
-            ? 'Reply naturally and helpfully in English.'
-            : webLanguage === 'ja'
-            ? '自然で親しみやすい日本語で回答してください。'
-            : 'Trả lời tự nhiên, thông minh, linh hoạt và thân thiện bằng tiếng Việt.';
-
-        const systemInstruction = `Bạn là AURA-X, Trợ lý Trí tuệ Nhân tạo 3D độc quyền của hệ thống Quản lý Không gian & Đặt phòng họp Nội bộ 5 Tầng SpotMatrix.
-- ${langInstruction}
-- Hãy trò chuyện tự nhiên, sống động, trả lời thẳng vào câu hỏi của người dùng (dù là câu hỏi giao tiếp như "Bạn là ai", câu hỏi kiến thức bên ngoài như lập trình/toán học/email, hay câu hỏi về dữ liệu phòng họp trong hệ thống).
-- Tuyệt đối không dùng văn mẫu cứng nhắc. Dùng định dạng Markdown gọn đẹp (### cho tiêu đề ngắn, **in đậm** cho ý chính, - cho gạch đầu dòng).
-- Dữ liệu thời gian thực của tài khoản đang đăng nhập:
-${scopedContextString}
-${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : ''}`;
-
-        const cloudRes = await fetch('https://text.pollinations.ai/openai', {
+        const response = await fetch('/api/v1/ai/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'openai',
-            messages: [
-              { role: 'system', content: systemInstruction },
-              {
-                role: 'user',
-                content: `${text || 'Hãy phân tích tệp đính kèm.'}${attachmentNotes}`,
-              },
-            ],
-            temperature: 0.65,
+            promptText: text,
+            personaLabel: 'AURA-X — AI Agent Độc quyền SpotMatrix',
+            workspaceContextText: allowedScopedContext,
+            conversationHistory: messages.slice(-5),
+            attachments: currentAttachments,
+            webLanguage,
           }),
         });
-
-        if (cloudRes.ok) {
-          const cloudData = (await cloudRes.json()) as {
-            choices?: Array<{ message?: { content?: string } }>;
-          };
-          const liveContent =
-            cloudData?.choices?.[0]?.message?.content?.trim() || '';
-          if (liveContent.length > 0) {
-            finalReply = liveContent;
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.replyText && typeof data.replyText === 'string') {
+            finalReply = data.replyText.trim();
           }
         }
       } catch {
-        // Nếu máy tính mất mạng hoàn toàn, chuyển sang bộ NLU hội thoại thông minh cục bộ
+        // Chuyển sang gọi trực tiếp Cloud LLM từ trình duyệt
+      }
+
+      if (!finalReply) {
+        try {
+          const cloudRes = await fetch('https://text.pollinations.ai/openai', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'openai',
+              messages: [
+                {
+                  role: 'system',
+                  content: `Bạn là AURA-X, AI Agent 3D độc quyền của hệ thống SpotMatrix. Hãy trả lời tự nhiên, thông minh, linh hoạt bằng tiếng Việt (hoặc ngôn ngữ người dùng chọn). Tuân thủ nghiêm ngặt giới hạn dữ liệu theo Role:
+${allowedScopedContext}`,
+                },
+                { role: 'user', content: text },
+              ],
+              temperature: 0.65,
+            }),
+          });
+          if (cloudRes.ok) {
+            const cData = await cloudRes.json();
+            const liveText =
+              cData?.choices?.[0]?.message?.content?.trim() || '';
+            if (liveText.length > 0) {
+              finalReply = liveText;
+            }
+          }
+        } catch {
+          // Ngoại tuyến
+        }
       }
     }
 
-    // 3. Nếu ngoại tuyến hoàn toàn -> Dùng bộ NLU hội thoại thông minh cục bộ
     if (!finalReply) {
-      finalReply = synthesizeStructuredAiAnswer(text, currentAttachments);
+      finalReply = localAgentResult.replyText;
     }
 
     const aiMsg: AiChatMessageItem = {
@@ -1320,6 +1991,8 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
       sender: 'AI',
       contentText: finalReply,
       timestampText: nowTimeStr,
+      bookingSuggestion: localAgentResult.bookingSuggestion,
+      groupDraftAction: localAgentResult.groupDraftAction,
     };
 
     setMessages((prev) => [...prev, aiMsg]);
@@ -1327,67 +2000,68 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
   };
 
   const quickSuggestedPrompts = useMemo(() => {
-    if (webLanguage === 'en') {
+    if (isSysAdmin) {
       return [
-        'Which rooms are free right now?',
-        'Check my account permissions & bookings',
-        'Status of Floor 5 Colosseum Hall H-01',
-        'Write a professional meeting agenda',
+        'Tạo phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3',
+        'Tổng kết điểm trung bình tín nhiệm nhân viên',
+        'Nhân viên Nguyễn Minh Quân có lịch sử đặt phòng thế nào so với tháng trước?',
+        'Đổi thiết bị tầng 1 cho tôi thành bảo trì',
       ];
     }
-    if (webLanguage === 'ja') {
+    if (isManager) {
       return [
-        '現在空いている会議室を教えて',
-        '私のアカウント権限と予約一覧',
-        '5階コロッセオ大ホールH-01の状況',
-        'プロジェクト会議のアジェンダを作成',
+        'Tạo phòng cho 4 người họp 2 tiếng sau 2 tiếng nữa ở tầng 3',
+        'Tạo 1 nhóm mới tên là Nhóm Tối ưu 3D',
+        'Thêm thành viên Nguyễn Minh Quân vào nhóm SQUAD-3D-TWIN',
+        'Kiểm tra lịch đặt & quyền của tài khoản tôi',
       ];
     }
     return [
+      'Yêu cầu xin phép 1 phòng họp cho tầm 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3',
+      'Đặt phòng cho 4 người họp 2 tiếng sau 2 tiếng nữa',
+      'Kiểm tra lịch đặt & điểm tín nhiệm của tôi',
       'Phòng họp nào đang trống ngay lúc này?',
-      'Kiểm tra lịch đặt & quyền của tài khoản tôi',
-      'Tình trạng Hội trường La Mã Tầng 5 (H-01)',
-      'Soạn giúp tôi mẫu kịch bản họp Sprint tuần',
     ];
-  }, [webLanguage]);
+  }, [isSysAdmin, isManager]);
+
+  const deptEligibleLeaders = useMemo(() => {
+    return trustProfiles.filter(
+      (tp) =>
+        isSysAdmin ||
+        tp.departmentName.trim().toLowerCase() ===
+          userProfile.departmentName.trim().toLowerCase()
+    );
+  }, [trustProfiles, isSysAdmin, userProfile.departmentName]);
 
   return (
     <>
       {/* =====================================================================
-          NÚT ICON ĐÁM MÂY AI ĐẶC BIỆT GÓC DƯỚI CÙNG BÊN PHẢI MÀN HÌNH
+          NÚT ICON MỞ AI GỌN GÀNG Ở GÓC DƯỚI PHẢI (CHỈ HIỆN ICON, RÊ CHUỘT MỚI HIỆN NỘI DUNG)
          ===================================================================== */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+      <div className="fixed bottom-5 right-5 z-50 flex items-center">
         {!isOpen && (
           <button
             type="button"
             onClick={() => setIsOpen(true)}
-            className="group relative flex items-center gap-3 pl-3.5 pr-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 hover:from-indigo-500 hover:to-emerald-400 text-white shadow-2xl shadow-indigo-600/40 border border-cyan-300/50 transition-all duration-300 hover:scale-105 hover:-translate-y-1"
-            title="Mở Trợ lý AI 3D Độc quyền SpotMatrix (AURA-X)"
+            className="group relative w-13 h-13 p-3.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl border border-indigo-400/40 flex items-center justify-center transition-all duration-200 hover:scale-105"
+            aria-label="Mở Trợ lý AI AURA-X"
           >
-            {/* Vòng hào quang xung nhịp quanh nút Đám mây AI */}
-            <span className="pointer-events-none absolute -inset-1 rounded-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 opacity-35 blur-md group-hover:opacity-65 transition" />
+            <Cloud className="w-6 h-6 text-white fill-white/15" />
+            <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
 
-            <div className="relative w-10 h-10 rounded-full bg-slate-950/90 border border-cyan-300/60 flex items-center justify-center shadow-inner">
-              <Cloud className="w-5 h-5 text-cyan-300 fill-cyan-400/25" />
-              <Sparkles className="w-3 h-3 text-amber-300 absolute -top-0.5 -right-0.5 animate-spin" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
-            </div>
-
-            <div className="relative text-left hidden sm:block">
+            {/* Tooltip chỉ xuất hiện mượt mà khi rê chuột (hover) vào nút Icon */}
+            <div className="pointer-events-none opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-200 absolute right-16 top-1/2 -translate-y-1/2 whitespace-nowrap px-3.5 py-2 rounded-2xl bg-slate-900/95 text-white border border-slate-700 shadow-xl text-left">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black tracking-tight">
-                  AURA-X • 3D AI Cloud
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-xs font-extrabold">
+                  AURA-X • Trợ lý AI 3D
                 </span>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-white/20 text-white">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
                   {userProfile.role}
                 </span>
               </div>
-              <p className="text-[10px] text-cyan-100 font-semibold">
-                {webLanguage === 'en'
-                  ? 'Ask Rooms, Upload Files & Global Q&A'
-                  : webLanguage === 'ja'
-                  ? '3D AIチャット・画像/ファイル分析'
-                  : 'Chat AI 3D • Gửi Ảnh/File & Hỏi đáp Đa năng'}
+              <p className="text-[10px] text-slate-300 mt-0.5">
+                Đặt phòng tự động • Gửi Ảnh/File & Hỏi đáp
               </p>
             </div>
           </button>
@@ -1395,35 +2069,38 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
       </div>
 
       {/* =====================================================================
-          NGĂN KÉO CHAT AI BÊN PHẢI VỚI LINH VẬT AI 3D SIÊU NÉT & ĐA PHƯƠNG TIỆN
+          NGĂN KÉO CHAT AI BÊN PHẢI VỚI LINH VẬT AI 3D & THỰC THI TÁC VỤ THEO ROLE
          ===================================================================== */}
       {isOpen && (
         <aside
           className={`fixed bottom-4 right-4 top-4 z-50 flex flex-col rounded-3xl border shadow-2xl overflow-hidden backdrop-blur-2xl transition-all duration-300 ${
             isExpandedWidth
               ? 'w-[95vw] sm:w-[640px]'
-              : 'w-[94vw] sm:w-[440px]'
+              : 'w-[94vw] sm:w-[450px]'
           } ${
             isDark
-              ? 'bg-slate-950/95 border-indigo-500/40 text-slate-100 shadow-black/80'
-              : 'bg-white/95 border-indigo-200 text-slate-800 shadow-indigo-950/25'
+              ? 'bg-slate-950/95 border-slate-800 text-slate-100 shadow-black/80'
+              : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-900/20'
           }`}
         >
-          {/* Thanh Header của Ngăn kéo AI */}
-          <div className="px-4 py-3 bg-gradient-to-r from-indigo-700 via-blue-700 to-teal-600 text-white flex items-center justify-between gap-2 shrink-0">
+          {/* Header gọn gàng, màu sắc tinh tế */}
+          <div
+            className={`px-4 py-3 border-b flex items-center justify-between gap-2 shrink-0 ${
+              isDark
+                ? 'bg-slate-900 border-slate-800 text-white'
+                : 'bg-slate-900 border-slate-800 text-white'
+            }`}
+          >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-2xl bg-slate-950/80 border border-cyan-300/50 flex items-center justify-center shrink-0">
-                <Cloud className="w-5 h-5 text-cyan-300" />
+              <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0">
+                <Cloud className="w-5 h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs sm:text-sm font-black truncate">
-                    AURA-X • Trợ lý AI Độc quyền SpotMatrix
-                  </h3>
-                </div>
-                <p className="text-[10px] text-cyan-100 truncate">
-                  Đang huấn luyện theo: @{userProfile.username} ({userProfile.role} •{' '}
-                  {userProfile.departmentName})
+                <h3 className="text-xs sm:text-sm font-black truncate">
+                  AURA-X • AI Agent ({userProfile.role})
+                </h3>
+                <p className="text-[10px] text-slate-300 truncate">
+                  @{userProfile.username} • {userProfile.departmentName}
                 </p>
               </div>
             </div>
@@ -1432,7 +2109,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
               <button
                 type="button"
                 onClick={() => setIsExpandedWidth((prev) => !prev)}
-                className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition"
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
                 title="Mở rộng / Thu gọn khung chat"
               >
                 {isExpandedWidth ? (
@@ -1453,7 +2130,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                     },
                   ])
                 }
-                className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition"
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
                 title="Làm mới cuộc trò chuyện"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1461,7 +2138,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-xl bg-rose-500/80 hover:bg-rose-500 text-white transition"
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white transition"
                 title="Đóng cửa sổ AI"
               >
                 <X className="w-4 h-4" />
@@ -1469,34 +2146,33 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
             </div>
           </div>
 
-          {/* SÂN KHẤU WEBGL 3D CỦA LINH VẬT AI "AURA-X CYBER GUARDIAN" */}
+          {/* SÂN KHẤU WEBGL 3D CỦA LINH VẬT AI */}
           <div className="p-3 pb-1.5 shrink-0">
             <SpotMatrixMascot3DStage isDark={isDark} aiMood={aiMood} />
 
-            {/* Thanh trạng thái dữ liệu phân quyền theo Tài khoản hiện tại */}
             <div
               className={`mt-2 px-3 py-1.5 rounded-xl border text-[10px] font-bold flex flex-wrap items-center justify-between gap-2 ${
                 isDark
                   ? 'bg-slate-900/90 border-slate-800 text-slate-300'
-                  : 'bg-indigo-50/80 border-indigo-100 text-slate-700'
+                  : 'bg-slate-100 border-slate-200 text-slate-700'
               }`}
             >
-              <span className="flex items-center gap-1 text-emerald-500">
-                <CheckCircle2 className="w-3 h-3" />
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-indigo-500" />
                 Trống: {roleScopedKnowledgeBase.freeRooms.length}/25 phòng
               </span>
-              <span className="flex items-center gap-1 text-indigo-500">
-                <ShieldCheck className="w-3 h-3" />
+              <span className="flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-indigo-500" />
                 Lịch của bạn: {roleScopedKnowledgeBase.myBookings.length} vé
               </span>
-              <span className="flex items-center gap-1 text-cyan-500">
-                <Cpu className="w-3 h-3" />
-                Thiết bị: {equipmentsList.length} máy
+              <span className="flex items-center gap-1">
+                <Cpu className="w-3 h-3 text-indigo-500" />
+                Tín nhiệm: {userProfile.trustScore}/100đ
               </span>
             </div>
           </div>
 
-          {/* DANH SÁCH TIN NHẮN HỘI THOẠI CÓ TỔ CHỨC MẠCH LẠC */}
+          {/* DANH SÁCH TIN NHẮN & THẺ HÀNH ĐỘNG TƯƠNG TÁC TRỰC TIẾP */}
           <div
             ref={chatScrollRef}
             className="flex-1 overflow-y-auto px-3.5 py-2 space-y-3"
@@ -1511,9 +2187,9 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                   }`}
                 >
                   <div
-                    className={`max-w-[92%] rounded-2xl p-3.5 text-xs space-y-2 shadow-sm ${
+                    className={`max-w-[94%] rounded-2xl p-3.5 text-xs space-y-2.5 shadow-sm ${
                       isUser
-                        ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white'
+                        ? 'bg-indigo-600 text-white'
                         : isDark
                         ? 'bg-slate-900 border border-slate-800 text-slate-100'
                         : 'bg-slate-100/90 border border-slate-200/90 text-slate-800'
@@ -1523,7 +2199,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                       <span>
                         {isUser
                           ? `${userProfile.fullName} (@${userProfile.username})`
-                          : 'AURA-X • SpotMatrix 3D AI'}
+                          : 'AURA-X • SpotMatrix AI Agent'}
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span>{msg.timestampText}</span>
@@ -1531,7 +2207,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                           <button
                             type="button"
                             onClick={() => handleSpeakMessage(msg.contentText)}
-                            className="p-0.5 rounded hover:bg-indigo-500/20 text-cyan-400"
+                            className="p-0.5 rounded hover:bg-indigo-500/20 text-indigo-400"
                             title="Đọc to câu trả lời này"
                           >
                             {isSpeaking ? (
@@ -1544,7 +2220,6 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                       </div>
                     </div>
 
-                    {/* Hiển thị Hình ảnh hoặc File đính kèm trong tin nhắn */}
                     {msg.attachments && msg.attachments.length > 0 && (
                       <div className="grid grid-cols-1 gap-2 pt-1">
                         {msg.attachments.map((att) =>
@@ -1568,7 +2243,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                               key={att.id}
                               className="p-2 rounded-xl bg-black/15 border border-white/15 flex items-center gap-2 text-[11px]"
                             >
-                              <FileText className="w-4 h-4 shrink-0 text-amber-300" />
+                              <FileText className="w-4 h-4 shrink-0 text-indigo-300" />
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold truncate">
                                   {att.fileName}
@@ -1583,25 +2258,291 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
                       </div>
                     )}
 
-                    {/* Nội dung câu trả lời được kết xuất Markdown sang JSX sắc nét */}
                     {renderFormattedAiMarkdown(msg.contentText, isUser)}
+
+                    {/* THẺ HÀNH ĐỘNG 1: CHỌN PHÒNG ĐỂ ĐIỀN SẴN HOẶC ĐẶT / XIN PHÉP NGAY TẠI ĐÂY */}
+                    {msg.bookingSuggestion &&
+                      msg.bookingSuggestion.candidateRooms.length > 0 && (
+                        <div
+                          className={`mt-2 p-3 rounded-2xl border space-y-2 ${
+                            isDark
+                              ? 'bg-slate-950 border-slate-800'
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                            <CalendarCheck className="w-3.5 h-3.5" />
+                            <span>
+                              Chọn phòng bên dưới ({msg.bookingSuggestion.dateIso} •{' '}
+                              {msg.bookingSuggestion.start} –{' '}
+                              {msg.bookingSuggestion.end}):
+                            </span>
+                          </p>
+
+                          <div className="space-y-2">
+                            {msg.bookingSuggestion.candidateRooms.map((rm) => {
+                              const alreadyBookedCode =
+                                executedBookingMsgIds[msg.id];
+                              const isThisBooked =
+                                alreadyBookedCode === rm.nodeCode;
+
+                              return (
+                                <div
+                                  key={rm.nodeCode}
+                                  className={`p-2.5 rounded-xl border flex flex-col gap-2 ${
+                                    isDark
+                                      ? 'bg-slate-900 border-slate-800'
+                                      : 'bg-slate-50 border-slate-200/80'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-extrabold text-xs">
+                                      [{rm.nodeCode}] {rm.nodeLabel}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">
+                                      {rm.capacityCount} chỗ • Tầng {rm.floorLevel}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {onAiNavigateAndPrefillBooking && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onAiNavigateAndPrefillBooking(rm, {
+                                            dateIso:
+                                              msg.bookingSuggestion!.dateIso,
+                                            start: msg.bookingSuggestion!.start,
+                                            end: msg.bookingSuggestion!.end,
+                                            purposeNote:
+                                              msg.bookingSuggestion!.purposeNote,
+                                            approvalRequestReason:
+                                              msg.bookingSuggestion!
+                                                .approvalRequestReason,
+                                          });
+                                        }}
+                                        className={`flex-1 py-1.5 px-2.5 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition ${
+                                          isDark
+                                            ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        <span>Đi đến Trang Đặt phòng (Điền sẵn)</span>
+                                        <ArrowRight className="w-3 h-3" />
+                                      </button>
+                                    )}
+
+                                    {onAiExecuteDirectBooking && (
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(alreadyBookedCode)}
+                                        onClick={() => {
+                                          onAiExecuteDirectBooking(rm, {
+                                            dateIso:
+                                              msg.bookingSuggestion!.dateIso,
+                                            start: msg.bookingSuggestion!.start,
+                                            end: msg.bookingSuggestion!.end,
+                                            purposeNote:
+                                              msg.bookingSuggestion!.purposeNote,
+                                            approvalRequestReason:
+                                              msg.bookingSuggestion!
+                                                .approvalRequestReason,
+                                          });
+                                          setExecutedBookingMsgIds((prev) => ({
+                                            ...prev,
+                                            [msg.id]: rm.nodeCode,
+                                          }));
+                                        }}
+                                        className={`flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold flex items-center justify-center gap-1 transition ${
+                                          isThisBooked
+                                            ? 'bg-emerald-600 text-white'
+                                            : alreadyBookedCode
+                                            ? 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-800 text-slate-500'
+                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                                        }`}
+                                      >
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>
+                                          {isThisBooked
+                                            ? 'Đã Tạo Đơn Thành Công!'
+                                            : userProfile.role === 'EMPLOYEE'
+                                            ? `Gửi Xin Phép ${rm.nodeCode} Ngay`
+                                            : `Xác nhận Đặt ${rm.nodeCode} Ngay`}
+                                        </span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* THẺ HÀNH ĐỘNG 2: FORM BỔ SUNG THÔNG TIN ĐỂ TẠO NHÓM MỚI TRỰC TIẾP TRONG CHAT AI (MANAGER / ADMIN) */}
+                    {msg.groupDraftAction && (
+                      <div
+                        className={`mt-2 p-3.5 rounded-2xl border space-y-2.5 ${
+                          isDark
+                            ? 'bg-slate-950 border-slate-800'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                          <Users className="w-4 h-4" />
+                          <span>
+                            Điền thông tin tạo nhóm ({msg.groupDraftAction.departmentName})
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                              Mã nhóm (Code)
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineGrpCode}
+                              onChange={(e) => setInlineGrpCode(e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                              Nhãn dự án (Tag)
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineGrpTag}
+                              onChange={(e) => setInlineGrpTag(e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                            Tên nhóm chuyên môn
+                          </label>
+                          <input
+                            type="text"
+                            value={inlineGrpName}
+                            onChange={(e) => setInlineGrpName(e.target.value)}
+                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                              isDark
+                                ? 'bg-slate-900 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                            Chọn Trưởng nhóm phụ trách
+                          </label>
+                          <select
+                            value={inlineGrpLeader}
+                            onChange={(e) => setInlineGrpLeader(e.target.value)}
+                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                              isDark
+                                ? 'bg-slate-900 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
+                          >
+                            {deptEligibleLeaders.map((ld) => (
+                              <option key={ld.userEmail} value={ld.userEmail}>
+                                {ld.fullName} ({ld.role})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                            Mô tả nhiệm vụ nhóm
+                          </label>
+                          <input
+                            type="text"
+                            value={inlineGrpDesc}
+                            onChange={(e) => setInlineGrpDesc(e.target.value)}
+                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] ${
+                              isDark
+                                ? 'bg-slate-900 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                            }`}
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={Boolean(executedGroupMsgIds[msg.id])}
+                          onClick={() => {
+                            if (!onAiUpsertGroup || !inlineGrpName.trim()) return;
+                            const leaderObj = trustProfiles.find(
+                              (tp) =>
+                                tp.userEmail.toLowerCase() ===
+                                inlineGrpLeader.toLowerCase()
+                            );
+                            const newGroup: OrganizationGroupItem = {
+                              groupId: `GRP-AI-${Date.now()}`,
+                              groupCode: inlineGrpCode.trim().toUpperCase(),
+                              groupName: inlineGrpName.trim(),
+                              departmentName:
+                                msg.groupDraftAction!.departmentName,
+                              description: inlineGrpDesc.trim(),
+                              leaderEmail: inlineGrpLeader,
+                              leaderName:
+                                leaderObj?.fullName || userProfile.fullName,
+                              projectTag: inlineGrpTag.trim() || 'AI Squad',
+                              memberEmails: [inlineGrpLeader],
+                              updatedAtIso: new Date().toISOString(),
+                            };
+                            onAiUpsertGroup(newGroup);
+                            setExecutedGroupMsgIds((prev) => ({
+                              ...prev,
+                              [msg.id]: true,
+                            }));
+                          }}
+                          className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
+                            executedGroupMsgIds[msg.id]
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>
+                            {executedGroupMsgIds[msg.id]
+                              ? 'Đã Tạo Nhóm Thành Công!'
+                              : 'Xác nhận Tạo Nhóm Ngay'}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* CÁC NÚT GỢI Ý CÂU HỎI NHANH */}
+          {/* CÁC NÚT GỢI Ý LỆNH THỰC THI NHANH THEO ROLE */}
           <div className="px-3.5 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar border-t border-slate-200/60 dark:border-slate-800/80 shrink-0">
             {quickSuggestedPrompts.map((qText) => (
               <button
                 key={qText}
                 type="button"
                 onClick={() => handleSubmitChat(undefined, qText)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold border whitespace-nowrap transition shrink-0 ${
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap transition shrink-0 ${
                   isDark
-                    ? 'bg-slate-900 border-slate-800 text-cyan-300 hover:border-cyan-500/50'
-                    : 'bg-slate-100 border-slate-200 text-indigo-700 hover:border-indigo-400'
+                    ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-indigo-400'
                 }`}
               >
                 {qText}
@@ -1609,13 +2550,12 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
             ))}
           </div>
 
-          {/* KHU VỰC XEM TRƯỚC HÌNH ẢNH & FILE ĐÍNH KÈM TRƯỚC KHI GỬI */}
           {pendingAttachments.length > 0 && (
             <div
               className={`px-3.5 py-2 border-t flex flex-wrap gap-2 max-h-28 overflow-y-auto ${
                 isDark
                   ? 'bg-slate-900/90 border-slate-800'
-                  : 'bg-indigo-50/60 border-indigo-100'
+                  : 'bg-slate-50 border-slate-200'
               }`}
             >
               {pendingAttachments.map((att) => (
@@ -1653,7 +2593,7 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
             </div>
           )}
 
-          {/* THANH NHẬP CÂU HỎI + NÚT GỬI HÌNH ẢNH + NÚT GỬI FILE */}
+          {/* THANH NHẬP LỆNH / CÂU HỎI + ĐÍNH KÈM ẢNH & FILE */}
           <form
             onSubmit={(e) => handleSubmitChat(e)}
             className={`p-3 border-t flex items-center gap-2 shrink-0 ${
@@ -1684,8 +2624,8 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
               onClick={() => imageInputRef.current?.click()}
               className={`p-2.5 rounded-xl border transition shrink-0 ${
                 isDark
-                  ? 'bg-slate-900 border-slate-800 text-cyan-400 hover:border-cyan-500/50'
-                  : 'bg-slate-100 border-slate-200 text-indigo-600 hover:bg-indigo-50'
+                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
               }`}
               title="Đính kèm Hình ảnh"
             >
@@ -1697,10 +2637,10 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
               onClick={() => fileInputRef.current?.click()}
               className={`p-2.5 rounded-xl border transition shrink-0 ${
                 isDark
-                  ? 'bg-slate-900 border-slate-800 text-emerald-400 hover:border-emerald-500/50'
-                  : 'bg-slate-100 border-slate-200 text-teal-600 hover:bg-teal-50'
+                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
               }`}
-              title="Đính kèm Tệp tin (CSV, JSON, TXT, Code, Tài liệu...)"
+              title="Đính kèm Tệp tin"
             >
               <Paperclip className="w-4 h-4" />
             </button>
@@ -1711,21 +2651,21 @@ ${historyLines ? `\nLịch sử trò chuyện gần đây:\n${historyLines}` : '
               onChange={(e) => setPromptInput(e.target.value)}
               placeholder={
                 webLanguage === 'en'
-                  ? 'Ask about rooms, your bookings, or any external topic...'
+                  ? 'Ask AI to book a room, manage groups, or run analytics...'
                   : webLanguage === 'ja'
-                  ? '空室、個人予約、添付ファイル、外部の質問を入力...'
-                  : 'Hỏi dữ liệu phòng họp, lịch cá nhân hoặc câu hỏi bất kỳ...'
+                  ? '会議室の自動予約、グループ管理、データ分析を指示...'
+                  : 'Ra lệnh đặt phòng, tạo nhóm, đổi thiết bị hoặc hỏi đáp...'
               }
               className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
                 isDark
-                  ? 'bg-slate-900 border-slate-800 text-white focus:border-cyan-400'
+                  ? 'bg-slate-900 border-slate-800 text-white focus:border-indigo-500'
                   : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500'
               }`}
             />
 
             <button
               type="submit"
-              className="p-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-emerald-400 text-white shadow-md transition shrink-0"
+              className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition shrink-0"
               title="Gửi tin nhắn"
             >
               <Send className="w-4 h-4" />

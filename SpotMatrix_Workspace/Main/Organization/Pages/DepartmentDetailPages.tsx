@@ -112,7 +112,7 @@ const DEPT_DETAIL_I18N: Record<
   }
 > = {
   vi: {
-    backBtn: '← Quay lại Danh sách Phòng ban',
+    backBtn: 'Quay lại Danh sách Phòng ban',
     detailPageBadge: 'TRANG CHI TIẾT PHÒNG BAN ĐỘC LẬP',
     rbacManageBadge: (role) =>
       `Quyền ${role}: Được phép Quản lý Thành viên & Nhóm chuyên môn`,
@@ -122,7 +122,7 @@ const DEPT_DETAIL_I18N: Record<
     floorZoneLabel: 'Khu vực Tầng Hoạt động:',
     editDeptBtn: 'Chỉnh sửa Phòng ban',
     deleteDeptBtn: 'Xóa Phòng ban',
-    addMemberBtn: '+ Thêm Nhân sự từ Công ty',
+    addMemberBtn: 'Thêm Nhân sự từ Công ty',
     kpi1Members: 'Tổng Nhân sự Trực thuộc',
     kpi2Groups: 'Nhóm Chuyên biệt (Squads)',
     kpi3AvgTrust: 'Điểm Tín nhiệm Trung bình',
@@ -142,10 +142,10 @@ const DEPT_DETAIL_I18N: Record<
       'Tổng hợp các lịch họp tại Tầng 1–4 và vé tham dự Hội trường Tầng 5 của phòng ban này.',
     hallEventsTitle: 'Sự kiện Hội trường Tầng 5 (H-01) Cho phép Phòng ban Tham gia',
     noBookingsText: 'Hiện chưa có lịch đặt phòng nào của phòng ban này.',
-    bookHallBtn: 'Đặt lịch Phòng / Hội trường →',
+    bookHallBtn: 'Đặt lịch Phòng / Hội trường',
   },
   en: {
-    backBtn: '← Back to Department Directory',
+    backBtn: 'Back to Department Directory',
     detailPageBadge: 'DEDICATED DEPARTMENT DETAIL PAGE',
     rbacManageBadge: (role) =>
       `${role} Access: Authorized to Manage Members & Sub-Groups`,
@@ -155,7 +155,7 @@ const DEPT_DETAIL_I18N: Record<
     floorZoneLabel: 'Assigned Floor Zone:',
     editDeptBtn: 'Edit Department',
     deleteDeptBtn: 'Delete',
-    addMemberBtn: '+ Add Member from Directory',
+    addMemberBtn: 'Add Member from Directory',
     kpi1Members: 'Assigned Employees',
     kpi2Groups: 'Specialized Sub-Groups',
     kpi3AvgTrust: 'Average Trust Score',
@@ -175,10 +175,10 @@ const DEPT_DETAIL_I18N: Record<
       'All active meeting sessions on Floors 1–4 and Floor 5 Amphitheater passes for this department.',
     hallEventsTitle: 'Floor 5 Colosseum Hall (H-01) Events Open to This Department',
     noBookingsText: 'No active bookings recorded for this department yet.',
-    bookHallBtn: 'Go to Room & Hall Booking →',
+    bookHallBtn: 'Go to Room & Hall Booking',
   },
   ja: {
-    backBtn: '← 部署一覧へ戻る',
+    backBtn: '部署一覧へ戻る',
     detailPageBadge: '部署詳細専用ページ',
     rbacManageBadge: (role) =>
       `${role} 権限：メンバーおよび専門グループの管理が可能`,
@@ -188,7 +188,7 @@ const DEPT_DETAIL_I18N: Record<
     floorZoneLabel: '主要活動フロア:',
     editDeptBtn: '部署情報を編集',
     deleteDeptBtn: '削除',
-    addMemberBtn: '+ 社員名簿からメンバー追加',
+    addMemberBtn: '社員名簿からメンバー追加',
     kpi1Members: '所属社員総数',
     kpi2Groups: '専門サブグループ数',
     kpi3AvgTrust: '部署平均信頼スコア',
@@ -208,7 +208,7 @@ const DEPT_DETAIL_I18N: Record<
       '1〜4階の会議室予約および5階コロッセオ大ホールの参加チケット一覧です。',
     hallEventsTitle: 'この部署が参加可能な5階大ホール (H-01) イベント',
     noBookingsText: '現在、この部署に関連する有効な予約はありません。',
-    bookHallBtn: '会議室・ホール予約へ移動 →',
+    bookHallBtn: '会議室・ホール予約へ移動',
   },
 };
 
@@ -234,7 +234,8 @@ export const DepartmentDetailPages: React.FC<DepartmentDetailPagesProps> = ({
 }) => {
   const isSysAdmin = userRole === 'SYS_ADMIN';
   // Phân quyền chuẩn: Chỉ MANAGER và SYS_ADMIN mới được thao tác quản trị phòng ban/nhóm; EMPLOYEE chỉ xem
-  const canManageDept = userRole === 'SYS_ADMIN' || userRole === 'MANAGER';
+  const canManageDept = userRole === 'SYS_ADMIN';
+  const canManageGroups = userRole === 'SYS_ADMIN' || userRole === 'MANAGER';
   const t = DEPT_DETAIL_I18N[webLanguage] || DEPT_DETAIL_I18N.vi;
 
   const [activeSubTab, setActiveSubTab] = useState<DetailSectionTab>('MEMBERS');
@@ -325,9 +326,9 @@ export const DepartmentDetailPages: React.FC<DepartmentDetailPagesProps> = ({
               : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-300'
           }`}
         >
-          {!canManageDept && <Lock className="w-3.5 h-3.5" />}
+          {!canManageGroups && <Lock className="w-3.5 h-3.5" />}
           <span>
-            {canManageDept ? t.rbacManageBadge(userRole) : t.rbacReadOnlyBadge}
+            {canManageGroups ? t.rbacManageBadge(userRole) : t.rbacReadOnlyBadge}
           </span>
         </span>
       </div>

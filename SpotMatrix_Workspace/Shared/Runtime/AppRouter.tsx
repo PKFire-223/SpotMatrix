@@ -30,6 +30,7 @@ import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
   AuditConcurrencyLogItem,
   BookingPayloadItem,
+  EquipmentFaultReportItem,
   EquipmentStatusType,
   NotificationCategoryType,
   NotificationRecordItem,
@@ -37,6 +38,7 @@ import {
   OrganizationGroupItem,
   SeatStatusType,
   SharedEquipmentItem,
+  TrustScoreHistoryRecordItem,
   UserTrustProfileItem,
   WebLanguageCodeType,
   WorkspaceNodeItem,
@@ -226,7 +228,6 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
         currentBookingId: isInUse ? 'BK-2026-001' : null,
         weeklyUsageHours: 16 + ((floor * 3 + idx * 4) % 18),
         monthlyUsageHours: 64 + ((floor * 12 + idx * 15) % 68),
-        healthPercent: 92 + ((floor + idx) % 8),
       });
       seq += 1;
 
@@ -237,13 +238,16 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
           equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-02`,
           equipmentName: `${spec.secondaryName} (${roomCode})`,
           categoryName: spec.secondaryCat,
-          status: isBroken ? 'BROKEN' : 'AVAILABLE',
+          status: isBroken ? 'REPORTED_BROKEN' : 'AVAILABLE',
           assignedNodeId: roomCode,
           position2D: { posX: spec.posX, posY: spec.posY },
           currentBookingId: null,
           weeklyUsageHours: 14,
           monthlyUsageHours: 58,
-          healthPercent: isBroken ? 45 : 95,
+          lastReportedReason: isBroken
+            ? 'Cổng HDMI số 2 bị lỏng tín hiệu khi kết nối máy tính cá nhân'
+            : undefined,
+          lastReportedByEmail: isBroken ? 'employee.dev@spotmatrix.vn' : undefined,
         });
         seq += 1;
       }
@@ -262,7 +266,6 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
       currentBookingId: null,
       weeklyUsageHours: 28,
       monthlyUsageHours: 112,
-      healthPercent: 99,
     },
     {
       equipmentId: `EQ-${String(seq + 1).padStart(2, '0')}`,
@@ -275,7 +278,6 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
       currentBookingId: null,
       weeklyUsageHours: 26,
       monthlyUsageHours: 104,
-      healthPercent: 98,
     }
   );
 
@@ -285,10 +287,114 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
 const INITIAL_ROOM_EQUIPMENTS: SharedEquipmentItem[] =
   buildStandardTwentyFiveRoomEquipments();
 
+const INITIAL_EQUIPMENT_FAULT_REPORTS: EquipmentFaultReportItem[] = [
+  {
+    reportId: 'FLT-2026-001',
+    equipmentId: 'EQ-05',
+    equipmentCode: 'EQ-M103-DEV-02',
+    equipmentName: 'Trạm Chia tín hiệu HDMI & Type-C 100W (M1-03)',
+    roomCode: 'M1-03',
+    reporterEmail: 'employee.dev@spotmatrix.vn',
+    reporterName: 'Nguyễn Minh Quân (Nhân viên)',
+    reporterRole: 'EMPLOYEE',
+    faultReason: 'Cổng HDMI số 2 bị lỏng tín hiệu khi kết nối máy tính cá nhân trong ca họp sáng.',
+    reportStatus: 'PENDING_ADMIN',
+    createdAtIso: '09:15 • Hôm nay',
+  },
+];
+
 const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
   { userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', role: 'SYS_ADMIN', departmentName: 'System Governance', trustScore: 100, onTimeCheckInCount: 32, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
   { userEmail: 'manager.lead@spotmatrix.vn', fullName: 'Lê Thu Hà (Quản lý)', role: 'MANAGER', departmentName: 'Product & Engineering', trustScore: 100, onTimeCheckInCount: 28, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
   { userEmail: 'employee.dev@spotmatrix.vn', fullName: 'Nguyễn Minh Quân (Nhân viên)', role: 'EMPLOYEE', departmentName: 'Product & Engineering', trustScore: 96, onTimeCheckInCount: 18, noShowPenaltyCount: 1, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
+];
+
+const INITIAL_TRUST_SCORE_HISTORY: TrustScoreHistoryRecordItem[] = [
+  {
+    historyId: 'TSH-2026-001',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    deltaPoints: 20,
+    resultingScore: 100,
+    reasonType: 'MONTHLY_RECURRING_BONUS',
+    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Chính sách thưởng duy trì kỷ luật phòng họp)',
+    createdAtIso: '01/11/2026 • 00:00',
+  },
+  {
+    historyId: 'TSH-2026-002',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    deltaPoints: -10,
+    resultingScore: 90,
+    reasonType: 'OVERDUE_NO_SHOW_PENALTY',
+    reasonText: 'Trừ -10 điểm do quá hạn 30 phút không quét QR xác nhận dùng phòng M2-04 (Tự động thu hồi phòng)',
+    relatedBookingId: 'BK-2026-HIST-02',
+    createdAtIso: '05/11/2026 • 10:31',
+  },
+  {
+    historyId: 'TSH-2026-003',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    deltaPoints: 2,
+    resultingScore: 92,
+    reasonType: 'ON_TIME_QR_CHECKIN',
+    reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M1-01',
+    relatedBookingId: 'BK-2026-HIST-03',
+    createdAtIso: '09/11/2026 • 07:55',
+  },
+  {
+    historyId: 'TSH-2026-004',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    deltaPoints: 2,
+    resultingScore: 94,
+    reasonType: 'ON_TIME_QR_CHECKIN',
+    reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M3-02',
+    relatedBookingId: 'BK-2026-HIST-04',
+    createdAtIso: '12/11/2026 • 13:52',
+  },
+  {
+    historyId: 'TSH-2026-005',
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    deltaPoints: 2,
+    resultingScore: 96,
+    reasonType: 'ON_TIME_QR_CHECKIN',
+    reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M1-01',
+    relatedBookingId: 'BK-2026-001',
+    createdAtIso: '14/11/2026 • 08:02',
+  },
+  {
+    historyId: 'TSH-2026-006',
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    deltaPoints: 20,
+    resultingScore: 100,
+    reasonType: 'MONTHLY_RECURRING_BONUS',
+    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
+    createdAtIso: '01/11/2026 • 00:00',
+  },
+  {
+    historyId: 'TSH-2026-007',
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    deltaPoints: 2,
+    resultingScore: 100,
+    reasonType: 'ON_TIME_QR_CHECKIN',
+    reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại ghế H01-A3 (Hội trường Tầng 5)',
+    relatedBookingId: 'BK-2026-002',
+    createdAtIso: 'Hôm nay • 12:45',
+  },
+  {
+    historyId: 'TSH-2026-008',
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    deltaPoints: 20,
+    resultingScore: 100,
+    reasonType: 'MONTHLY_RECURRING_BONUS',
+    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
+    createdAtIso: '01/11/2026 • 00:00',
+  },
 ];
 
 const INITIAL_FIVE_FLOOR_ROOMS = buildStandardFiveFloorRooms();
@@ -452,6 +558,15 @@ const LOFI_CHORD_PROGRESSIONS: Record<LofiTrackStyleType, number[][]> = {
     [220.0, 277.18, 329.63, 392.0],
   ],
 };
+
+function getPreviousMonthIsoDate(dayOfMonth = 15): string {
+  const now = new Date();
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, dayOfMonth);
+  const y = prevMonthDate.getFullYear();
+  const m = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
+  const d = String(prevMonthDate.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
@@ -705,8 +820,11 @@ const MainWorkspaceRoutes: React.FC = () => {
     INITIAL_FIVE_FLOOR_ROOMS[0]
   );
   const [preselectedSlot, setPreselectedSlot] = useState<{
+    dateIso?: string;
     start: string;
     end: string;
+    purposeNote?: string;
+    approvalRequestReason?: string;
     seatCode?: string;
     hallMode?: 'HALL_EVENT_RENTAL' | 'HALL_SEAT_BOOKING';
   } | null>(null);
@@ -748,10 +866,12 @@ const MainWorkspaceRoutes: React.FC = () => {
       userEmail: 'employee.dev@spotmatrix.vn',
       requesterUsername: 'Employeedev123',
       requesterRole: 'EMPLOYEE',
+      departmentName: 'Product & Engineering',
       bookingDateIso: new Date().toISOString().slice(0, 10),
       startTimeIso: '08:00',
       endTimeIso: '10:00',
       purposeNote: 'Họp Kiến trúc Hệ thống 3D (Tầng 1)',
+      approvalRequestReason: 'Xin phép họp rà soát sơ đồ 3D PBR cùng nhóm Frontend',
       recurringOption: 'NONE',
       occurrenceDates: [new Date().toISOString().slice(0, 10)],
       lockVersion: 1,
@@ -765,6 +885,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       userEmail: 'manager.lead@spotmatrix.vn',
       requesterUsername: 'Managerlead123',
       requesterRole: 'MANAGER',
+      departmentName: 'Product & Engineering',
       bookingDateIso: new Date().toISOString().slice(0, 10),
       startTimeIso: '13:00',
       endTimeIso: '15:00',
@@ -779,12 +900,56 @@ const MainWorkspaceRoutes: React.FC = () => {
       checkedInTimestampMs: Date.now() - 3600 * 1000,
       qrToken: 'QR-SMX-H01A3-BK2026002-CHECKIN',
     },
+    {
+      bookingId: 'BK-2026-PREV-01',
+      nodeId: 'M2-02',
+      userEmail: 'employee.dev@spotmatrix.vn',
+      requesterUsername: 'Employeedev123',
+      requesterRole: 'EMPLOYEE',
+      departmentName: 'Product & Engineering',
+      bookingDateIso: getPreviousMonthIsoDate(10),
+      startTimeIso: '09:00',
+      endTimeIso: '11:00',
+      purposeNote: 'Họp Sprint Planning Tháng trước (Tầng 2)',
+      recurringOption: 'NONE',
+      occurrenceDates: [getPreviousMonthIsoDate(10)],
+      lockVersion: 1,
+      bookingStatus: 'CHECKED_IN',
+      approvalStatus: 'APPROVED',
+      approvedByUsername: 'Managerlead123',
+      checkedInAtIso: `08:52:00 • Ngày ${getPreviousMonthIsoDate(10)}`,
+      checkedInTimestampMs: Date.now() - 25 * 24 * 3600 * 1000,
+    },
+    {
+      bookingId: 'BK-2026-PREV-02',
+      nodeId: 'M3-04',
+      userEmail: 'employee.dev@spotmatrix.vn',
+      requesterUsername: 'Employeedev123',
+      requesterRole: 'EMPLOYEE',
+      departmentName: 'Product & Engineering',
+      bookingDateIso: getPreviousMonthIsoDate(18),
+      startTimeIso: '14:00',
+      endTimeIso: '16:00',
+      purposeNote: 'Review Giao diện 3D WebGL Tháng trước',
+      recurringOption: 'NONE',
+      occurrenceDates: [getPreviousMonthIsoDate(18)],
+      lockVersion: 1,
+      bookingStatus: 'EXPIRED_NO_SHOW',
+      approvalStatus: 'APPROVED',
+      approvedByUsername: 'Managerlead123',
+      expiredAtIso: `14:31:00 • Ngày ${getPreviousMonthIsoDate(18)}`,
+      expiredAtTimestampMs: Date.now() - 18 * 24 * 3600 * 1000,
+    },
   ]);
 
   const [equipmentsList, setEquipmentsList] =
     useState<SharedEquipmentItem[]>(INITIAL_ROOM_EQUIPMENTS);
+  const [equipmentFaultReports, setEquipmentFaultReports] =
+    useState<EquipmentFaultReportItem[]>(INITIAL_EQUIPMENT_FAULT_REPORTS);
   const [trustProfiles, setTrustProfiles] =
     useState<UserTrustProfileItem[]>(INITIAL_TRUST_PROFILES);
+  const [trustScoreHistory, setTrustScoreHistory] =
+    useState<TrustScoreHistoryRecordItem[]>(INITIAL_TRUST_SCORE_HISTORY);
   const [auditLogs, setAuditLogs] = useState<AuditConcurrencyLogItem[]>([
     {
       auditId: 'AUD-INIT-01',
@@ -1059,6 +1224,11 @@ const MainWorkspaceRoutes: React.FC = () => {
       )
     );
 
+    if (notifItem.category === 'EQUIPMENT_FAULT_ALERT') {
+      setActivePage('DATAMANAGER');
+      return;
+    }
+
     if (notifItem.relatedNodeId) {
       const foundNode = workspaceNodes.find(
         (n) =>
@@ -1076,8 +1246,11 @@ const MainWorkspaceRoutes: React.FC = () => {
   const handleNavigateToBookingWithSlot = (
     nodeItem: WorkspaceNodeItem,
     slotTime: {
+      dateIso?: string;
       start: string;
       end: string;
+      purposeNote?: string;
+      approvalRequestReason?: string;
       seatCode?: string;
       hallMode?: 'HALL_EVENT_RENTAL' | 'HALL_SEAT_BOOKING';
     }
@@ -1337,7 +1510,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     if (needsApproval) {
       const reasonSuffix = timeWindow?.approvalRequestReason
         ? ` Lý do xin phép: "${timeWindow.approvalRequestReason}".`
-        : "";
+        : '';
       pushRealtimeNotification(
         `[Cần Phê Duyệt] Yêu cầu đặt ${codeToBook}`,
         `@${userSession?.userProfile.username} xin đặt ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).${reasonSuffix}`,
@@ -1381,16 +1554,34 @@ const MainWorkspaceRoutes: React.FC = () => {
       playUiSoundEffect('SUCCESS');
 
       setTrustProfiles((prev) =>
-        prev.map((tp) =>
-          tp.userEmail.toLowerCase() === targetEmail.toLowerCase()
-            ? {
-                ...tp,
-                trustScore: Math.min(100, tp.trustScore + 2),
-                onTimeCheckInCount: tp.onTimeCheckInCount + 1,
-                updatedAtIso: new Date().toISOString(),
-              }
-            : tp
-        )
+        prev.map((tp) => {
+          if (tp.userEmail.toLowerCase() !== targetEmail.toLowerCase()) {
+            return tp;
+          }
+          const nextScore = Math.min(100, tp.trustScore + 2);
+          setTrustScoreHistory((hPrev) => [
+            {
+              historyId: `TSH-${Date.now()}-${Math.floor(Math.random() * 90 + 10)}`,
+              userEmail: tp.userEmail,
+              fullName: tp.fullName,
+              deltaPoints: 2,
+              resultingScore: nextScore,
+              reasonType: 'ON_TIME_QR_CHECKIN',
+              reasonText: `Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng ${
+                targetBk?.nodeId || bookingId
+              }`,
+              relatedBookingId: bookingId,
+              createdAtIso: frozenTime,
+            },
+            ...hPrev,
+          ]);
+          return {
+            ...tp,
+            trustScore: nextScore,
+            onTimeCheckInCount: tp.onTimeCheckInCount + 1,
+            updatedAtIso: new Date().toISOString(),
+          };
+        })
       );
 
       fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}/checkin`, {
@@ -1455,6 +1646,20 @@ const MainWorkspaceRoutes: React.FC = () => {
             return tp;
           }
           const nextScore = Math.max(0, tp.trustScore - 10);
+          setTrustScoreHistory((hPrev) => [
+            {
+              historyId: `TSH-${Date.now()}-${Math.floor(Math.random() * 90 + 10)}`,
+              userEmail: tp.userEmail,
+              fullName: tp.fullName,
+              deltaPoints: -10,
+              resultingScore: nextScore,
+              reasonType: 'OVERDUE_NO_SHOW_PENALTY',
+              reasonText: `Trừ -10 điểm do quá hạn không quét QR xác nhận dùng phòng ${nodeCode} (Tự động thu hồi phòng)`,
+              relatedBookingId: bookingId,
+              createdAtIso: expiredTimeStr,
+            },
+            ...hPrev,
+          ]);
           return {
             ...tp,
             trustScore: nextScore,
@@ -1485,6 +1690,44 @@ const MainWorkspaceRoutes: React.FC = () => {
     [workspaceNodes, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
   );
 
+  // Cộng +20 điểm tín nhiệm định kỳ hằng tháng cho toàn bộ nhân sự
+  const handleTriggerMonthlyTrustBonus = useCallback(() => {
+    const now = new Date();
+    const timeLabel = `${now.toLocaleDateString('vi-VN')} • ${now.toLocaleTimeString('vi-VN')}`;
+
+    setTrustProfiles((prev) => {
+      const bonusHistoryEntries: TrustScoreHistoryRecordItem[] = [];
+      const updated = prev.map((tp) => {
+        const nextScore = Math.min(100, tp.trustScore + 20);
+        bonusHistoryEntries.push({
+          historyId: `TSH-MONTH-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
+          userEmail: tp.userEmail,
+          fullName: tp.fullName,
+          deltaPoints: 20,
+          resultingScore: nextScore,
+          reasonType: 'MONTHLY_RECURRING_BONUS',
+          reasonText: 'Cộng +20 điểm tín nhiệm định kỳ hằng tháng (Tối đa 100 điểm)',
+          createdAtIso: timeLabel,
+        });
+        return {
+          ...tp,
+          trustScore: nextScore,
+          isRestrictedMode: nextScore < 60,
+          updatedAtIso: now.toISOString(),
+        };
+      });
+      setTrustScoreHistory((hPrev) => [...bonusHistoryEntries, ...hPrev]);
+      return updated;
+    });
+
+    playUiSoundEffect('SUCCESS');
+    pushRealtimeNotification(
+      '[Cộng +20đ Định kỳ Tháng] Đã cập nhật Điểm Tín nhiệm',
+      'Hệ thống đã cộng +20 điểm tín nhiệm định kỳ hằng tháng cho toàn bộ nhân sự và ghi vào Sổ cái Lịch sử Tín nhiệm.',
+      'TRUST_SCORE_ALERT'
+    );
+  }, [playUiSoundEffect, pushRealtimeNotification]);
+
   const handleUpdateEquipmentStatus = (
     equipmentId: string,
     nextStatus: EquipmentStatusType
@@ -1502,6 +1745,184 @@ const MainWorkspaceRoutes: React.FC = () => {
       body: JSON.stringify({ status: nextStatus }),
     }).catch(() => {});
   };
+
+  // Nhân viên / Quản lý gửi Báo lỗi Thiết bị từ trang Tổ chức & Phòng ban lên Admin
+  const handleSubmitEquipmentFaultReport = useCallback(
+    (equipmentId: string, roomCode: string, faultReason: string) => {
+      const targetEq = equipmentsList.find((e) => e.equipmentId === equipmentId);
+      const reporterEmail = userSession?.userProfile.userEmail || 'employee.dev@spotmatrix.vn';
+      const reporterName = userSession?.userProfile.fullName || 'Nhân sự Nội bộ';
+      const reporterRole = userSession?.userProfile.role || 'EMPLOYEE';
+      const nowStr = `${new Date().toLocaleTimeString('vi-VN')} • Hôm nay`;
+
+      const newReport: EquipmentFaultReportItem = {
+        reportId: `FLT-${Date.now().toString().slice(-4)}`,
+        equipmentId,
+        equipmentCode: targetEq?.equipmentCode || equipmentId,
+        equipmentName: targetEq?.equipmentName || `Thiết bị phòng ${roomCode}`,
+        roomCode,
+        reporterEmail,
+        reporterName,
+        reporterRole,
+        faultReason,
+        reportStatus: 'PENDING_ADMIN',
+        createdAtIso: nowStr,
+      };
+
+      setEquipmentFaultReports((prev) => [newReport, ...prev]);
+      setEquipmentsList((prev) =>
+        prev.map((eq) =>
+          eq.equipmentId === equipmentId
+            ? {
+                ...eq,
+                lastReportedReason: faultReason,
+                lastReportedByEmail: reporterEmail,
+              }
+            : eq
+        )
+      );
+
+      playUiSoundEffect('NOTIFICATION');
+
+      // Thông báo cho cả người báo lỗi và SYS_ADMIN
+      pushRealtimeNotification(
+        `[Báo lỗi Thiết bị Phòng ${roomCode}] Chờ Admin xác nhận`,
+        `${reporterName} đã báo lỗi thiết bị "${
+          targetEq?.equipmentName || equipmentId
+        }" tại phòng ${roomCode}. Lý do: "${faultReason}". Hệ thống đã chuyển phiếu đến SYS_ADMIN.`,
+        'EQUIPMENT_FAULT_ALERT',
+        roomCode,
+        undefined,
+        'all'
+      );
+
+      recordRealtimeAuditLog(
+        'POLICY_CONFIG_UPDATED',
+        reporterEmail,
+        roomCode,
+        `[Báo lỗi Thiết bị] ${reporterName} (${reporterEmail}) báo lỗi ${
+          targetEq?.equipmentCode || equipmentId
+        } tại ${roomCode}: "${faultReason}".`
+      );
+    },
+    [equipmentsList, userSession, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+  );
+
+  // Admin duyệt Báo lỗi Thiết bị -> Chuyển sang REPORTED_BROKEN -> MAINTENANCE -> AVAILABLE hoặc REJECT
+  const handleEquipmentFaultDecision = useCallback(
+    (
+      reportId: string,
+      decision: 'CONFIRM_BROKEN' | 'START_MAINTENANCE' | 'MARK_FIXED' | 'REJECT'
+    ) => {
+      const targetReport = equipmentFaultReports.find((r) => r.reportId === reportId);
+      if (!targetReport) return;
+
+      const adminName = userSession?.userProfile.username || 'Systemadmin123';
+      const handledAtStr = `${new Date().toLocaleTimeString('vi-VN')} • Hôm nay`;
+
+      const nextReportStatus: EquipmentFaultReportItem['reportStatus'] =
+        decision === 'CONFIRM_BROKEN'
+          ? 'CONFIRMED_BROKEN'
+          : decision === 'START_MAINTENANCE'
+          ? 'IN_MAINTENANCE'
+          : decision === 'MARK_FIXED'
+          ? 'RESOLVED_AVAILABLE'
+          : 'REJECTED';
+
+      const nextEqStatus: EquipmentStatusType =
+        decision === 'CONFIRM_BROKEN'
+          ? 'REPORTED_BROKEN'
+          : decision === 'START_MAINTENANCE'
+          ? 'MAINTENANCE'
+          : 'AVAILABLE';
+
+      setEquipmentFaultReports((prev) =>
+        prev.map((r) =>
+          r.reportId === reportId
+            ? {
+                ...r,
+                reportStatus: nextReportStatus,
+                handledByAdmin: adminName,
+                handledAtIso: handledAtStr,
+              }
+            : r
+        )
+      );
+
+      setEquipmentsList((prev) =>
+        prev.map((eq) =>
+          eq.equipmentId === targetReport.equipmentId
+            ? { ...eq, status: nextEqStatus }
+            : eq
+        )
+      );
+
+      playUiSoundEffect(decision === 'REJECT' ? 'CLICK' : 'SUCCESS');
+
+      const statusLabelMap = {
+        CONFIRM_BROKEN: 'Đã xác nhận Báo hỏng (Chờ kỹ thuật bảo trì)',
+        START_MAINTENANCE: 'Đang bảo trì / sửa chữa tại phòng',
+        MARK_FIXED: 'Đã sửa xong — Chuyển về Sử dụng được',
+        REJECT: 'Từ chối báo lỗi — Thiết bị hoạt động bình thường',
+      };
+
+      pushRealtimeNotification(
+        `[Cập nhật Thiết bị ${targetReport.roomCode}] ${statusLabelMap[decision]}`,
+        `Quản trị viên @${adminName} đã xử lý phiếu ${reportId} (${targetReport.equipmentName}): ${statusLabelMap[decision]}.`,
+        'EQUIPMENT_FAULT_ALERT',
+        targetReport.roomCode,
+        undefined,
+        targetReport.reporterEmail
+      );
+    },
+    [equipmentFaultReports, userSession, playUiSoundEffect, pushRealtimeNotification]
+  );
+
+  // AI Tự động Xử lý & Điều phối Bảo trì Thiết bị cho Admin
+  const handleTriggerAiAutoProcessFaults = useCallback(() => {
+    const nowStr = `${new Date().toLocaleTimeString('vi-VN')} • AI Auto-Triage`;
+
+    setEquipmentFaultReports((prev) =>
+      prev.map((r) => {
+        if (r.reportStatus === 'PENDING_ADMIN' || r.reportStatus === 'CONFIRMED_BROKEN') {
+          return {
+            ...r,
+            reportStatus: 'IN_MAINTENANCE',
+            handledByAdmin: 'AURA-X AI Auto-Triage',
+            handledAtIso: nowStr,
+          };
+        }
+        if (r.reportStatus === 'IN_MAINTENANCE') {
+          return {
+            ...r,
+            reportStatus: 'RESOLVED_AVAILABLE',
+            handledByAdmin: 'AURA-X AI Auto-Triage',
+            handledAtIso: nowStr,
+          };
+        }
+        return r;
+      })
+    );
+
+    setEquipmentsList((prev) =>
+      prev.map((eq) => {
+        if (eq.status === 'REPORTED_BROKEN' || eq.status === 'BROKEN') {
+          return { ...eq, status: 'MAINTENANCE' };
+        }
+        if (eq.status === 'MAINTENANCE') {
+          return { ...eq, status: 'AVAILABLE' };
+        }
+        return eq;
+      })
+    );
+
+    playUiSoundEffect('SUCCESS');
+    pushRealtimeNotification(
+      '[AURA-X AI Tự động Điều phối Thiết bị]',
+      'AI đã tự động duyệt các phiếu báo hỏng sang trạng thái Đang bảo trì và nghiệm thu các thiết bị hoàn tất bảo trì sang Sử dụng được.',
+      'EQUIPMENT_FAULT_ALERT'
+    );
+  }, [playUiSoundEffect, pushRealtimeNotification]);
 
   const handleCancelBooking = useCallback(
     (bookingId: string, viaQrScan = false, customCancelTimeText?: string) => {
@@ -1624,7 +2045,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [bookingsList, handlePenalizeNoShowBooking]);
 
-  // Chức năng dành riêng cho SYS_ADMIN: Đổi Role người dùng giữa EMPLOYEE và MANAGER (Role SYS_ADMIN chỉ tạo từ DB/Backend)
+  // Chức năng dành riêng cho SYS_ADMIN: Đổi Role người dùng giữa EMPLOYEE và MANAGER
   const handleChangeUserRole = (
     username: string,
     targetUserEmail: string,
@@ -1752,8 +2173,9 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   };
 
+  // Chỉ SYS_ADMIN mới được phép Tạo / Sửa / Xóa Phòng ban
   const handleUpsertDepartment = (dept: OrganizationDepartmentItem) => {
-    if (userSession?.userProfile.role === 'EMPLOYEE') return;
+    if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
     setDepartmentsList((prev) => {
       const idx = prev.findIndex((d) => d.departmentId === dept.departmentId);
       if (idx >= 0) {
@@ -1772,7 +2194,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleDeleteDepartment = (departmentId: string) => {
-    if (userSession?.userProfile.role === 'EMPLOYEE') return;
+    if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
     setDepartmentsList((prev) => prev.filter((d) => d.departmentId !== departmentId));
     playUiSoundEffect('CLICK');
     fetch(`/api/v1/organization/departments/${encodeURIComponent(departmentId)}`, {
@@ -1845,6 +2267,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
   };
 
+  // MANAGER và SYS_ADMIN được phép Tạo / Đổi tên / Quản lý thành viên Nhóm (Squad)
   const handleUpsertGroup = (group: OrganizationGroupItem) => {
     if (userSession?.userProfile.role === 'EMPLOYEE') return;
     setGroupsList((prev) => {
@@ -1874,6 +2297,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleToggleGroupMember = (groupId: string, targetUserEmail: string) => {
+    if (userSession?.userProfile.role === 'EMPLOYEE') return;
     const cleanEmail = targetUserEmail.trim().toLowerCase();
     setGroupsList((prev) =>
       prev.map((g) => {
@@ -1902,6 +2326,80 @@ const MainWorkspaceRoutes: React.FC = () => {
     ).catch(() => {});
   };
 
+  // Hành động AI dành riêng cho SYS_ADMIN: Đổi tên Phòng ban đồng bộ toàn hệ thống
+  const handleAiRenameDepartment = useCallback(
+    (departmentId: string, newDepartmentName: string) => {
+      if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
+      const targetDept = departmentsList.find((d) => d.departmentId === departmentId);
+      if (!targetDept) return;
+      const oldName = targetDept.departmentName;
+
+      setDepartmentsList((prev) =>
+        prev.map((d) =>
+          d.departmentId === departmentId
+            ? { ...d, departmentName: newDepartmentName, updatedAtIso: new Date().toISOString() }
+            : d
+        )
+      );
+
+      setGroupsList((prev) =>
+        prev.map((g) =>
+          g.departmentName.toLowerCase() === oldName.toLowerCase()
+            ? { ...g, departmentName: newDepartmentName }
+            : g
+        )
+      );
+
+      setTrustProfiles((prev) =>
+        prev.map((tp) =>
+          tp.departmentName.toLowerCase() === oldName.toLowerCase()
+            ? { ...tp, departmentName: newDepartmentName }
+            : tp
+        )
+      );
+
+      setManagedUsers((prev) =>
+        prev.map((u) =>
+          u.departmentName.toLowerCase() === oldName.toLowerCase()
+            ? { ...u, departmentName: newDepartmentName }
+            : u
+        )
+      );
+
+      playUiSoundEffect('SUCCESS');
+      pushRealtimeNotification(
+        '[AURA-X AI] Đã đổi tên Phòng ban',
+        `Đã đổi tên phòng ban "${oldName}" thành "${newDepartmentName}" trên toàn bộ hệ thống.`,
+        'SYSTEM_POLICY'
+      );
+    },
+    [userSession, departmentsList, playUiSoundEffect, pushRealtimeNotification]
+  );
+
+  // Hành động AI dành riêng cho SYS_ADMIN: Đổi trạng thái thiết bị hàng loạt theo Tầng hoặc Phòng
+  const handleAiBatchUpdateEquipmentStatus = useCallback(
+    (targetRoomCodes: string[], nextStatus: EquipmentStatusType) => {
+      if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
+      const codeSet = new Set(targetRoomCodes.map((c) => c.toUpperCase()));
+
+      setEquipmentsList((prev) =>
+        prev.map((eq) =>
+          codeSet.has((eq.assignedNodeId || '').toUpperCase())
+            ? { ...eq, status: nextStatus }
+            : eq
+        )
+      );
+
+      playUiSoundEffect('SUCCESS');
+      pushRealtimeNotification(
+        `[AURA-X AI] Đã cập nhật Thiết bị (${targetRoomCodes.length} phòng)`,
+        `Đã chuyển trạng thái thiết bị thuộc [${targetRoomCodes.join(', ')}] sang [${nextStatus}].`,
+        'EQUIPMENT_FAULT_ALERT'
+      );
+    },
+    [userSession, playUiSoundEffect, pushRealtimeNotification]
+  );
+
   // Đa ngôn ngữ cho cả Sidebar, Header và Menu Avatar
   const sidebarItems = [
     {
@@ -1928,14 +2426,36 @@ const MainWorkspaceRoutes: React.FC = () => {
     {
       id: 'ORGANIZATION' as ActiveSidebarPage,
       label: webLanguage === 'en' ? 'Organization & Teams' : webLanguage === 'ja' ? '組織・部署・グループ' : 'Tổ chức & Phòng ban',
-      sub: webLanguage === 'en' ? '1 Dept & Sub-Groups' : webLanguage === 'ja' ? '単一部署・専門グループ' : 'Phòng ban duy nhất & Đa nhóm',
+      sub: webLanguage === 'en' ? '1 Dept & Fault Report' : webLanguage === 'ja' ? '部署・設備故障報告' : 'Phòng ban & Báo lỗi Thiết bị',
       icon: Building2,
       adminOnly: false,
     },
     {
       id: 'DATAMANAGER' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Equipment & Trust' : webLanguage === 'ja' ? '設備・信頼スコア' : 'Thiết bị & Tín nhiệm',
-      sub: webLanguage === 'en' ? '25 Rooms Devices & Score' : webLanguage === 'ja' ? '全25室設備・信頼スコア' : 'Thiết bị 25 phòng & Điểm số',
+      label:
+        userSession?.userProfile.role === 'SYS_ADMIN'
+          ? webLanguage === 'en'
+            ? 'Equipment & Trust'
+            : webLanguage === 'ja'
+            ? '設備・信頼スコア'
+            : 'Thiết bị & Tín nhiệm'
+          : webLanguage === 'en'
+          ? 'Personal Trust Score'
+          : webLanguage === 'ja'
+          ? '個人信頼スコア履歴'
+          : 'Điểm & Lịch sử Tín nhiệm',
+      sub:
+        userSession?.userProfile.role === 'SYS_ADMIN'
+          ? webLanguage === 'en'
+            ? '25 Rooms Devices & Score'
+            : webLanguage === 'ja'
+            ? '全25室設備・信頼スコア'
+            : 'Thiết bị 25 phòng & Điểm số'
+          : webLanguage === 'en'
+          ? '+20 Monthly & QR Ledger'
+          : webLanguage === 'ja'
+          ? '毎月+20・QR加減点履歴'
+          : 'Cộng +20đ/tháng & Sổ cái QR',
       icon: Database,
       adminOnly: false,
     },
@@ -2083,7 +2603,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       playUiSoundEffect('CLICK');
                       navigate('/welcome');
                     }}
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600/15 via-blue-600/15 to-emerald-500/15 hover:from-indigo-600 hover:to-emerald-500 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
+                    className="w-full py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
                   >
                     <span>
                       {webLanguage === 'en'
@@ -2160,7 +2680,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       }}
                       className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition ${
                         audioSettings.lofiEnabled
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : isDark
                           ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
                           : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
@@ -2313,7 +2833,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                               <span className="text-slate-400 flex items-center gap-1.5">
                                 <Award className="w-3.5 h-3.5" /> Trust Score:
                               </span>
-                              <strong className="font-extrabold text-teal-600 dark:text-teal-400">
+                              <strong className="font-extrabold text-indigo-600 dark:text-indigo-400">
                                 {userSession.userProfile.trustScore} pts
                               </strong>
                             </p>
@@ -2379,7 +2899,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                               isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
                             }`}
                           >
-                            <Settings className="w-4 h-4 text-teal-600" />
+                            <Settings className="w-4 h-4 text-indigo-600" />
                             <span>
                               {webLanguage === 'en'
                                 ? 'System Settings & Security'
@@ -2511,6 +3031,8 @@ const MainWorkspaceRoutes: React.FC = () => {
                       groupsList={groupsList}
                       trustProfiles={trustProfiles}
                       bookingsList={bookingsList}
+                      equipmentsList={equipmentsList}
+                      workspaceNodes={workspaceNodes}
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
@@ -2528,6 +3050,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                         setActivePage('BOOKING');
                         playUiSoundEffect('CLICK');
                       }}
+                      onSubmitEquipmentFaultReport={handleSubmitEquipmentFaultReport}
                     />
                   )}
 
@@ -2555,13 +3078,18 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <DataOverviewPages
                       workspaceNodes={workspaceNodes}
                       equipmentsList={equipmentsList}
+                      equipmentFaultReports={equipmentFaultReports}
                       trustProfiles={trustProfiles}
+                      trustScoreHistory={trustScoreHistory}
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       userEmail={userSession.userProfile.userEmail}
                       webLanguage={webLanguage}
                       isDark={isDark}
                       onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
+                      onHandleEquipmentFaultDecision={handleEquipmentFaultDecision}
+                      onTriggerAiAutoProcessFaults={handleTriggerAiAutoProcessFaults}
+                      onTriggerMonthlyTrustBonus={handleTriggerMonthlyTrustBonus}
                     />
                   )}
 
@@ -2674,12 +3202,43 @@ const MainWorkspaceRoutes: React.FC = () => {
                 bookingsList={bookingsList}
                 equipmentsList={equipmentsList}
                 trustProfiles={trustProfiles}
+                trustScoreHistory={trustScoreHistory}
                 departmentsList={departmentsList}
                 groupsList={groupsList}
                 auditLogs={auditLogs}
                 userProfile={userSession.userProfile}
                 webLanguage={webLanguage}
                 isDark={isDark}
+                onAiNavigateAndPrefillBooking={(node, slot) => {
+                  handleNavigateToBookingWithSlot(node, {
+                    dateIso: slot.dateIso,
+                    start: slot.start,
+                    end: slot.end,
+                    purposeNote: slot.purposeNote,
+                    approvalRequestReason: slot.approvalRequestReason,
+                  });
+                }}
+                onAiExecuteDirectBooking={(node, slot) => {
+                  handleQuickBooking(
+                    node,
+                    userSession.userProfile.userEmail,
+                    slot.purposeNote,
+                    node.nodeCode,
+                    {
+                      dateIso: slot.dateIso,
+                      start: slot.start,
+                      end: slot.end,
+                      approvalRequestReason: slot.approvalRequestReason,
+                      recurringOption: 'NONE',
+                      occurrenceDates: [slot.dateIso],
+                      lockVersion: (node.lockVersion || 1) + 1,
+                    }
+                  );
+                }}
+                onAiUpsertGroup={handleUpsertGroup}
+                onAiToggleGroupMember={handleToggleGroupMember}
+                onAiRenameDepartment={handleAiRenameDepartment}
+                onAiBatchUpdateEquipmentStatus={handleAiBatchUpdateEquipmentStatus}
               />
             </div>
           )
