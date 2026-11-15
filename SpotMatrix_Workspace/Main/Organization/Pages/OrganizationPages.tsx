@@ -15,7 +15,7 @@ import {
   ArrowRightLeft,
   Search,
   Lock,
-  Eye,
+  ArrowRight,
 } from 'lucide-react';
 import {
   BookingPayloadItem,
@@ -23,8 +23,13 @@ import {
   OrganizationGroupItem,
   UserRoleType,
   UserTrustProfileItem,
+  WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
-import { DepartmentGroupsPanel } from '../Groups/DepartmentGroupsPanel';
+import { formatPersonDisplayNameForLocale } from '../Groups/DepartmentGroupsPanel';
+import {
+  DepartmentDetailPages,
+  formatFloorLocationForLocale,
+} from './DepartmentDetailPages';
 
 export interface OrganizationPagesProps {
   departmentsList: OrganizationDepartmentItem[];
@@ -34,6 +39,7 @@ export interface OrganizationPagesProps {
   userEmail: string;
   userRole: UserRoleType;
   userDepartment: string;
+  webLanguage?: WebLanguageCodeType;
   isDark: boolean;
   onUpsertDepartment: (dept: OrganizationDepartmentItem) => void;
   onDeleteDepartment: (departmentId: string) => void;
@@ -59,7 +65,6 @@ const STANDARD_FLOOR_LOCATIONS = [
   'Toàn bộ 5 Tầng Tòa nhà',
 ];
 
-// Danh mục nhân sự mở rộng của công ty để chọn Quản lý / Thêm thành viên thực tế
 const EXTENDED_COMPANY_DIRECTORY: UserTrustProfileItem[] = [
   {
     userEmail: 'sysadmin@spotmatrix.vn',
@@ -140,6 +145,183 @@ const EXTENDED_COMPANY_DIRECTORY: UserTrustProfileItem[] = [
   },
 ];
 
+const ORG_I18N: Record<
+  WebLanguageCodeType,
+  {
+    title: string;
+    roleBadgeAdmin: string;
+    roleBadgeManager: string;
+    roleBadgeEmployee: string;
+    subTitle: string;
+    tab1: (c: number) => string;
+    tab2: string;
+    loggedAccountLabel: string;
+    singleDeptLabel: string;
+    employeeReadOnlyHint: string;
+    searchDeptPlaceholder: string;
+    createDeptBtn: string;
+    createGroupBtn: string;
+    openDetailPageBtn: string;
+    managerLabel: string;
+    floorZoneLabel: string;
+    membersCount: (c: number) => string;
+    groupsCount: (c: number) => string;
+    addMemberBtn: string;
+    searchEmpPlaceholder: string;
+    noGroupYet: string;
+    matrixTitle: string;
+    matrixSub: string;
+    colMember: string;
+    colRole: string;
+    colSingleDept: string;
+    colJoinedGroups: string;
+    unassignedOpt: string;
+    hallEventsCardTitle: string;
+    lockedOtherDeptLabel: (d: string) => string;
+    joinedBadge: string;
+    modalDeptCodeLabel: string;
+    modalDeptNameLabel: string;
+    modalDeptDescPlaceholder: string;
+    modalGroupCodeLabel: string;
+    modalGroupDeptLabel: string;
+    modalGroupNamePlaceholder: string;
+    saveBtn: string;
+  }
+> = {
+  vi: {
+    title: 'Cơ cấu Tổ chức — Quản lý Phòng ban & Các Nhóm Chuyên biệt Trực thuộc',
+    roleBadgeAdmin: 'SYS_ADMIN • Toàn quyền Tạo / Sửa / Xóa Phòng ban & Nhóm',
+    roleBadgeManager: 'MANAGER • Được phép Tạo Phòng ban & Quản lý Nhóm',
+    roleBadgeEmployee: 'EMPLOYEE • Chế độ Chỉ Xem (Nhân viên không được tạo Phòng ban)',
+    subTitle:
+      'Bấm vào từng Phòng ban để chuyển sang Trang Chi tiết Phòng ban riêng biệt • Chỉ Quản lý (MANAGER) và Admin (SYS_ADMIN) mới có quyền tạo Phòng ban.',
+    tab1: (c) => `Danh sách Phòng ban (${c})`,
+    tab2: 'Ma trận Thành viên & Sự kiện Hội trường (Admin)',
+    loggedAccountLabel: 'Tài khoản đang đăng nhập:',
+    singleDeptLabel: 'Phòng ban duy nhất của bạn:',
+    employeeReadOnlyHint:
+      'Vai trò Nhân viên (EMPLOYEE) chỉ có quyền xem thông tin phòng ban, không thể tạo hoặc chỉnh sửa.',
+    searchDeptPlaceholder: 'Tìm phòng ban, mã, quản lý...',
+    createDeptBtn: 'Tạo Phòng ban Mới',
+    createGroupBtn: 'Tạo Nhóm Mới',
+    openDetailPageBtn: 'Mở Trang Chi Tiết Phòng Ban',
+    managerLabel: 'Quản lý Phụ trách:',
+    floorZoneLabel: 'Khu vực Tầng Hoạt động:',
+    membersCount: (c) => `${c} nhân sự`,
+    groupsCount: (c) => `${c} nhóm chuyên biệt`,
+    addMemberBtn: '+ Thêm Thành viên',
+    searchEmpPlaceholder: 'Tìm nhân viên theo tên, email...',
+    noGroupYet: 'Chưa vào nhóm',
+    matrixTitle:
+      'Bảng Kiểm chứng Quan hệ: 1 Phòng ban Duy nhất & Đa Nhóm Chuyên biệt (SYS_ADMIN)',
+    matrixSub: 'Chỉ System Admin mới nhìn thấy bảng điều phối tổng thể này.',
+    colMember: 'Nhân sự',
+    colRole: 'Vai trò',
+    colSingleDept: 'Phòng ban Duy nhất (1)',
+    colJoinedGroups: 'Các Nhóm Tham gia (Cùng Phòng ban)',
+    unassignedOpt: '-- Chưa phân bổ phòng ban --',
+    hallEventsCardTitle:
+      'Sự kiện Hội trường Tầng 5 (H-01) & Phân quyền Phòng ban',
+    lockedOtherDeptLabel: (d) => `Không thể chỉ định (${d})`,
+    joinedBadge: 'Đã thuộc phòng ban',
+    modalDeptCodeLabel: 'Mã Phòng ban',
+    modalDeptNameLabel: 'Tên Phòng ban',
+    modalDeptDescPlaceholder: 'Mô tả chức năng và phạm vi hoạt động của phòng ban...',
+    modalGroupCodeLabel: 'Mã Nhóm (Squad)',
+    modalGroupDeptLabel: 'Phòng ban Trực thuộc',
+    modalGroupNamePlaceholder: 'Nhập tên nhóm chuyên môn...',
+    saveBtn: 'Lưu thông tin',
+  },
+  en: {
+    title: 'Organization Structure — Departments & Specialized Sub-Groups',
+    roleBadgeAdmin: 'SYS_ADMIN • Full Create / Edit / Delete Access',
+    roleBadgeManager: 'MANAGER • Authorized to Create Departments & Manage Groups',
+    roleBadgeEmployee: 'EMPLOYEE • Read-Only Mode (Employees cannot create Departments)',
+    subTitle:
+      'Click any Department card to open its dedicated Department Detail Page • Only Managers and System Admins can create or modify Departments.',
+    tab1: (c) => `Department Directory (${c})`,
+    tab2: 'Member Matrix & Hall Events (Admin)',
+    loggedAccountLabel: 'Signed-in Account:',
+    singleDeptLabel: 'Your Assigned Department:',
+    employeeReadOnlyHint:
+      'Employees (EMPLOYEE) have read-only access and cannot create or modify departments.',
+    searchDeptPlaceholder: 'Search department, code, manager...',
+    createDeptBtn: 'New Department',
+    createGroupBtn: 'New Sub-Group',
+    openDetailPageBtn: 'Open Department Detail Page',
+    managerLabel: 'Department Manager:',
+    floorZoneLabel: 'Primary Floor Zone:',
+    membersCount: (c) => `${c} members`,
+    groupsCount: (c) => `${c} sub-groups`,
+    addMemberBtn: '+ Add Member',
+    searchEmpPlaceholder: 'Search employee by name, email...',
+    noGroupYet: 'No group yet',
+    matrixTitle:
+      'Single-Department & Multi-Squad Assignment Matrix (SYS_ADMIN Exclusive)',
+    matrixSub: 'Only System Administrators can view and reassign company-wide memberships.',
+    colMember: 'Employee',
+    colRole: 'Role',
+    colSingleDept: 'Assigned Department (1)',
+    colJoinedGroups: 'Joined Sub-Groups (Same Dept)',
+    unassignedOpt: '-- Unassigned --',
+    hallEventsCardTitle:
+      'Floor 5 Colosseum Hall (H-01) Events & Department Access',
+    lockedOtherDeptLabel: (d) => `Locked (${d})`,
+    joinedBadge: 'Joined',
+    modalDeptCodeLabel: 'Department Code',
+    modalDeptNameLabel: 'Department Name',
+    modalDeptDescPlaceholder: 'Describe department responsibilities and scope...',
+    modalGroupCodeLabel: 'Sub-Group Code',
+    modalGroupDeptLabel: 'Parent Department',
+    modalGroupNamePlaceholder: 'Enter specialized sub-group name...',
+    saveBtn: 'Save Changes',
+  },
+  ja: {
+    title: '組織構造 — 部署管理および所属専門グループ',
+    roleBadgeAdmin: 'SYS_ADMIN • 全部署＆グループ作成・編集・削除権限',
+    roleBadgeManager: 'MANAGER • 部署作成および専門グループ管理が可能',
+    roleBadgeEmployee: 'EMPLOYEE • 閲覧専用モード（一般社員は部署を作成できません）',
+    subTitle:
+      '各部署カードをクリックすると専用の「部署詳細ページ」へ移動します • 部署の作成・編集はマネージャー(MANAGER)と管理者(SYS_ADMIN)のみ可能です。',
+    tab1: (c) => `部署一覧 (${c})`,
+    tab2: 'メンバー連携＆5階ホールイベント (Admin)',
+    loggedAccountLabel: 'ログイン中のアカウント:',
+    singleDeptLabel: 'あなたの所属部署:',
+    employeeReadOnlyHint:
+      '一般社員 (EMPLOYEE) は閲覧のみ可能で、部署やグループの作成・変更はできません。',
+    searchDeptPlaceholder: '部署名、コード、マネージャーで検索...',
+    createDeptBtn: '新規部署を作成',
+    createGroupBtn: '新規グループを作成',
+    openDetailPageBtn: '部署詳細ページを開く',
+    managerLabel: '担当マネージャー:',
+    floorZoneLabel: '主要活動フロア:',
+    membersCount: (c) => `${c} 名の社員`,
+    groupsCount: (c) => `${c} 専門グループ`,
+    addMemberBtn: '+ メンバー追加',
+    searchEmpPlaceholder: '氏名、メールアドレスで社員を検索...',
+    noGroupYet: '未参加',
+    matrixTitle:
+      '単一部署・複数専門グループ配属マトリックス (SYS_ADMIN 専用)',
+    matrixSub: '全社員の所属部署と専門グループの対応関係を管理します。',
+    colMember: '社員名',
+    colRole: 'ロール',
+    colSingleDept: '単一所属部署 (1)',
+    colJoinedGroups: '参加専門グループ (同一部署内)',
+    unassignedOpt: '-- 未配属 --',
+    hallEventsCardTitle:
+      '5階コロッセオ大ホール (H-01) イベント＆部署別アクセス権限',
+    lockedOtherDeptLabel: (d) => `指定不可 (${d})`,
+    joinedBadge: '所属済',
+    modalDeptCodeLabel: '部署コード',
+    modalDeptNameLabel: '部署名',
+    modalDeptDescPlaceholder: '部署の業務内容や管轄範囲を入力してください...',
+    modalGroupCodeLabel: 'グループコード',
+    modalGroupDeptLabel: '管轄部署',
+    modalGroupNamePlaceholder: '専門グループ名を入力...',
+    saveBtn: '保存する',
+  },
+};
+
 export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   departmentsList,
   groupsList,
@@ -148,6 +330,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   userEmail,
   userRole,
   userDepartment,
+  webLanguage = 'vi',
   isDark,
   onUpsertDepartment,
   onDeleteDepartment,
@@ -158,17 +341,19 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   onNavigateToHallBooking,
 }) => {
   const isSysAdmin = userRole === 'SYS_ADMIN';
+  // Quy tắc RBAC: Chỉ Quản lý (MANAGER) và Admin (SYS_ADMIN) mới có thể tác động tạo/chỉnh sửa Phòng ban & Nhóm. Nhân viên (EMPLOYEE) không tạo được!
+  const canCreateOrEditOrg = userRole === 'SYS_ADMIN' || userRole === 'MANAGER';
+  const t = ORG_I18N[webLanguage] || ORG_I18N.vi;
 
   const [activeTab, setActiveTab] = useState<'DEPARTMENTS' | 'MEMBER_MATRIX'>(
     'DEPARTMENTS'
   );
   const [deptSearchQuery, setDeptSearchQuery] = useState<string>('');
-  const [selectedDetailDeptId, setSelectedDetailDeptId] = useState<string>(
-    departmentsList[0]?.departmentId || 'DEPT-GOV-01'
-  );
-  const [detailEmployeeSearch, setDetailEmployeeSearch] = useState<string>('');
+  // Khi null -> hiển thị trang Danh sách Phòng ban; khi có ID -> chuyển hẳn sang Trang Chi tiết Phòng ban riêng biệt
+  const [openedDetailPageDeptId, setOpenedDetailPageDeptId] = useState<
+    string | null
+  >(null);
 
-  // Hợp nhất danh bạ nhân sự từ trustProfiles + danh bạ mở rộng
   const allCompanyMembers = useMemo(() => {
     const map = new Map<string, UserTrustProfileItem>();
     EXTENDED_COMPANY_DIRECTORY.forEach((item) => {
@@ -189,18 +374,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     return Array.from(map.values());
   }, [trustProfiles, departmentsList]);
 
-  // Danh sách nhân sự hiển thị theo Role: Admin thấy tất cả (bao gồm chính mình), Role khác KHÔNG thấy SYS_ADMIN
   const roleFilteredCompanyMembers = useMemo(() => {
     return allCompanyMembers.filter(
       (m) => isSysAdmin || m.role !== 'SYS_ADMIN'
     );
   }, [allCompanyMembers, isSysAdmin]);
 
-  // Lọc Phòng ban theo Role + Thanh tìm kiếm
   const visibleDepartments = useMemo(() => {
     const q = deptSearchQuery.trim().toLowerCase();
     return departmentsList.filter((dept) => {
-      if (!isSysAdmin) {
+      if (userRole === 'EMPLOYEE') {
         const isMyDept =
           dept.departmentName.trim().toLowerCase() ===
             userDepartment.trim().toLowerCase() ||
@@ -217,20 +400,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
         dept.floorLocation.toLowerCase().includes(q)
       );
     });
-  }, [departmentsList, isSysAdmin, userDepartment, userEmail, deptSearchQuery]);
+  }, [departmentsList, userRole, userDepartment, userEmail, deptSearchQuery]);
 
-  // Phòng ban đang được bấm chọn để xem chi tiết Nhân viên & Nhóm con
-  const activeDetailDepartment = useMemo(() => {
+  const activeOpenedDepartment = useMemo(() => {
+    if (!openedDetailPageDeptId) return null;
     return (
-      visibleDepartments.find((d) => d.departmentId === selectedDetailDeptId) ||
-      visibleDepartments[0] ||
+      departmentsList.find((d) => d.departmentId === openedDetailPageDeptId) ||
       null
     );
-  }, [visibleDepartments, selectedDetailDeptId]);
+  }, [departmentsList, openedDetailPageDeptId]);
 
-  // ============================================================================
-  // MODAL 1: TẠO / CHỈNH SỬA PHÒNG BAN (CHỌN QUẢN LÝ & TẦNG TỪ DROPDOWN)
-  // ============================================================================
   const [isDeptModalOpen, setIsDeptModalOpen] = useState<boolean>(false);
   const [editingDept, setEditingDept] =
     useState<OrganizationDepartmentItem | null>(null);
@@ -248,6 +427,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   >('INDIGO');
 
   const openCreateDepartmentModal = () => {
+    if (!canCreateOrEditOrg) return;
     setEditingDept(null);
     setDeptCodeInput(`DEPT-${Math.floor(Math.random() * 90 + 10)}`);
     setDeptNameInput('');
@@ -261,6 +441,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   };
 
   const openEditDepartmentModal = (dept: OrganizationDepartmentItem) => {
+    if (!canCreateOrEditOrg) return;
     setEditingDept(dept);
     setDeptCodeInput(dept.departmentCode);
     setDeptNameInput(dept.departmentName);
@@ -277,7 +458,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
   const handleSaveDepartmentForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!deptNameInput.trim()) return;
+    if (!canCreateOrEditOrg || !deptNameInput.trim()) return;
 
     const selectedMgr = allCompanyMembers.find(
       (m) =>
@@ -304,13 +485,9 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     };
 
     onUpsertDepartment(payload);
-    setSelectedDetailDeptId(payload.departmentId);
     setIsDeptModalOpen(false);
   };
 
-  // ============================================================================
-  // MODAL 2: TẠO / CHỈNH SỬA NHÓM CON THUỘC PHÒNG BAN (CHỌN TRƯỞNG NHÓM TỪ DANH SÁCH)
-  // ============================================================================
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
   const [editingGroup, setEditingGroup] =
     useState<OrganizationGroupItem | null>(null);
@@ -335,9 +512,10 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   }, [allCompanyMembers, grpDeptInput]);
 
   const openCreateGroupModal = (preselectedDeptName?: string) => {
+    if (!canCreateOrEditOrg) return;
     const targetDeptName =
       preselectedDeptName ||
-      activeDetailDepartment?.departmentName ||
+      activeOpenedDepartment?.departmentName ||
       departmentsList[0]?.departmentName ||
       'Product & Engineering';
     const deptMembers = allCompanyMembers.filter(
@@ -359,6 +537,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   };
 
   const openEditGroupModal = (group: OrganizationGroupItem) => {
+    if (!canCreateOrEditOrg) return;
     setEditingGroup(group);
     setGrpCodeInput(group.groupCode);
     setGrpNameInput(group.groupName);
@@ -371,7 +550,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
   const handleSaveGroupForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!grpNameInput.trim()) return;
+    if (!canCreateOrEditOrg || !grpNameInput.trim()) return;
 
     const selectedLeader = allCompanyMembers.find(
       (m) =>
@@ -401,9 +580,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     setIsGroupModalOpen(false);
   };
 
-  // ============================================================================
-  // MODAL 3: CHỦ ĐỘNG "+ THÊM THÀNH VIÊN VÀO PHÒNG BAN" (LÀM XÁM NGƯỜI ĐÃ CÓ PHÒNG BAN)
-  // ============================================================================
   const [assignMemberModalDept, setAssignMemberModalDept] =
     useState<OrganizationDepartmentItem | null>(null);
   const [assignMemberSearch, setAssignMemberSearch] = useState<string>('');
@@ -430,693 +606,527 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div
-        className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
-          isDark
-            ? 'bg-slate-900/90 border-slate-800'
-            : 'bg-white border-indigo-100/80 shadow-sm'
-        }`}
-      >
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <span className="p-2 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
-              <Building2 className="w-5 h-5" />
-            </span>
-            <h1 className="text-lg font-black tracking-tight">
-              Cơ cấu Tổ chức — Quản lý Phòng ban & Các Nhóm Chuyên biệt Trực thuộc
-            </h1>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
-                isSysAdmin
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
-              }`}
-            >
-              {isSysAdmin
-                ? 'SYS_ADMIN • Toàn quyền Tạo / Sửa / Xóa & Xem Tất cả'
-                : `${userRole} • Chỉ hiển thị Phòng ban & Nhóm của bạn`}
-            </span>
-          </div>
-          <p className="text-xs text-slate-400">
-            Bấm vào từng ô Phòng ban để xem danh sách Nhân viên và các Nhóm chuyên biệt con bên trong • Một người chỉ thuộc duy nhất 1 Phòng ban.
-          </p>
-        </div>
-
-        {/* Nút Chuyển Tab: Tab "Liên kết Thành viên & Sự kiện Hội trường" CHỈ HIỂN THỊ CHO SYS_ADMIN */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab('DEPARTMENTS')}
-            className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition ${
-              activeTab === 'DEPARTMENTS'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : isDark
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+      {/* NẾU ĐANG MỞ TRANG CHI TIẾT PHÒNG BAN -> HIỂN THỊ TRANG CHI TIẾT ĐỘC LẬP */}
+      {activeOpenedDepartment ? (
+        <DepartmentDetailPages
+          department={activeOpenedDepartment}
+          groupsList={groupsList}
+          allCompanyMembers={allCompanyMembers}
+          bookingsList={bookingsList}
+          userEmail={userEmail}
+          userRole={userRole}
+          webLanguage={webLanguage}
+          isDark={isDark}
+          onBackToList={() => setOpenedDetailPageDeptId(null)}
+          onOpenEditDepartment={openEditDepartmentModal}
+          onDeleteDepartment={onDeleteDepartment}
+          onOpenAssignMemberModal={(dept) => {
+            if (!canCreateOrEditOrg) return;
+            setAssignMemberModalDept(dept);
+            setAssignMemberSearch('');
+          }}
+          onRemoveMemberFromDepartment={(targetEmail) => {
+            if (!canCreateOrEditOrg) return;
+            onAssignUserSingleDepartment(targetEmail, 'Chưa phân bổ');
+          }}
+          onOpenCreateGroupForDept={(deptName) => openCreateGroupModal(deptName)}
+          onOpenEditGroup={openEditGroupModal}
+          onDeleteGroup={onDeleteGroup}
+          onToggleGroupMember={onToggleGroupMember}
+          onNavigateToHallBooking={onNavigateToHallBooking}
+        />
+      ) : (
+        <>
+          {/* Header Banner */}
+          <div
+            className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
+              isDark
+                ? 'bg-slate-900/90 border-slate-800'
+                : 'bg-white border-indigo-100/80 shadow-sm'
             }`}
           >
-            <Building2 className="w-3.5 h-3.5" />
-            <span>
-              Phòng ban & Nhóm Trực thuộc ({visibleDepartments.length})
-            </span>
-          </button>
-
-          {isSysAdmin && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('MEMBER_MATRIX')}
-              className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition ${
-                activeTab === 'MEMBER_MATRIX'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : isDark
-                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5" />
-              <span>Liên kết Thành viên & Sự kiện Hội trường (Admin)</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Thanh Trạng thái Cá nhân & Tìm kiếm Phòng ban */}
-      <div
-        className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
-          isDark
-            ? 'bg-indigo-950/30 border-indigo-500/30'
-            : 'bg-indigo-50/70 border-indigo-200/70'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-          <div className="text-xs">
-            <span className="text-slate-500 dark:text-slate-400">
-              Tài khoản đang đăng nhập:{' '}
-            </span>
-            <strong>{userEmail}</strong>
-            <span className="mx-2 text-slate-400">•</span>
-            <span className="text-slate-500 dark:text-slate-400">
-              Phòng ban duy nhất của bạn:{' '}
-            </span>
-            <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold">
-              {userDepartment}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative w-60">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={deptSearchQuery}
-              onChange={(e) => setDeptSearchQuery(e.target.value)}
-              placeholder="Tìm phòng ban, mã, quản lý..."
-              className={`w-full pl-8 pr-7 py-2 rounded-xl border text-xs font-semibold outline-none ${
-                isDark
-                  ? 'bg-slate-950 border-slate-800 text-white'
-                  : 'bg-white border-slate-200 text-slate-900'
-              }`}
-            />
-            {deptSearchQuery && (
-              <button
-                type="button"
-                onClick={() => setDeptSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {isSysAdmin && (
-            <>
-              <button
-                type="button"
-                onClick={openCreateDepartmentModal}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tạo Phòng ban Mới</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreateGroupModal()}
-                className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tạo Nhóm Mới</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* TAB 1: DANH SÁCH Ô PHÒNG BAN & BẢNG CHI TIẾT PHÒNG BAN (NHÂN VIÊN + CÁC NHÓM CON) */}
-      {activeTab === 'DEPARTMENTS' && (
-        <div className="space-y-6">
-          {/* Lưới các Ô Phòng ban: Click vào ô nào sẽ mở chi tiết Nhân sự & Nhóm của Phòng ban đó */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {visibleDepartments.map((dept) => {
-              const isSelectedCard =
-                activeDetailDepartment?.departmentId === dept.departmentId;
-
-              const deptMembers = roleFilteredCompanyMembers.filter(
-                (m) =>
-                  dept.memberEmails.some(
-                    (em) =>
-                      em.trim().toLowerCase() ===
-                      m.userEmail.trim().toLowerCase()
-                  ) ||
-                  m.departmentName.trim().toLowerCase() ===
-                    dept.departmentName.trim().toLowerCase()
-              );
-
-              const subGroupsCount = groupsList.filter(
-                (g) =>
-                  g.departmentName.trim().toLowerCase() ===
-                  dept.departmentName.trim().toLowerCase()
-              ).length;
-
-              return (
-                <div
-                  key={dept.departmentId}
-                  onClick={() => setSelectedDetailDeptId(dept.departmentId)}
-                  className={`p-5 rounded-3xl border flex flex-col justify-between space-y-4 cursor-pointer transition-all ${
-                    isSelectedCard
-                      ? isDark
-                        ? 'bg-slate-900 border-indigo-500 ring-2 ring-indigo-500/30 shadow-lg'
-                        : 'bg-white border-indigo-600 ring-2 ring-indigo-500/20 shadow-lg'
-                      : isDark
-                      ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                      : 'bg-white border-indigo-100/80 hover:border-indigo-300 shadow-sm'
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="p-2 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+                  <Building2 className="w-5 h-5" />
+                </span>
+                <h1 className="text-lg font-black tracking-tight">{t.title}</h1>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                    isSysAdmin
+                      ? 'bg-indigo-600 text-white'
+                      : userRole === 'MANAGER'
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
                   }`}
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-indigo-600 text-white">
-                            {dept.departmentCode}
-                          </span>
-                          <h3 className="text-base font-black">
-                            {dept.departmentName}
-                          </h3>
-                          {isSelectedCard && (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-300 flex items-center gap-1">
-                              <Eye className="w-3 h-3" />
-                              Đang xem chi tiết
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {dept.description}
-                        </p>
-                      </div>
+                  {isSysAdmin
+                    ? t.roleBadgeAdmin
+                    : userRole === 'MANAGER'
+                    ? t.roleBadgeManager
+                    : t.roleBadgeEmployee}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">{t.subTitle}</p>
+            </div>
 
-                      {isSysAdmin && (
-                        <div
-                          className="flex items-center gap-1.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openEditDepartmentModal(dept)}
-                            className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            title="Chỉnh sửa Phòng ban"
-                          >
-                            <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onDeleteDepartment(dept.departmentId)
-                            }
-                            className="p-2 rounded-xl border border-rose-500/20 text-rose-500 hover:bg-rose-500/10"
-                            title="Xóa Phòng ban"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setActiveTab('DEPARTMENTS')}
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition ${
+                  activeTab === 'DEPARTMENTS'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                    : isDark
+                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>{t.tab1(visibleDepartments.length)}</span>
+              </button>
 
-                    <div
-                      className={`p-3.5 rounded-2xl border grid grid-cols-2 gap-3 text-xs ${
-                        isDark
-                          ? 'bg-slate-950/70 border-slate-800'
-                          : 'bg-slate-50 border-slate-200/70'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">
-                          Quản lý Phụ trách:
-                        </span>
-                        <strong className="font-bold">
-                          {dept.managerName}
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">
-                          Khu vực Tầng Hoạt động:
-                        </span>
-                        <strong className="font-bold text-indigo-500">
-                          {dept.floorLocation}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="flex items-center gap-3 text-xs font-extrabold">
-                        <span className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
-                          <Users className="w-3.5 h-3.5" />
-                          {deptMembers.length} nhân sự
-                        </span>
-                        <span className="text-slate-300 dark:text-slate-700">
-                          •
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
-                          <Layers className="w-3.5 h-3.5" />
-                          {subGroupsCount} nhóm chuyên biệt
-                        </span>
-                      </div>
-
-                      {isSysAdmin && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAssignMemberModalDept(dept);
-                            setAssignMemberSearch('');
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>+ Thêm Thành viên</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+              {isSysAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('MEMBER_MATRIX')}
+                  className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition ${
+                    activeTab === 'MEMBER_MATRIX'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                      : isDark
+                      ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                  <span>{t.tab2}</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* BẢNG CHI TIẾT PHÒNG BAN ĐANG CHỌN: HIỂN THỊ NHÂN VIÊN TRONG PHÒNG BAN & CÁC NHÓM CON */}
-          {activeDetailDepartment && (
-            <div
-              className={`p-6 rounded-3xl border space-y-6 ${
-                isDark
-                  ? 'bg-slate-900/95 border-indigo-500/40 shadow-xl'
-                  : 'bg-white border-indigo-200 shadow-md'
-              }`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-indigo-600 text-white">
-                      CHI TIẾT PHÒNG BAN
-                    </span>
-                    <h3 className="text-base font-black">
-                      {activeDetailDepartment.departmentName} (
-                      {activeDetailDepartment.departmentCode})
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Quản lý: <strong>{activeDetailDepartment.managerName}</strong> • Tầng hoạt động:{' '}
-                    <strong className="text-indigo-500">
-                      {activeDetailDepartment.floorLocation}
-                    </strong>
-                  </p>
-                </div>
+          {/* Thanh Trạng thái Cá nhân & Tìm kiếm / Nút Tạo Phòng ban (Chỉ mở cho MANAGER & SYS_ADMIN) */}
+          <div
+            className={`p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+              isDark
+                ? 'bg-indigo-950/30 border-indigo-500/30'
+                : 'bg-indigo-50/70 border-indigo-200/70'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <div className="text-xs">
+                <span className="text-slate-500 dark:text-slate-400">
+                  {t.loggedAccountLabel}{' '}
+                </span>
+                <strong>{userEmail}</strong>
+                <span className="mx-2 text-slate-400">•</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  {t.singleDeptLabel}{' '}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold">
+                  {userDepartment}
+                </span>
+              </div>
+            </div>
 
-                {isSysAdmin && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative w-60">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={deptSearchQuery}
+                  onChange={(e) => setDeptSearchQuery(e.target.value)}
+                  placeholder={t.searchDeptPlaceholder}
+                  className={`w-full pl-8 pr-7 py-2 rounded-xl border text-xs font-semibold outline-none ${
+                    isDark
+                      ? 'bg-slate-950 border-slate-800 text-white'
+                      : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+                />
+                {deptSearchQuery && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setAssignMemberModalDept(activeDetailDepartment);
-                      setAssignMemberSearch('');
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                    onClick={() => setDeptSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
                   >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>+ Thêm Thành viên từ Danh sách Công ty</span>
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* PHẦN A: DANH SÁCH NHÂN SỰ TRỰC THUỘC PHÒNG BAN NÀY */}
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                    <Users className="w-4 h-4" />
-                    1. Danh sách Nhân viên thuộc Phòng ban “
-                    {activeDetailDepartment.departmentName}”
-                  </h4>
+              {canCreateOrEditOrg ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={openCreateDepartmentModal}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t.createDeptBtn}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCreateGroupModal()}
+                    className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t.createGroupBtn}</span>
+                  </button>
+                </>
+              ) : (
+                <span className="px-3 py-1.5 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-bold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>{t.employeeReadOnlyHint}</span>
+                </span>
+              )}
+            </div>
+          </div>
 
-                  <div className="relative w-56">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={detailEmployeeSearch}
-                      onChange={(e) => setDetailEmployeeSearch(e.target.value)}
-                      placeholder="Tìm nhân viên trong phòng ban..."
-                      className={`w-full pl-8 pr-3 py-1.5 rounded-xl border text-xs font-semibold outline-none ${
-                        isDark
-                          ? 'bg-slate-950 border-slate-800 text-white'
-                          : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
-                    />
-                  </div>
-                </div>
+          {/* TAB 1: DANH SÁCH THẺ PHÒNG BAN (BẤM VÀO SẼ MỞ TRANG CHI TIẾT PHÒNG BAN RIÊNG) */}
+          {activeTab === 'DEPARTMENTS' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {visibleDepartments.map((dept) => {
+                const deptMembers = roleFilteredCompanyMembers.filter(
+                  (m) =>
+                    dept.memberEmails.some(
+                      (em) =>
+                        em.trim().toLowerCase() ===
+                        m.userEmail.trim().toLowerCase()
+                    ) ||
+                    m.departmentName.trim().toLowerCase() ===
+                      dept.departmentName.trim().toLowerCase()
+                );
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {roleFilteredCompanyMembers
-                    .filter((m) => {
-                      const inThisDept =
-                        activeDetailDepartment.memberEmails.some(
-                          (em) =>
-                            em.trim().toLowerCase() ===
-                            m.userEmail.trim().toLowerCase()
-                        ) ||
-                        m.departmentName.trim().toLowerCase() ===
-                          activeDetailDepartment.departmentName
-                            .trim()
-                            .toLowerCase();
-                      if (!inThisDept) return false;
-                      const q = detailEmployeeSearch.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        m.fullName.toLowerCase().includes(q) ||
-                        m.userEmail.toLowerCase().includes(q) ||
-                        m.role.toLowerCase().includes(q)
-                      );
-                    })
-                    .map((emp) => {
-                      const empGroups = groupsList.filter(
-                        (g) =>
-                          g.departmentName.trim().toLowerCase() ===
-                            activeDetailDepartment.departmentName
-                              .trim()
-                              .toLowerCase() &&
-                          g.memberEmails.some(
-                            (em) =>
-                              em.trim().toLowerCase() ===
-                              emp.userEmail.trim().toLowerCase()
-                          )
-                      );
+                const subGroupsCount = groupsList.filter(
+                  (g) =>
+                    g.departmentName.trim().toLowerCase() ===
+                    dept.departmentName.trim().toLowerCase()
+                ).length;
 
-                      return (
-                        <div
-                          key={emp.userEmail}
-                          className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-2 ${
-                            isDark
-                              ? 'bg-slate-950 border-slate-800'
-                              : 'bg-slate-50 border-slate-200/80'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs font-extrabold truncate">
-                                  {emp.fullName}
-                                </span>
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[9px] font-black ${
-                                    emp.role === 'SYS_ADMIN'
-                                      ? 'bg-rose-500/15 text-rose-500'
-                                      : emp.role === 'MANAGER'
-                                      ? 'bg-indigo-500/15 text-indigo-500'
-                                      : 'bg-teal-500/15 text-teal-600'
-                                  }`}
-                                >
-                                  {emp.role}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                                {emp.userEmail}
-                              </p>
-                            </div>
+                return (
+                  <div
+                    key={dept.departmentId}
+                    onClick={() => setOpenedDetailPageDeptId(dept.departmentId)}
+                    className={`p-5 rounded-3xl border flex flex-col justify-between space-y-4 cursor-pointer transition-all group ${
+                      isDark
+                        ? 'bg-slate-900/90 border-slate-800 hover:border-indigo-500/60 shadow-sm hover:shadow-xl'
+                        : 'bg-white border-indigo-100/80 hover:border-indigo-400 shadow-sm hover:shadow-lg'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-indigo-600 text-white">
+                              {dept.departmentCode}
+                            </span>
+                            <h3 className="text-base font-black group-hover:text-indigo-500 transition">
+                              {dept.departmentName}
+                            </h3>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {dept.description}
+                          </p>
+                        </div>
 
+                        {canCreateOrEditOrg && (
+                          <div
+                            className="flex items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openEditDepartmentModal(dept)}
+                              className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                            </button>
                             {isSysAdmin && (
                               <button
                                 type="button"
                                 onClick={() =>
-                                  onAssignUserSingleDepartment(
-                                    emp.userEmail,
-                                    'Chưa phân bổ'
-                                  )
+                                  onDeleteDepartment(dept.departmentId)
                                 }
-                                className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"
-                                title="Gỡ nhân sự khỏi phòng ban này (về trạng thái Chưa phân bổ)"
+                                className="p-2 rounded-xl border border-rose-500/20 text-rose-500 hover:bg-rose-500/10"
                               >
-                                <X className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
+                        )}
+                      </div>
 
-                          <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center gap-1">
-                            <span className="text-[10px] text-slate-400">
-                              Nhóm tham gia ({empGroups.length}):
-                            </span>
-                            {empGroups.length === 0 ? (
-                              <span className="text-[10px] italic text-slate-400">
-                                Chưa vào nhóm
-                              </span>
-                            ) : (
-                              empGroups.map((eg) => (
-                                <span
-                                  key={eg.groupId}
-                                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-300"
-                                >
-                                  {eg.groupCode}
-                                </span>
-                              ))
+                      <div
+                        className={`p-3.5 rounded-2xl border grid grid-cols-2 gap-3 text-xs ${
+                          isDark
+                            ? 'bg-slate-950/70 border-slate-800'
+                            : 'bg-slate-50 border-slate-200/70'
+                        }`}
+                      >
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">
+                            {t.managerLabel}
+                          </span>
+                          <strong className="font-bold">
+                            {formatPersonDisplayNameForLocale(
+                              dept.managerName,
+                              webLanguage
                             )}
-                          </div>
+                          </strong>
                         </div>
-                      );
-                    })}
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">
+                            {t.floorZoneLabel}
+                          </span>
+                          <strong className="font-bold text-indigo-500">
+                            {formatFloorLocationForLocale(
+                              dept.floorLocation,
+                              webLanguage
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                        <div className="flex items-center gap-3 text-xs font-extrabold">
+                          <span className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                            <Users className="w-3.5 h-3.5" />
+                            {t.membersCount(deptMembers.length)}
+                          </span>
+                          <span className="text-slate-300 dark:text-slate-700">
+                            •
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
+                            <Layers className="w-3.5 h-3.5" />
+                            {t.groupsCount(subGroupsCount)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {canCreateOrEditOrg && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAssignMemberModalDept(dept);
+                                setAssignMemberSearch('');
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-teal-600/15 hover:bg-teal-600 text-teal-600 dark:text-teal-300 hover:text-white text-xs font-extrabold flex items-center gap-1 transition"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>{t.addMemberBtn}</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenedDetailPageDeptId(dept.departmentId);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
+                          >
+                            <span>{t.openDetailPageBtn}</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* TAB 2: MA TRẬN THÀNH VIÊN & SỰ KIỆN HỘI TRƯỜNG (ADMIN) */}
+          {activeTab === 'MEMBER_MATRIX' && isSysAdmin && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div
+                className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
+                  isDark
+                    ? 'bg-slate-900/90 border-slate-800'
+                    : 'bg-white border-indigo-100/80 shadow-sm'
+                }`}
+              >
+                <div>
+                  <h3 className="text-sm font-black">{t.matrixTitle}</h3>
+                  <p className="text-xs text-slate-400">{t.matrixSub}</p>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 uppercase">
+                        <th className="py-2.5 pr-3">{t.colMember}</th>
+                        <th className="py-2.5 px-3">{t.colRole}</th>
+                        <th className="py-2.5 px-3">{t.colSingleDept}</th>
+                        <th className="py-2.5 pl-3">{t.colJoinedGroups}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800">
+                      {allCompanyMembers.map((tp) => {
+                        const userGroups = groupsList.filter(
+                          (g) =>
+                            g.departmentName.trim().toLowerCase() ===
+                              tp.departmentName.trim().toLowerCase() &&
+                            g.memberEmails.some(
+                              (em) =>
+                                em.trim().toLowerCase() ===
+                                tp.userEmail.trim().toLowerCase()
+                            )
+                        );
+                        return (
+                          <tr key={tp.userEmail}>
+                            <td className="py-3 pr-3">
+                              <p className="font-extrabold">
+                                {formatPersonDisplayNameForLocale(
+                                  tp.fullName,
+                                  webLanguage
+                                )}
+                              </p>
+                              <p className="text-[11px] text-slate-400">
+                                {tp.userEmail}
+                              </p>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-500">
+                                {tp.role}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <select
+                                value={tp.departmentName}
+                                onChange={(e) =>
+                                  onAssignUserSingleDepartment(
+                                    tp.userEmail,
+                                    e.target.value
+                                  )
+                                }
+                                className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold ${
+                                  isDark
+                                    ? 'bg-slate-950 border-slate-800 text-indigo-300'
+                                    : 'bg-slate-50 border-slate-200 text-indigo-700'
+                                }`}
+                              >
+                                <option value="Chưa phân bổ">
+                                  {t.unassignedOpt}
+                                </option>
+                                {departmentsList.map((d) => (
+                                  <option
+                                    key={d.departmentId}
+                                    value={d.departmentName}
+                                  >
+                                    {d.departmentName}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="py-3 pl-3">
+                              <div className="flex flex-wrap gap-1">
+                                {userGroups.length === 0 ? (
+                                  <span className="text-[11px] text-slate-400 italic">
+                                    {t.noGroupYet}
+                                  </span>
+                                ) : (
+                                  userGroups.map((ug) => (
+                                    <span
+                                      key={ug.groupId}
+                                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-300"
+                                    >
+                                      {ug.groupName}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              {/* PHẦN B: DANH SÁCH CÁC NHÓM CHUYÊN BIỆT TRỰC THUỘC PHÒNG BAN NÀY (THƯ MỤC GROUPS RIÊNG) */}
-              <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800">
-                <DepartmentGroupsPanel
-                  parentDepartment={activeDetailDepartment}
-                  groupsList={groupsList}
-                  allMembers={allCompanyMembers}
-                  userEmail={userEmail}
-                  userRole={userRole}
-                  isDark={isDark}
-                  onOpenCreateGroupForDept={(deptName) =>
-                    openCreateGroupModal(deptName)
-                  }
-                  onOpenEditGroup={openEditGroupModal}
-                  onDeleteGroup={onDeleteGroup}
-                  onToggleGroupMember={onToggleGroupMember}
-                />
+              <div
+                className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
+                  isDark
+                    ? 'bg-slate-900/90 border-slate-800'
+                    : 'bg-white border-indigo-100/80 shadow-sm'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <h3 className="text-sm font-black">
+                      {t.hallEventsCardTitle}
+                    </h3>
+                  </div>
+                  {onNavigateToHallBooking && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToHallBooking}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
+                    >
+                      H-01
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {hallEventsList.map((ev) => (
+                    <div
+                      key={ev.bookingId}
+                      className={`p-4 rounded-2xl border space-y-2 ${
+                        isDark
+                          ? 'bg-slate-950/70 border-slate-800'
+                          : 'bg-slate-50 border-slate-200/80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-extrabold text-indigo-500 flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {ev.bookingDateIso || 'Today'} ({ev.startTimeIso} –{' '}
+                          {ev.endTimeIso})
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                            ev.approvalStatus === 'APPROVED'
+                              ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
+                              : 'bg-amber-500/15 text-amber-600'
+                          }`}
+                        >
+                          {ev.approvalStatus === 'APPROVED'
+                            ? 'APPROVED'
+                            : 'PENDING'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-bold">{ev.purposeNote}</p>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {(ev.allowedDepartments &&
+                        ev.allowedDepartments.length > 0
+                          ? ev.allowedDepartments
+                          : ['ALL']
+                        ).map((deptName) => (
+                          <span
+                            key={deptName}
+                            className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                          >
+                            ✓ {deptName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* TAB 2 (CHỈ DÀNH RIÊNG CHO SYS_ADMIN): MA TRẬN LIÊN KẾT THÀNH VIÊN & SỰ KIỆN HỘI TRƯỜNG */}
-      {activeTab === 'MEMBER_MATRIX' && isSysAdmin && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div
-            className={`lg:col-span-7 p-6 rounded-3xl border space-y-4 ${
-              isDark
-                ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
-            }`}
-          >
-            <div>
-              <h3 className="text-sm font-black">
-                Bảng Kiểm chứng Quan hệ: 1 Phòng ban Duy nhất & Đa Nhóm Chuyên biệt (SYS_ADMIN)
-              </h3>
-              <p className="text-xs text-slate-400">
-                Chỉ System Admin mới nhìn thấy bảng điều phối tổng thể này.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 uppercase">
-                    <th className="py-2.5 pr-3">Nhân sự</th>
-                    <th className="py-2.5 px-3">Vai trò</th>
-                    <th className="py-2.5 px-3">Phòng ban Duy nhất (1)</th>
-                    <th className="py-2.5 pl-3">
-                      Các Nhóm Tham gia (Cùng Phòng ban)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/60 dark:divide-slate-800">
-                  {allCompanyMembers.map((tp) => {
-                    const userGroups = groupsList.filter(
-                      (g) =>
-                        g.departmentName.trim().toLowerCase() ===
-                          tp.departmentName.trim().toLowerCase() &&
-                        g.memberEmails.some(
-                          (em) =>
-                            em.trim().toLowerCase() ===
-                            tp.userEmail.trim().toLowerCase()
-                        )
-                    );
-                    return (
-                      <tr key={tp.userEmail}>
-                        <td className="py-3 pr-3">
-                          <p className="font-extrabold">{tp.fullName}</p>
-                          <p className="text-[11px] text-slate-400">
-                            {tp.userEmail}
-                          </p>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-500">
-                            {tp.role}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <select
-                            value={tp.departmentName}
-                            onChange={(e) =>
-                              onAssignUserSingleDepartment(
-                                tp.userEmail,
-                                e.target.value
-                              )
-                            }
-                            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold ${
-                              isDark
-                                ? 'bg-slate-950 border-slate-800 text-indigo-300'
-                                : 'bg-slate-50 border-slate-200 text-indigo-700'
-                            }`}
-                          >
-                            <option value="Chưa phân bổ">
-                              -- Chưa phân bổ phòng ban --
-                            </option>
-                            {departmentsList.map((d) => (
-                              <option
-                                key={d.departmentId}
-                                value={d.departmentName}
-                              >
-                                {d.departmentName}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-3 pl-3">
-                          <div className="flex flex-wrap gap-1">
-                            {userGroups.length === 0 ? (
-                              <span className="text-[11px] text-slate-400 italic">
-                                Chưa tham gia nhóm
-                              </span>
-                            ) : (
-                              userGroups.map((ug) => (
-                                <span
-                                  key={ug.groupId}
-                                  className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-300"
-                                >
-                                  {ug.groupName}
-                                </span>
-                              ))
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div
-            className={`lg:col-span-5 p-6 rounded-3xl border space-y-4 ${
-              isDark
-                ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-black">
-                  Sự kiện Hội trường Tầng 5 (H-01) & Phân quyền Phòng ban
-                </h3>
-              </div>
-              {onNavigateToHallBooking && (
-                <button
-                  type="button"
-                  onClick={onNavigateToHallBooking}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
-                >
-                  Đến Hội trường
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {hallEventsList.length === 0 ? (
-                <div className="p-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-xs text-slate-400 text-center">
-                  Hiện chưa có sự kiện thuê Hội trường (H-01) nào.
-                </div>
-              ) : (
-                hallEventsList.map((ev) => (
-                  <div
-                    key={ev.bookingId}
-                    className={`p-4 rounded-2xl border space-y-2 ${
-                      isDark
-                        ? 'bg-slate-950/70 border-slate-800'
-                        : 'bg-slate-50 border-slate-200/80'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-indigo-500 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {ev.bookingDateIso || 'Hôm nay'} ({ev.startTimeIso} –{' '}
-                        {ev.endTimeIso})
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          ev.approvalStatus === 'APPROVED'
-                            ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
-                            : 'bg-amber-500/15 text-amber-600'
-                        }`}
-                      >
-                        {ev.approvalStatus === 'APPROVED'
-                          ? 'ĐÃ PHÊ DUYỆT THUÊ'
-                          : 'CHỜ ADMIN DUYỆT'}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold">{ev.purposeNote}</p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {(ev.allowedDepartments &&
-                      ev.allowedDepartments.length > 0
-                        ? ev.allowedDepartments
-                        : ['Tất cả các Phòng ban']
-                      ).map((deptName) => (
-                        <span
-                          key={deptName}
-                          className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                        >
-                          ✓ {deptName}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CHỦ ĐỘNG "+ THÊM THÀNH VIÊN VÀO PHÒNG BAN" (AI ĐÃ CÓ PHÒNG BAN THÌ XÁM NHẠT KHÔNG THỂ CHỈ ĐỊNH) */}
-      {assignMemberModalDept && isSysAdmin && (
+      {/* MODAL THÊM THÀNH VIÊN VÀO PHÒNG BAN */}
+      {assignMemberModalDept && canCreateOrEditOrg && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div
             className={`w-full max-w-xl p-6 rounded-3xl border shadow-2xl space-y-4 ${
@@ -1128,14 +1138,8 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="text-sm font-black">
-                  Thêm Thành viên vào Phòng ban:{' '}
-                  {assignMemberModalDept.departmentName}
+                  {t.addMemberBtn}: {assignMemberModalDept.departmentName}
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Quy tắc: Mỗi nhân sự chỉ thuộc duy nhất 1 Phòng ban. Những
-                  người đã thuộc phòng ban khác sẽ hiện màu xám nhạt (không thể
-                  chỉ định trùng).
-                </p>
               </div>
               <button
                 type="button"
@@ -1152,7 +1156,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 type="text"
                 value={assignMemberSearch}
                 onChange={(e) => setAssignMemberSearch(e.target.value)}
-                placeholder="Tìm kiếm nhân sự theo tên, email hoặc trạng thái phòng ban..."
+                placeholder={t.searchEmpPlaceholder}
                 className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
@@ -1195,14 +1199,17 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-extrabold">
-                          {person.fullName}
+                          {formatPersonDisplayNameForLocale(
+                            person.fullName,
+                            webLanguage
+                          )}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/15 text-indigo-500">
                           {person.role}
                         </span>
                       </div>
                       <p className="text-[11px] mt-0.5">
-                        {person.userEmail} • Hiện tại:{' '}
+                        {person.userEmail} •{' '}
                         <strong>
                           {person.departmentName || 'Chưa phân bổ'}
                         </strong>
@@ -1212,12 +1219,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     {isAlreadyInThisDept ? (
                       <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center gap-1 shrink-0">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Đã ở Phòng ban này
+                        {t.joinedBadge}
                       </span>
                     ) : hasAnotherDept ? (
                       <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold bg-slate-300/50 dark:bg-slate-800 text-slate-500 flex items-center gap-1 shrink-0">
                         <Lock className="w-3 h-3" />
-                        Không thể chỉ định (Đã thuộc {person.departmentName})
+                        {t.lockedOtherDeptLabel(person.departmentName)}
                       </span>
                     ) : (
                       <button
@@ -1231,7 +1238,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                         className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition shrink-0"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
-                        <span>Chỉ định vào Phòng ban</span>
+                        <span>{t.addMemberBtn}</span>
                       </button>
                     )}
                   </div>
@@ -1245,15 +1252,15 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 onClick={() => setAssignMemberModalDept(null)}
                 className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-extrabold"
               >
-                Đóng
+                OK
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL TẠO / SỬA PHÒNG BAN: CHỌN NGƯỜI QUẢN LÝ & TẦNG HOẠT ĐỘNG TỪ DANH SÁCH */}
-      {isDeptModalOpen && (
+      {/* MODAL TẠO / SỬA PHÒNG BAN */}
+      {isDeptModalOpen && canCreateOrEditOrg && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveDepartmentForm}
@@ -1264,11 +1271,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             }`}
           >
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-black">
-                {editingDept
-                  ? 'Chỉnh sửa Phòng ban Tổ chức'
-                  : 'Thiết lập Phòng ban Tổ chức Mới'}
-              </h3>
+              <h3 className="text-base font-black">{t.createDeptBtn}</h3>
               <button
                 type="button"
                 onClick={() => setIsDeptModalOpen(false)}
@@ -1281,7 +1284,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Mã Phòng ban
+                  {t.modalDeptCodeLabel}
                 </label>
                 <input
                   type="text"
@@ -1297,14 +1300,13 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Tên Phòng ban
+                  {t.modalDeptNameLabel}
                 </label>
                 <input
                   type="text"
                   required
                   value={deptNameInput}
                   onChange={(e) => setDeptNameInput(e.target.value)}
-                  placeholder="VD: Cloud & DevSecOps"
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
                     isDark
                       ? 'bg-slate-950 border-slate-800'
@@ -1317,7 +1319,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Chọn Người Quản lý (Từ Danh sách)
+                  {t.managerLabel}
                 </label>
                 <select
                   value={deptManagerEmailInput}
@@ -1330,14 +1332,18 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 >
                   {allCompanyMembers.map((mem) => (
                     <option key={mem.userEmail} value={mem.userEmail}>
-                      {mem.fullName} ({mem.role})
+                      {formatPersonDisplayNameForLocale(
+                        mem.fullName,
+                        webLanguage
+                      )}{' '}
+                      ({mem.role})
                     </option>
                   ))}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Chọn Tầng Hoạt động Chính
+                  {t.floorZoneLabel}
                 </label>
                 <select
                   value={deptFloorInput}
@@ -1350,7 +1356,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 >
                   {STANDARD_FLOOR_LOCATIONS.map((fl) => (
                     <option key={fl} value={fl}>
-                      {fl}
+                      {formatFloorLocationForLocale(fl, webLanguage)}
                     </option>
                   ))}
                 </select>
@@ -1358,13 +1364,11 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">
-                Mô tả chức năng nhiệm vụ
-              </label>
               <textarea
                 rows={3}
                 value={deptDescInput}
                 onChange={(e) => setDeptDescInput(e.target.value)}
+                placeholder={t.modalDeptDescPlaceholder}
                 className={`w-full px-3.5 py-2 rounded-xl border text-xs ${
                   isDark
                     ? 'bg-slate-950 border-slate-800'
@@ -1375,25 +1379,18 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="flex justify-end gap-2 pt-2">
               <button
-                type="button"
-                onClick={() => setIsDeptModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
-              >
-                Hủy
-              </button>
-              <button
                 type="submit"
                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-md"
               >
-                Lưu Phòng ban lên Database
+                {t.saveBtn}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* MODAL TẠO / SỬA NHÓM CON: CHỌN PHÒNG BAN CHỦ QUẢN & CHỌN TRƯỞNG NHÓM TỪ DANH SÁCH */}
-      {isGroupModalOpen && (
+      {/* MODAL TẠO / SỬA NHÓM CHUYÊN BIỆT */}
+      {isGroupModalOpen && canCreateOrEditOrg && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <form
             onSubmit={handleSaveGroupForm}
@@ -1404,11 +1401,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             }`}
           >
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-black">
-                {editingGroup
-                  ? 'Chỉnh sửa Nhóm Chuyên biệt'
-                  : 'Tạo Nhóm Chuyên biệt Trực thuộc Phòng ban'}
-              </h3>
+              <h3 className="text-base font-black">{t.createGroupBtn}</h3>
               <button
                 type="button"
                 onClick={() => setIsGroupModalOpen(false)}
@@ -1420,7 +1413,9 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold block mb-1">Mã Nhóm</label>
+                <label className="text-xs font-bold block mb-1">
+                  {t.modalGroupCodeLabel}
+                </label>
                 <input
                   type="text"
                   required
@@ -1435,7 +1430,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Thuộc Phòng ban Chủ quản
+                  {t.modalGroupDeptLabel}
                 </label>
                 <select
                   value={grpDeptInput}
@@ -1467,15 +1462,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">
-                Tên Nhóm Chuyên biệt / Dự án
-              </label>
               <input
                 type="text"
                 required
                 value={grpNameInput}
                 onChange={(e) => setGrpNameInput(e.target.value)}
-                placeholder="VD: Nhóm Tối ưu Không gian 3D & AI"
+                placeholder={t.modalGroupNamePlaceholder}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
                   isDark
                     ? 'bg-slate-950 border-slate-800'
@@ -1486,9 +1478,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Chọn Trưởng nhóm (Từ Phòng ban)
-                </label>
                 <select
                   value={grpLeaderEmailInput}
                   onChange={(e) => setGrpLeaderEmailInput(e.target.value)}
@@ -1500,15 +1489,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 >
                   {eligibleGroupLeaders.map((mem) => (
                     <option key={mem.userEmail} value={mem.userEmail}>
-                      {mem.fullName} ({mem.role})
+                      {formatPersonDisplayNameForLocale(
+                        mem.fullName,
+                        webLanguage
+                      )}{' '}
+                      ({mem.role})
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Tag Dự án
-                </label>
                 <input
                   type="text"
                   value={grpTagInput}
@@ -1522,35 +1512,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold block mb-1">
-                Mô tả nhiệm vụ của nhóm
-              </label>
-              <textarea
-                rows={2}
-                value={grpDescInput}
-                onChange={(e) => setGrpDescInput(e.target.value)}
-                className={`w-full px-3.5 py-2 rounded-xl border text-xs ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              />
-            </div>
-
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsGroupModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
-              >
-                Hủy
-              </button>
               <button
                 type="submit"
                 className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-md"
               >
-                Lưu Nhóm lên Database
+                {t.saveBtn}
               </button>
             </div>
           </form>

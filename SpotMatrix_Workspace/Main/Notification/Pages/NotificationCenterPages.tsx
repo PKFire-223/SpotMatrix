@@ -11,12 +11,14 @@ import {
 import {
   NotificationRecordItem,
   UserRoleType,
+  WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
 import { NotificationPanelLayout } from '../Layout/NotificationPanelLayout';
 
 interface NotificationCenterPagesProps {
   notifications: NotificationRecordItem[];
   userRole?: UserRoleType;
+  webLanguage?: WebLanguageCodeType;
   isDark: boolean;
   onSelectAndNavigateNotification: (item: NotificationRecordItem) => void;
   onHandleApprovalDecision?: (bookingId: string, decision: 'APPROVED' | 'REJECTED') => void;
@@ -25,9 +27,63 @@ interface NotificationCenterPagesProps {
   onTriggerTestNotification: (title: string, content: string) => void;
 }
 
+const NOTIF_CENTER_I18N: Record<
+  WebLanguageCodeType,
+  {
+    title: string;
+    sub: string;
+    allBtn: (c: number) => string;
+    unreadBtn: (c: number) => string;
+    markAllBtn: string;
+    testHeader: string;
+    sendTestBtn: string;
+    emptyText: string;
+    approveBtn: string;
+    rejectBtn: string;
+  }
+> = {
+  vi: {
+    title: 'Trung tâm Thông báo & Phê duyệt Yêu cầu Đặt phòng',
+    sub: 'Bấm vào thông báo để đi tới vị trí phòng họp • Quản lý & Admin có thể duyệt yêu cầu kèm lý do trực tiếp tại đây',
+    allBtn: (c) => `Tất cả (${c})`,
+    unreadBtn: (c) => `Chưa đọc (${c})`,
+    markAllBtn: 'Đánh dấu đã đọc hết',
+    testHeader: 'Phát Thông báo Nhắc lịch Nội bộ Nhanh:',
+    sendTestBtn: 'Phát thông báo',
+    emptyText: 'Hiện không có thông báo nào trong danh mục này.',
+    approveBtn: 'Chấp nhận yêu cầu',
+    rejectBtn: 'Từ chối yêu cầu',
+  },
+  en: {
+    title: 'Notification Center & Room Booking Approvals',
+    sub: 'Click any notification to jump to the room • Managers & Admins can approve or reject requests directly here',
+    allBtn: (c) => `All (${c})`,
+    unreadBtn: (c) => `Unread (${c})`,
+    markAllBtn: 'Mark All as Read',
+    testHeader: 'Broadcast Quick Internal Reminder:',
+    sendTestBtn: 'Send Broadcast',
+    emptyText: 'No notifications in this filter.',
+    approveBtn: 'Approve Request',
+    rejectBtn: 'Reject Request',
+  },
+  ja: {
+    title: '通知センター＆会議室予約承認管理',
+    sub: '通知をクリックして該当会議室へ移動 • マネージャーと管理者はここで申請理由を確認し承認・却下できます',
+    allBtn: (c) => `すべて (${c})`,
+    unreadBtn: (c) => `未読 (${c})`,
+    markAllBtn: 'すべて既読にする',
+    testHeader: '社内リマインダー通知のテスト送信:',
+    sendTestBtn: '通知を送信',
+    emptyText: '該当する通知はありません。',
+    approveBtn: '承認する',
+    rejectBtn: '却下する',
+  },
+};
+
 export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = ({
   notifications = [],
   userRole = 'EMPLOYEE',
+  webLanguage = 'vi',
   isDark,
   onSelectAndNavigateNotification,
   onHandleApprovalDecision,
@@ -38,8 +94,9 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
   const [filterMode, setFilterMode] = useState<'ALL' | 'UNREAD'>('ALL');
   const [customTitle, setCustomTitle] = useState('Nhắc lịch Check-in QR phòng M1-01');
   const [customContent, setCustomContent] = useState(
-    'Phòng M1-01 đã nằm trong khung giờ 2 tiếng trước giờ bắt đầu, mời bạn quét mã QR nhận phòng.'
+    'Phòng M1-01 đã nằm trong khung giờ 30 phút trước giờ bắt đầu, mời bạn quét mã QR nhận phòng.'
   );
+  const t = NOTIF_CENTER_I18N[webLanguage] || NOTIF_CENTER_I18N.vi;
 
   const canApprove = userRole === 'MANAGER' || userRole === 'SYS_ADMIN';
   const validNotifications = (Array.isArray(notifications) ? notifications : []).filter(
@@ -65,12 +122,8 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
             <Bell className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-extrabold">
-              Trung tâm Thông báo & Phê duyệt Yêu cầu Đặt phòng
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Bấm vào thông báo để đi tới vị trí phòng họp • Quản lý & Admin có thể duyệt yêu cầu trực tiếp tại đây
-            </p>
+            <h2 className="text-base font-extrabold">{t.title}</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{t.sub}</p>
           </div>
         </div>
 
@@ -87,7 +140,7 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
                 filterMode === 'ALL' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'
               }`}
             >
-              Tất cả ({validNotifications.length})
+              {t.allBtn(validNotifications.length)}
             </button>
             <button
               type="button"
@@ -98,7 +151,7 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
                   : 'text-slate-500'
               }`}
             >
-              Chưa đọc ({validNotifications.filter((n) => !n.isRead).length})
+              {t.unreadBtn(validNotifications.filter((n) => !n.isRead).length)}
             </button>
           </div>
 
@@ -112,21 +165,21 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
             }`}
           >
             <CheckCheck className="w-3.5 h-3.5" />
-            Đánh dấu đã đọc hết
+            {t.markAllBtn}
           </button>
         </div>
       </div>
 
       <div className={`p-4 rounded-2xl border ${cardSurface}`}>
-        <p className="text-xs font-bold mb-2.5 text-slate-500 dark:text-slate-400">
-          Mô phỏng phát Thông báo Realtime:
+        <p className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 mb-3">
+          {t.testHeader}
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           <input
             type="text"
             value={customTitle}
             onChange={(e) => setCustomTitle(e.target.value)}
-            className={`sm:col-span-4 px-3 py-2 rounded-xl border text-xs ${
+            className={`md:col-span-4 px-3.5 py-2 rounded-xl border text-xs font-semibold ${
               isDark
                 ? 'bg-slate-950 border-slate-800 text-slate-100'
                 : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -136,7 +189,7 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
             type="text"
             value={customContent}
             onChange={(e) => setCustomContent(e.target.value)}
-            className={`sm:col-span-6 px-3 py-2 rounded-xl border text-xs ${
+            className={`md:col-span-6 px-3.5 py-2 rounded-xl border text-xs ${
               isDark
                 ? 'bg-slate-950 border-slate-800 text-slate-100'
                 : 'bg-slate-50 border-slate-200 text-slate-800'
@@ -144,106 +197,93 @@ export const NotificationCenterPages: React.FC<NotificationCenterPagesProps> = (
           />
           <button
             type="button"
-            onClick={() => onTriggerTestNotification(customTitle, customContent)}
-            className="sm:col-span-2 py-2 px-3 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-1.5 transition"
+            onClick={() => {
+              if (customTitle.trim()) {
+                onTriggerTestNotification(customTitle.trim(), customContent.trim());
+              }
+            }}
+            className="md:col-span-2 py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition"
           >
             <Send className="w-3.5 h-3.5" />
-            Phát thử
+            {t.sendTestBtn}
           </button>
         </div>
       </div>
 
-      <div
-        className={`rounded-2xl border divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden ${cardSurface}`}
-      >
+      <div className="space-y-3">
         {displayedList.length === 0 ? (
-          <div className="p-10 text-center text-xs text-slate-400">
-            Hiện không có thông báo nào trong danh mục này.
+          <div className={`p-8 rounded-2xl border text-center text-xs text-slate-400 ${cardSurface}`}>
+            {t.emptyText}
           </div>
         ) : (
           displayedList.map((item) => {
             const isApprovalReq = Boolean(item.approvalBookingId);
-            const isPendingApproval = item.approvalHandledStatus === 'PENDING';
+            const isPending = item.approvalHandledStatus === 'PENDING';
 
             return (
               <div
                 key={item.notificationId}
-                className={`p-4 flex flex-col gap-3 transition ${
-                  !item.isRead
-                    ? isDark
-                      ? 'bg-indigo-950/15'
-                      : 'bg-indigo-50/30'
-                    : 'opacity-85'
+                className={`p-4 rounded-2xl border transition ${cardSurface} ${
+                  !item.isRead ? 'ring-1 ring-indigo-500/40' : 'opacity-90'
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-3">
                   <div
                     onClick={() => onSelectAndNavigateNotification(item)}
-                    className="flex items-start gap-3 cursor-pointer flex-1 group"
+                    className="flex-1 cursor-pointer group"
                   >
-                    <span
-                      className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${
-                        !item.isRead ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
-                      }`}
-                    />
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-extrabold group-hover:text-indigo-600 flex items-center gap-1">
-                          {item.titleText}
-                          <ArrowUpRight className="w-3.5 h-3.5 opacity-60" />
-                        </span>
-                        {item.relatedNodeId && (
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
-                            Đi tới: {item.relatedNodeId}
-                          </span>
-                        )}
-                        <span className="text-[11px] text-slate-400">
-                          {new Date(item.createdAtIso).toLocaleString('vi-VN')}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {item.contentText}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      {!item.isRead && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 shrink-0" />
+                      )}
+                      <h3 className="text-sm font-bold group-hover:text-indigo-600 transition flex items-center gap-1.5">
+                        {item.titleText}
+                        <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                      </h3>
                     </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                      {item.contentText}
+                    </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => onDeleteNotification(item.notificationId)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 transition"
-                    title="Xóa thông báo"
+                    className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
                 {isApprovalReq && canApprove && onHandleApprovalDecision && (
-                  <div className="pl-5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3 text-xs">
-                    {isPendingApproval ? (
-                      <>
+                  <div className="mt-3 pt-3 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+                    {isPending ? (
+                      <div className="flex items-center gap-2.5">
                         <button
                           type="button"
                           onClick={() =>
                             onHandleApprovalDecision(item.approvalBookingId!, 'APPROVED')
                           }
-                          className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white font-bold flex items-center gap-1"
+                          className="py-1.5 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Chấp nhận yêu cầu
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {t.approveBtn}
                         </button>
                         <button
                           type="button"
                           onClick={() =>
                             onHandleApprovalDecision(item.approvalBookingId!, 'REJECTED')
                           }
-                          className="px-3.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 font-bold flex items-center gap-1"
+                          className="py-1.5 px-3.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 text-xs font-bold flex items-center gap-1.5"
                         >
-                          <XCircle className="w-3.5 h-3.5" /> Từ chối
+                          <XCircle className="w-3.5 h-3.5" />
+                          {t.rejectBtn}
                         </button>
-                      </>
+                      </div>
                     ) : (
-                      <span className="font-bold text-slate-400">
-                        ✓ Yêu cầu đã được xử lý bởi @{item.approvalHandledBy || 'Quản lý/Admin'} (
-                        {item.approvalHandledStatus === 'APPROVED' ? 'Đã chấp nhận' : 'Đã từ chối'})
+                      <span className="text-xs font-bold text-slate-400">
+                        ✓ @{item.approvalHandledBy || 'Admin'} (
+                        {item.approvalHandledStatus === 'APPROVED' ? 'APPROVED' : 'REJECTED'})
                       </span>
                     )}
                   </div>

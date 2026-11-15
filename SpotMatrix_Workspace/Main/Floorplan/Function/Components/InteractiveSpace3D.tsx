@@ -24,6 +24,87 @@ interface Hovered3DInfo {
   screenY: number;
 }
 
+function createBeveledBoxGeometry(
+  width: number,
+  height: number,
+  depth: number,
+  cornerRadius: number,
+  bevelSize: number
+): THREE.ExtrudeGeometry {
+  const hw = Math.max(0.02, width / 2 - bevelSize);
+  const hd = Math.max(0.02, depth / 2 - bevelSize);
+  const r = Math.min(cornerRadius, hw * 0.45, hd * 0.45);
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-hw + r, -hd);
+  shape.lineTo(hw - r, -hd);
+  shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+  shape.lineTo(hw, hd - r);
+  shape.quadraticCurveTo(hw, hd, hw - r, hd);
+  shape.lineTo(-hw + r, hd);
+  shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+  shape.lineTo(-hw, -hd + r);
+  shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+
+  const extrudeDepth = Math.max(0.01, height - bevelSize * 2);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: extrudeDepth,
+    bevelEnabled: true,
+    bevelSegments: 3,
+    steps: 1,
+    bevelSize,
+    bevelThickness: bevelSize,
+    curveSegments: 12,
+  });
+
+  geometry.rotateX(-Math.PI / 2);
+  geometry.center();
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function buildStudioEnvironmentMap(
+  renderer: THREE.WebGLRenderer,
+  isDarkTheme: boolean
+): THREE.Texture {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+
+  const envScene = new THREE.Scene();
+  envScene.background = new THREE.Color(isDarkTheme ? 0x060b18 : 0xf1f5f9);
+
+  const topLight = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshBasicMaterial({
+      color: isDarkTheme ? 0xe0f2fe : 0xffffff,
+      side: THREE.DoubleSide,
+    })
+  );
+  topLight.position.set(0, 16, 0);
+  topLight.rotation.x = Math.PI / 2;
+  envScene.add(topLight);
+
+  const cyanStrip = new THREE.Mesh(
+    new THREE.PlaneGeometry(24, 6),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide })
+  );
+  cyanStrip.position.set(15, 5, 8);
+  cyanStrip.lookAt(0, 0, 0);
+  envScene.add(cyanStrip);
+
+  const indigoStrip = new THREE.Mesh(
+    new THREE.PlaneGeometry(24, 6),
+    new THREE.MeshBasicMaterial({ color: 0x818cf8, side: THREE.DoubleSide })
+  );
+  indigoStrip.position.set(-15, 6, -8);
+  indigoStrip.lookAt(0, 0, 0);
+  envScene.add(indigoStrip);
+
+  const target = pmrem.fromScene(envScene, 0.03);
+  pmrem.dispose();
+  return target.texture;
+}
+
 export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
   workspaceNodes,
   bookingsList,
@@ -42,14 +123,14 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     startX: 0,
     startY: 0,
     theta: 0.42,
-    phi: 0.88,
-    radius: 20,
+    phi: 0.86,
+    radius: 19.5,
   });
 
   const resetCameraView = () => {
     orbitStateRef.current.theta = activeFloor === 5 ? 0.0 : 0.42;
-    orbitStateRef.current.phi = activeFloor === 5 ? 0.82 : 0.88;
-    orbitStateRef.current.radius = activeFloor === 5 ? 21.5 : 20;
+    orbitStateRef.current.phi = activeFloor === 5 ? 0.8 : 0.86;
+    orbitStateRef.current.radius = activeFloor === 5 ? 20.5 : 19.5;
   };
 
   useEffect(() => {
@@ -60,43 +141,53 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     const height = 450;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(isDark ? 0x0b1120 : 0xf1f5f9);
+    scene.background = new THREE.Color(isDark ? 0x070c18 : 0xeef4ff);
 
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 200);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 200);
     const updateCameraPosition = () => {
       const { theta, phi, radius } = orbitStateRef.current;
       camera.position.x = radius * Math.sin(phi) * Math.sin(theta);
       camera.position.y = radius * Math.cos(phi);
       camera.position.z = radius * Math.sin(phi) * Math.cos(theta);
-      camera.lookAt(0, 0.4, 0);
+      camera.lookAt(0, 0.45, 0);
     };
     updateCameraPosition();
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, isDark ? 0.78 : 0.95));
-    const dirLight = new THREE.DirectionalLight(0xffffff, isDark ? 0.95 : 1.15);
+    const envMapTex = buildStudioEnvironmentMap(renderer, isDark);
+    scene.environment = envMapTex;
+
+    scene.add(new THREE.AmbientLight(0xffffff, isDark ? 0.9 : 1.2));
+    const dirLight = new THREE.DirectionalLight(0xffffff, isDark ? 2.1 : 2.4);
     dirLight.position.set(14, 24, 16);
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 1024;
-    dirLight.shadow.mapSize.height = 1024;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
     const floorWidth = 18.6;
     const floorDepth = 12.4;
-    const slabMat = new THREE.MeshStandardMaterial({
-      color: isDark ? 0x1e293b : 0xf8fafc,
-      roughness: 0.65,
+    const slabMat = new THREE.MeshPhysicalMaterial({
+      color: isDark ? 0x0f172a : 0xf8fafc,
+      roughness: 0.16,
+      metalness: 0.35,
+      clearcoat: 0.9,
     });
     const floorSlab = new THREE.Mesh(
-      new THREE.BoxGeometry(floorWidth, 0.36, floorDepth),
+      createBeveledBoxGeometry(floorWidth, 0.36, floorDepth, 0.45, 0.04),
       slabMat
     );
     floorSlab.position.y = -0.18;
@@ -106,32 +197,34 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     const gridHelper = new THREE.GridHelper(
       floorWidth,
       18,
-      isDark ? 0x334155 : 0xcbd5e1,
+      isDark ? 0x38bdf8 : 0x94a3b8,
       isDark ? 0x1e293b : 0xe2e8f0
     );
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    const outerWallMat = new THREE.MeshStandardMaterial({
-      color: isDark ? 0x334155 : 0xcbd5e1,
-      roughness: 0.5,
+    const outerWallMat = new THREE.MeshPhysicalMaterial({
+      color: isDark ? 0x1e293b : 0xcbd5e1,
+      roughness: 0.25,
+      metalness: 0.4,
+      clearcoat: 0.6,
     });
     const backOuterWall = new THREE.Mesh(
-      new THREE.BoxGeometry(floorWidth, 1.85, 0.18),
+      createBeveledBoxGeometry(floorWidth, 1.85, 0.22, 0.06, 0.02),
       outerWallMat
     );
     backOuterWall.position.set(0, 0.92, -floorDepth / 2);
     scene.add(backOuterWall);
 
     const leftOuterWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 1.85, floorDepth),
+      createBeveledBoxGeometry(0.22, 1.85, floorDepth, 0.06, 0.02),
       outerWallMat
     );
     leftOuterWall.position.set(-floorWidth / 2, 0.92, 0);
     scene.add(leftOuterWall);
 
     const rightOuterWall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 1.85, floorDepth),
+      createBeveledBoxGeometry(0.22, 1.85, floorDepth, 0.06, 0.02),
       outerWallMat
     );
     rightOuterWall.position.set(floorWidth / 2, 0.92, 0);
@@ -142,45 +235,59 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     const getStatusHex = (status: WorkspaceNodeItem['status']) => {
       switch (status) {
         case 'AVAILABLE':
-          return 0x0d9488;
+          return 0x10b981;
         case 'HOLDING':
-          return 0xd97706;
+          return 0xf59e0b;
         case 'RESERVED':
-          return 0x4f46e5;
+          return 0x6366f1;
         case 'OCCUPIED':
-          return 0xe11d48;
+          return 0xf43f5e;
         default:
           return 0x64748b;
       }
     };
 
-    // Tựa lưng đặt tại z = -0.19 để mặt trước ghế luôn hướng về +Z
+    const sharedChairSeatGeo = createBeveledBoxGeometry(0.44, 0.08, 0.44, 0.08, 0.015);
+    const sharedChairBackGeo = createBeveledBoxGeometry(0.44, 0.48, 0.08, 0.08, 0.015);
+    const chromeMat = new THREE.MeshPhysicalMaterial({
+      color: 0x94a3b8,
+      roughness: 0.14,
+      metalness: 0.92,
+      clearcoat: 1.0,
+    });
+
     const createChair3D = (colorHex: number) => {
       const chairGroup = new THREE.Group();
-      const cushionMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.35 });
-      const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+      const cushionMat = new THREE.MeshPhysicalMaterial({
+        color: colorHex,
+        emissive: colorHex,
+        emissiveIntensity: 0.15,
+        roughness: 0.2,
+        metalness: 0.25,
+        clearcoat: 0.8,
+      });
 
-      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.09, 0.46), cushionMat);
+      const seat = new THREE.Mesh(sharedChairSeatGeo, cushionMat);
       seat.position.y = 0.44;
       seat.castShadow = true;
       chairGroup.add(seat);
 
-      const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.52, 0.09), cushionMat);
+      const backrest = new THREE.Mesh(sharedChairBackGeo, cushionMat);
       backrest.position.set(0, 0.72, -0.19);
       backrest.castShadow = true;
       chairGroup.add(backrest);
 
-      const armLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.36), frameMat);
-      armLeft.position.set(-0.24, 0.56, 0.02);
+      const armLeft = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.34), chromeMat);
+      armLeft.position.set(-0.23, 0.56, 0.02);
       chairGroup.add(armLeft);
 
-      const armRight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.22, 0.36), frameMat);
-      armRight.position.set(0.24, 0.56, 0.02);
+      const armRight = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.34), chromeMat);
+      armRight.position.set(0.23, 0.56, 0.02);
       chairGroup.add(armRight);
 
       const pedestal = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.08, 0.42, 12),
-        frameMat
+        new THREE.CylinderGeometry(0.05, 0.07, 0.42, 14),
+        chromeMat
       );
       pedestal.position.y = 0.21;
       chairGroup.add(pedestal);
@@ -188,7 +295,6 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       return chairGroup;
     };
 
-    // Hàm xoay mặt trước của ghế (+Z) hướng thẳng vào tọa độ (targetX, targetZ)
     const orientChairTowardTarget = (
       chairObj: THREE.Object3D,
       chairX: number,
@@ -204,35 +310,33 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         workspaceNodes.find((n) => n.floorLevel === 5) ||
         workspaceNodes[workspaceNodes.length - 1];
 
-      const aisleCarpet = new THREE.Mesh(
-        new THREE.BoxGeometry(1.6, 0.03, 11.8),
-        new THREE.MeshStandardMaterial({ color: 0x312e81, roughness: 0.8 })
-      );
-      aisleCarpet.position.set(0, 0.02, 0);
-      scene.add(aisleCarpet);
-
       const stageCenterZ = -1.6;
       const stageCylinder = new THREE.Mesh(
-        new THREE.CylinderGeometry(2.1, 2.25, 0.28, 48),
-        new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.3 })
+        new THREE.CylinderGeometry(2.15, 2.35, 0.32, 64),
+        new THREE.MeshPhysicalMaterial({
+          color: 0x0f172a,
+          roughness: 0.12,
+          metalness: 0.7,
+          clearcoat: 1.0,
+        })
       );
-      stageCylinder.position.set(0, 0.14, stageCenterZ);
+      stageCylinder.position.set(0, 0.16, stageCenterZ);
       stageCylinder.receiveShadow = true;
       scene.add(stageCylinder);
 
       const stageLedRing = new THREE.Mesh(
-        new THREE.RingGeometry(2.05, 2.22, 48),
-        new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide })
+        new THREE.TorusGeometry(2.2, 0.055, 16, 64),
+        new THREE.MeshBasicMaterial({ color: 0x10b981 })
       );
-      stageLedRing.rotation.x = -Math.PI / 2;
-      stageLedRing.position.set(0, 0.29, stageCenterZ);
+      stageLedRing.rotation.x = Math.PI / 2;
+      stageLedRing.position.set(0, 0.32, stageCenterZ);
       scene.add(stageLedRing);
 
       const lectern = new THREE.Mesh(
-        new THREE.BoxGeometry(0.75, 0.85, 0.45),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.25 })
+        createBeveledBoxGeometry(0.75, 0.85, 0.45, 0.08, 0.02),
+        chromeMat
       );
-      lectern.position.set(0, 0.7, stageCenterZ);
+      lectern.position.set(0, 0.72, stageCenterZ);
       lectern.castShadow = true;
       scene.add(lectern);
 
@@ -240,7 +344,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         4.8,
         4.8,
         2.3,
-        40,
+        64,
         1,
         true,
         Math.PI * 0.72,
@@ -248,8 +352,8 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       );
       const ledArcMat = new THREE.MeshStandardMaterial({
         color: 0x0f172a,
-        emissive: 0x2563eb,
-        emissiveIntensity: 0.45,
+        emissive: 0x38bdf8,
+        emissiveIntensity: 0.65,
         side: THREE.DoubleSide,
       });
       const ledScreen = new THREE.Mesh(ledArcGeo, ledArcMat);
@@ -257,14 +361,16 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       scene.add(ledScreen);
 
       const amphitheaterTiers = [
-        { radius: 3.3, stepHeight: 0.16, count: 7, prefix: 'A' },
-        { radius: 4.7, stepHeight: 0.42, count: 9, prefix: 'B' },
-        { radius: 6.1, stepHeight: 0.68, count: 12, prefix: 'C' },
+        { radius: 3.3, stepHeight: 0.2, count: 7, prefix: 'A' },
+        { radius: 4.7, stepHeight: 0.46, count: 9, prefix: 'B' },
+        { radius: 6.1, stepHeight: 0.74, count: 12, prefix: 'C' },
       ];
 
-      const platformMat = new THREE.MeshStandardMaterial({
-        color: isDark ? 0x334155 : 0xe2e8f0,
-        roughness: 0.6,
+      const platformMat = new THREE.MeshPhysicalMaterial({
+        color: isDark ? 0x1e293b : 0xe2e8f0,
+        roughness: 0.25,
+        metalness: 0.45,
+        clearcoat: 0.8,
       });
 
       amphitheaterTiers.forEach((tier) => {
@@ -276,7 +382,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
           const seatCode = `H01-${tier.prefix}${i + 1}`;
 
           const stepBlock = new THREE.Mesh(
-            new THREE.BoxGeometry(0.95, tier.stepHeight, 0.95),
+            createBeveledBoxGeometry(0.95, tier.stepHeight, 0.95, 0.12, 0.02),
             platformMat
           );
           stepBlock.position.set(sx, tier.stepHeight / 2, sz);
@@ -289,10 +395,9 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
             (tier.prefix === 'A' && i === 3) ||
             (tier.prefix === 'B' && i === 4);
 
-          const chairColor = isBooked ? 0x4f46e5 : 0x0d9488;
+          const chairColor = isBooked ? 0x6366f1 : 0x10b981;
           const chair3D = createChair3D(chairColor);
           chair3D.position.set(sx, tier.stepHeight, sz);
-          // Quay mặt ghế hướng thẳng vào tâm Sân khấu Tròn (0, stageCenterZ)
           orientChairTowardTarget(chair3D, sx, sz, 0, stageCenterZ);
 
           if (hallNode) {
@@ -314,45 +419,25 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
     } else {
       const corridorRunner = new THREE.Mesh(
         new THREE.BoxGeometry(floorWidth - 0.6, 0.02, 1.85),
-        new THREE.MeshStandardMaterial({
-          color: isDark ? 0x0f172a : 0xe2e8f0,
-          roughness: 0.8,
+        new THREE.MeshPhysicalMaterial({
+          color: isDark ? 0x1e1b4b : 0xe0e7ff,
+          roughness: 0.15,
+          metalness: 0.4,
+          clearcoat: 1.0,
         })
       );
       corridorRunner.position.set(0, 0.015, 0);
       scene.add(corridorRunner);
 
-      const interiorWallMat = new THREE.MeshStandardMaterial({
-        color: isDark ? 0x475569 : 0xcbd5e1,
-        roughness: 0.45,
-      });
-      const glassCorridorMat = new THREE.MeshStandardMaterial({
-        color: isDark ? 0x38bdf8 : 0x64748b,
+      const glassCorridorMat = new THREE.MeshPhysicalMaterial({
+        color: isDark ? 0xbae6fd : 0x93c5fd,
         transparent: true,
-        opacity: 0.24,
-        roughness: 0.15,
-      });
-      const doorWoodMat = new THREE.MeshStandardMaterial({
-        color: isDark ? 0x6366f1 : 0x334155,
-        roughness: 0.4,
-      });
-
-      [-3.1, 3.1].forEach((divX) => {
-        const northDivider = new THREE.Mesh(
-          new THREE.BoxGeometry(0.14, 1.65, 5.1),
-          interiorWallMat
-        );
-        northDivider.position.set(divX, 0.82, -3.55);
-        northDivider.castShadow = true;
-        scene.add(northDivider);
-
-        const southDivider = new THREE.Mesh(
-          new THREE.BoxGeometry(0.14, 1.65, 5.1),
-          interiorWallMat
-        );
-        southDivider.position.set(divX, 0.82, 3.55);
-        southDivider.castShadow = true;
-        scene.add(southDivider);
+        opacity: 0.34,
+        roughness: 0.04,
+        metalness: 0.12,
+        transmission: 0.85,
+        ior: 1.5,
+        clearcoat: 1.0,
       });
 
       workspaceNodes.forEach((nodeItem, idx) => {
@@ -370,8 +455,8 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         roomGroup.position.set(roomCenterX, 0, roomCenterZ);
 
         const roomCarpet = new THREE.Mesh(
-          new THREE.BoxGeometry(5.8, 0.03, 4.8),
-          new THREE.MeshStandardMaterial({
+          createBeveledBoxGeometry(5.8, 0.06, 4.8, 0.2, 0.015),
+          new THREE.MeshPhysicalMaterial({
             color: isSelected
               ? isDark
                 ? 0x1e1b4b
@@ -379,41 +464,34 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
               : isDark
               ? 0x1e293b
               : 0xffffff,
-            roughness: 0.5,
+            roughness: 0.2,
+            clearcoat: 0.8,
           })
         );
-        roomCarpet.position.y = 0.02;
+        roomCarpet.position.y = 0.03;
         roomGroup.add(roomCarpet);
 
         const localCorridorZ = corridorWallZ - roomCenterZ;
         const leftGlassPanel = new THREE.Mesh(
-          new THREE.BoxGeometry(3.6, 1.65, 0.1),
+          new THREE.BoxGeometry(3.6, 1.65, 0.08),
           glassCorridorMat
         );
         leftGlassPanel.position.set(-1.1, 0.82, localCorridorZ);
         roomGroup.add(leftGlassPanel);
 
         const rightGlassPanel = new THREE.Mesh(
-          new THREE.BoxGeometry(1.1, 1.65, 0.1),
+          new THREE.BoxGeometry(1.1, 1.65, 0.08),
           glassCorridorMat
         );
         rightGlassPanel.position.set(2.35, 0.82, localCorridorZ);
         roomGroup.add(rightGlassPanel);
 
-        const doorLeaf = new THREE.Mesh(
-          new THREE.BoxGeometry(0.95, 1.5, 0.07),
-          doorWoodMat
-        );
-        doorLeaf.position.set(1.25, 0.75, localCorridorZ + (isNorthWing ? -0.25 : 0.25));
-        doorLeaf.rotation.y = isNorthWing ? 0.55 : -0.55;
-        roomGroup.add(doorLeaf);
-
         const tvWall = new THREE.Mesh(
-          new THREE.BoxGeometry(0.08, 0.85, 1.65),
+          createBeveledBoxGeometry(0.09, 0.88, 1.7, 0.05, 0.015),
           new THREE.MeshStandardMaterial({
             color: 0x0f172a,
             emissive: statusColor,
-            emissiveIntensity: 0.4,
+            emissiveIntensity: 0.65,
           })
         );
         tvWall.position.set(-2.75, 0.95, 0);
@@ -424,10 +502,12 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         if (nodeItem.zoneType === 'COLLAB_HUB') {
           const tableRadius = seatCap >= 8 ? 1.25 : 1.0;
           const roundTable = new THREE.Mesh(
-            new THREE.CylinderGeometry(tableRadius, tableRadius, 0.1, 32),
-            new THREE.MeshStandardMaterial({
-              color: isDark ? 0x334155 : 0xf1f5f9,
-              roughness: 0.3,
+            new THREE.CylinderGeometry(tableRadius, tableRadius, 0.1, 40),
+            new THREE.MeshPhysicalMaterial({
+              color: isDark ? 0xe2e8f0 : 0xffffff,
+              roughness: 0.1,
+              metalness: 0.3,
+              clearcoat: 1.0,
             })
           );
           roundTable.position.y = 0.68;
@@ -435,8 +515,8 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
           roomGroup.add(roundTable);
 
           const basePole = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.25, 0.4, 0.65, 20),
-            new THREE.MeshStandardMaterial({ color: 0x475569 })
+            new THREE.CylinderGeometry(0.25, 0.4, 0.65, 24),
+            chromeMat
           );
           basePole.position.y = 0.32;
           roomGroup.add(basePole);
@@ -449,7 +529,6 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
             const cx = Math.cos(ang) * chairDist;
             const cz = Math.sin(ang) * chairDist;
             ch.position.set(cx, 0, cz);
-            // Quay mặt ghế hướng thẳng vào tâm bàn tròn (0, 0)
             orientChairTowardTarget(ch, cx, cz, 0, 0);
             roomGroup.add(ch);
           }
@@ -459,10 +538,12 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
           const tableWid = seatCap <= 4 ? 0.95 : 1.2;
 
           const rectTable = new THREE.Mesh(
-            new THREE.BoxGeometry(tableLen, 0.1, tableWid),
-            new THREE.MeshStandardMaterial({
-              color: isDark ? 0x334155 : 0xf8fafc,
-              roughness: 0.3,
+            createBeveledBoxGeometry(tableLen, 0.1, tableWid, 0.14, 0.02),
+            new THREE.MeshPhysicalMaterial({
+              color: isDark ? 0xe2e8f0 : 0xffffff,
+              roughness: 0.1,
+              metalness: 0.3,
+              clearcoat: 1.0,
             })
           );
           rectTable.position.y = 0.68;
@@ -472,7 +553,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
           [-tableLen / 2 + 0.25, tableLen / 2 - 0.25].forEach((lx) => {
             const leg = new THREE.Mesh(
               new THREE.BoxGeometry(0.12, 0.65, tableWid - 0.3),
-              new THREE.MeshStandardMaterial({ color: 0x475569 })
+              chromeMat
             );
             leg.position.set(lx, 0.32, 0);
             roomGroup.add(leg);
@@ -519,14 +600,17 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
         }
 
         const statusOrb = new THREE.Mesh(
-          new THREE.SphereGeometry(0.18, 16, 16),
+          new THREE.OctahedronGeometry(0.18, 0),
           new THREE.MeshStandardMaterial({
             color: statusColor,
             emissive: statusColor,
-            emissiveIntensity: 0.65,
+            emissiveIntensity: 0.85,
+            roughness: 0.1,
+            metalness: 0.8,
+            flatShading: true,
           })
         );
-        statusOrb.position.y = 1.75;
+        statusOrb.position.y = 1.78;
         roomGroup.add(statusOrb);
 
         roomGroup.userData = { nodeItem };
@@ -633,6 +717,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       domElem.removeEventListener('wheel', handleWheel);
+      envMapTex.dispose();
       renderer.dispose();
     };
   }, [workspaceNodes, bookingsList, selectedNodeId, activeFloor, isDark, onSelectWorkspaceNode]);
@@ -657,8 +742,8 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-sm">
             <Move3d className="w-3.5 h-3.5" />
             {activeFloor === 5
-              ? 'Mô hình 3D Tầng 5 — Hội trường Đấu trường La Mã'
-              : `Mô hình 3D 6 Phòng họp — Tầng ${activeFloor}`}
+              ? 'Mô hình 3D PBR Tầng 5 — Hội trường Đấu trường La Mã'
+              : `Mô hình 3D PBR 6 Phòng họp — Tầng ${activeFloor}`}
           </span>
           <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
             Giữ chuột trái xoay 360° • Click vào từng phòng để xem Slot trống
@@ -667,7 +752,7 @@ export const InteractiveSpace3D: React.FC<InteractiveSpace3DProps> = ({
 
         <div className="flex items-center gap-3 text-xs font-semibold">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-teal-600" /> Còn trống
+            <span className="w-2.5 h-2.5 rounded-full bg-teal-500" /> Còn trống
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Giữ / Chờ duyệt

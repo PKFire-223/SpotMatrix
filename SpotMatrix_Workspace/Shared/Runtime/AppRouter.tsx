@@ -24,6 +24,7 @@ import {
   Award,
   Music,
   VolumeX,
+  Globe,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
@@ -50,11 +51,22 @@ import {
   BookingCalendarPages,
   BookingTimeWindowInput,
 } from '../../Main/Booking/Pages/BookingCalendarPages';
-import { QrCheckinConfirmPages } from '../../Main/Booking/Pages/QrCheckinConfirmPages';
+import {
+  QR_BROADCAST_CHANNEL_NAME,
+  QR_STORAGE_EVENT_KEY,
+  QrCheckinConfirmPages,
+  QrRealtimeSyncPayload,
+} from '../../Main/Booking/Pages/QrCheckinConfirmPages';
+import {
+  buildNormalizedMeetingDateRange,
+  generateQrCheckinToken,
+} from '../../Main/Booking/Function/Validators/BookingValidator';
 import {
   AuthenticatedUserSession,
   LoginPages,
 } from '../../Main/Auth/Pages/LoginPages';
+import { LandingShowcasePages } from '../../Main/Auth/Pages/LandingShowcasePages';
+import { SpotMatrixAiCloudWidget } from '../../Ai/Function/Components/SpotMatrixAiCloudWidget';
 import {
   ProfilePages,
   UserProfileCustomization,
@@ -764,6 +776,8 @@ const MainWorkspaceRoutes: React.FC = () => {
       approvalStatus: 'APPROVED',
       approvedByUsername: 'Systemadmin123',
       checkedInAtIso: '12:45:10 • Hôm nay',
+      checkedInTimestampMs: Date.now() - 3600 * 1000,
+      qrToken: 'QR-SMX-H01A3-BK2026002-CHECKIN',
     },
   ]);
 
@@ -1082,6 +1096,26 @@ const MainWorkspaceRoutes: React.FC = () => {
     const approvedTimeStr = new Date().toLocaleTimeString('vi-VN');
     playUiSoundEffect(decision === 'APPROVED' ? 'SUCCESS' : 'ERROR');
 
+    const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+    if (targetBk && decision === 'REJECTED') {
+      const matchedNode = workspaceNodes.find((n) => n.nodeCode === targetBk.nodeId);
+      if (matchedNode) {
+        setWorkspaceNodes((prev) =>
+          prev.map((n) =>
+            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+          )
+        );
+      }
+      pushRealtimeNotification(
+        `[Từ chối yêu cầu] Đặt phòng ${targetBk.nodeId}`,
+        `Yêu cầu đặt vị trí ${targetBk.nodeId} (${targetBk.startTimeIso} – ${targetBk.endTimeIso}) không được phê duyệt bởi @${actorUsername}. Đơn đã được chuyển vào Lịch sử Đặt phòng.`,
+        'BOOKING_EVENT',
+        targetBk.nodeId,
+        undefined,
+        targetBk.userEmail
+      );
+    }
+
     setBookingsList((prev) =>
       prev.map((b) =>
         b.bookingId === bookingId
@@ -1090,6 +1124,8 @@ const MainWorkspaceRoutes: React.FC = () => {
               approvalStatus: decision,
               approvedByUsername: actorUsername,
               approvedAtIso: approvedTimeStr,
+              rejectedAtIso: decision === 'REJECTED' ? approvedTimeStr : null,
+              rejectedAtTimestampMs: decision === 'REJECTED' ? Date.now() : null,
               bookingStatus: decision === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED',
             }
           : b
@@ -1255,11 +1291,13 @@ const MainWorkspaceRoutes: React.FC = () => {
       startTimeIso: timeWindow?.start || '08:00',
       endTimeIso: timeWindow?.end || '10:00',
       purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
+      approvalRequestReason: timeWindow?.approvalRequestReason,
       recurringOption: timeWindow?.recurringOption || 'NONE',
       occurrenceDates: timeWindow?.occurrenceDates || [baseDate],
       lockVersion: timeWindow?.lockVersion || (targetNode.lockVersion || 1) + 1,
       bookingStatus: 'CONFIRMED',
       approvalStatus: needsApproval ? 'PENDING_APPROVAL' : 'APPROVED',
+      qrToken: generateQrCheckinToken(codeToBook, newBookingId),
       approvedByUsername: needsApproval
         ? null
         : userSession?.userProfile.username || 'Systemadmin123',
@@ -1297,9 +1335,12 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
 
     if (needsApproval) {
+      const reasonSuffix = timeWindow?.approvalRequestReason
+        ? ` Lý do xin phép: "${timeWindow.approvalRequestReason}".`
+        : "";
       pushRealtimeNotification(
         `[Cần Phê Duyệt] Yêu cầu đặt ${codeToBook}`,
-        `Nhân viên @${userSession?.userProfile.username} xin đặt phòng ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+        `@${userSession?.userProfile.username} xin đặt ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).${reasonSuffix}`,
         'BOOKING_APPROVAL_REQUEST',
         targetNode.nodeId,
         { approvalBookingId: newBookingId, approvalHandledStatus: 'PENDING' }
@@ -1314,80 +1355,135 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   };
 
-  const handleCheckInBooking = (bookingId: string, exactScanTimeText?: string) => {
-    const now = new Date();
-    const frozenTime =
-      exactScanTimeText ||
-      `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+  const handleCheckInBooking = useCallback(
+    (bookingId: string, exactScanTimeText?: string) => {
+      const now = new Date();
+      const frozenTime =
+        exactScanTimeText ||
+        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
 
-    const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
-    const targetEmail = targetBk?.userEmail || userSession?.userProfile.userEmail || '';
+      const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+      const targetEmail =
+        targetBk?.userEmail || userSession?.userProfile.userEmail || '';
 
-    setBookingsList((prev) =>
-      prev.map((b) =>
-        b.bookingId === bookingId
-          ? { ...b, bookingStatus: 'CHECKED_IN', checkedInAtIso: frozenTime }
-          : b
-      )
-    );
-    playUiSoundEffect('SUCCESS');
+      setBookingsList((prev) =>
+        prev.map((b) =>
+          b.bookingId === bookingId
+            ? {
+                ...b,
+                bookingStatus: 'CHECKED_IN',
+                checkedInAtIso: frozenTime,
+                checkedInTimestampMs: Date.now(),
+              }
+            : b
+        )
+      );
+      playUiSoundEffect('SUCCESS');
 
-    setTrustProfiles((prev) =>
-      prev.map((tp) =>
-        tp.userEmail.toLowerCase() === targetEmail.toLowerCase()
-          ? {
-              ...tp,
-              trustScore: Math.min(100, tp.trustScore + 2),
-              onTimeCheckInCount: tp.onTimeCheckInCount + 1,
-              updatedAtIso: new Date().toISOString(),
-            }
-          : tp
-      )
-    );
+      setTrustProfiles((prev) =>
+        prev.map((tp) =>
+          tp.userEmail.toLowerCase() === targetEmail.toLowerCase()
+            ? {
+                ...tp,
+                trustScore: Math.min(100, tp.trustScore + 2),
+                onTimeCheckInCount: tp.onTimeCheckInCount + 1,
+                updatedAtIso: new Date().toISOString(),
+              }
+            : tp
+        )
+      );
 
-    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}/checkin`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkedInAtIso: frozenTime }),
-    }).catch(() => {});
+      fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}/checkin`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkedInAtIso: frozenTime }),
+      }).catch(() => {});
 
-    recordRealtimeAuditLog(
-      'QR_CHECKIN_SUCCESS',
-      targetEmail || userSession?.userProfile.username || 'User',
-      targetBk?.nodeId || bookingId,
-      `Xác nhận quét mã QR đúng hạn cho vé ${bookingId} tại thời điểm cố định: [${frozenTime}] (+2 điểm tín nhiệm).`
-    );
-  };
+      pushRealtimeNotification(
+        `[Quét QR Nhận Phòng Thành Công] ${targetBk?.nodeId || bookingId}`,
+        `Đã xác thực nhận phòng ${targetBk?.nodeId || ''} (${bookingId}) lúc ${frozenTime} và cộng +2 điểm Tín nhiệm. Vé sẽ lưu tại khung nhanh 3 ngày và chuyển vào Lịch sử.`,
+        'BOOKING_EVENT',
+        targetBk?.nodeId
+      );
 
-  const handlePenalizeNoShowBooking = (
-    bookingId: string,
-    targetUserEmail: string,
-    nodeCode: string
-  ) => {
-    setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
-    playUiSoundEffect('ERROR');
+      recordRealtimeAuditLog(
+        'QR_CHECKIN_SUCCESS',
+        targetEmail || userSession?.userProfile.username || 'User',
+        targetBk?.nodeId || bookingId,
+        `Xác nhận quét mã QR đúng hạn cho vé ${bookingId} tại thời điểm cố định: [${frozenTime}] (+2 điểm tín nhiệm).`
+      );
+    },
+    [bookingsList, userSession, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+  );
 
-    setTrustProfiles((prev) =>
-      prev.map((tp) => {
-        if (tp.userEmail.toLowerCase() !== targetUserEmail.toLowerCase()) return tp;
-        const nextScore = Math.max(0, tp.trustScore - 10);
-        return {
-          ...tp,
-          trustScore: nextScore,
-          noShowPenaltyCount: tp.noShowPenaltyCount + 1,
-          isRestrictedMode: nextScore < 60,
-          updatedAtIso: new Date().toISOString(),
-        };
-      })
-    );
+  // Tự động thu hồi phòng khi quá hạn quét QR: Chuyển sang Trạng thái 3 (EXPIRED_NO_SHOW), trừ 10đ, thông báo và giữ hiển thị 3 ngày
+  const handlePenalizeNoShowBooking = useCallback(
+    (bookingId: string, targetUserEmail: string, nodeCode: string) => {
+      const now = new Date();
+      const expiredTimeStr = `${now.toLocaleTimeString(
+        'vi-VN'
+      )} • Ngày ${now.toLocaleDateString('vi-VN')}`;
 
-    pushRealtimeNotification(
-      `[Cronjob 15p] Tự động thu hồi chỗ ${nodeCode}`,
-      `Vé ${bookingId} quá 15 phút không quét QR Check-in. Đã giải phóng vị trí ${nodeCode} và trừ 10 điểm tín nhiệm của ${targetUserEmail}.`,
-      'SYSTEM_POLICY',
-      nodeCode
-    );
-  };
+      setBookingsList((prev) =>
+        prev.map((b) =>
+          b.bookingId === bookingId
+            ? {
+                ...b,
+                bookingStatus: 'EXPIRED_NO_SHOW',
+                expiredAtIso: expiredTimeStr,
+                expiredAtTimestampMs: Date.now(),
+                autoReleasedReason: `Quá hạn không quét QR xác nhận dùng phòng (${expiredTimeStr})`,
+              }
+            : b
+        )
+      );
+
+      const matchedNode = workspaceNodes.find((n) => n.nodeCode === nodeCode);
+      if (matchedNode) {
+        setWorkspaceNodes((prev) =>
+          prev.map((n) =>
+            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+          )
+        );
+      }
+
+      playUiSoundEffect('ERROR');
+
+      setTrustProfiles((prev) =>
+        prev.map((tp) => {
+          if (tp.userEmail.toLowerCase() !== targetUserEmail.toLowerCase()) {
+            return tp;
+          }
+          const nextScore = Math.max(0, tp.trustScore - 10);
+          return {
+            ...tp,
+            trustScore: nextScore,
+            noShowPenaltyCount: tp.noShowPenaltyCount + 1,
+            isRestrictedMode: nextScore < 60,
+            updatedAtIso: new Date().toISOString(),
+          };
+        })
+      );
+
+      pushRealtimeNotification(
+        `[Trễ hạn Quét QR • Thu hồi phòng ${nodeCode}]`,
+        `Vé ${bookingId} đã quá thời gian cho phép quét QR xác nhận dùng phòng. Hệ thống tự động thu hồi phòng ${nodeCode}, chuyển vé sang Trạng thái 3 (Trễ hạn • Ẩn sau 3 ngày) và trừ 10 điểm tín nhiệm của ${targetUserEmail}.`,
+        'TRUST_SCORE_ALERT',
+        nodeCode,
+        undefined,
+        targetUserEmail
+      );
+
+      recordRealtimeAuditLog(
+        'AUTO_RELEASE_NO_SHOW',
+        targetUserEmail,
+        nodeCode,
+        `[Tự động Thu hồi Phòng & Trừ 10đ] Vé ${bookingId} tại ${nodeCode} quá hạn không quét QR Check-in lúc ${expiredTimeStr}.`,
+        'AUTO_REVOKED'
+      );
+    },
+    [workspaceNodes, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+  );
 
   const handleUpdateEquipmentStatus = (
     equipmentId: string,
@@ -1407,13 +1503,167 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
   };
 
-  const handleCancelBooking = (bookingId: string) => {
-    setBookingsList((prev) => prev.filter((b) => b.bookingId !== bookingId));
-    playUiSoundEffect('CLICK');
+  const handleCancelBooking = useCallback(
+    (bookingId: string, viaQrScan = false, customCancelTimeText?: string) => {
+      const now = new Date();
+      const cancelTimeStr =
+        customCancelTimeText ||
+        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
 
-    fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}`, {
-      method: 'DELETE',
-    }).catch(() => {});
+      const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
+
+      setBookingsList((prev) =>
+        prev.map((b) =>
+          b.bookingId === bookingId
+            ? {
+                ...b,
+                bookingStatus: 'CANCELLED',
+                cancelledViaQr: Boolean(viaQrScan),
+                cancelledAtIso: cancelTimeStr,
+                cancelledAtTimestampMs: Date.now(),
+              }
+            : b
+        )
+      );
+
+      if (targetBk) {
+        const matchedNode = workspaceNodes.find(
+          (n) => n.nodeCode === targetBk.nodeId
+        );
+        if (matchedNode) {
+          setWorkspaceNodes((prev) =>
+            prev.map((n) =>
+              n.nodeId === matchedNode.nodeId
+                ? { ...n, status: 'AVAILABLE' }
+                : n
+            )
+          );
+        }
+
+        pushRealtimeNotification(
+          viaQrScan
+            ? `[Đã Hủy Đặt Phòng Bằng QR] ${targetBk.nodeId}`
+            : `[Đã Hủy Đặt Phòng] ${targetBk.nodeId}`,
+          `Đã giải phóng phòng ${targetBk.nodeId} (Mã vé: ${bookingId}) lúc ${cancelTimeStr} và lưu vào Trang Lịch sử Đặt phòng.`,
+          'BOOKING_EVENT',
+          targetBk.nodeId
+        );
+      }
+
+      playUiSoundEffect('CLICK');
+
+      fetch(`/api/v1/bookings/${encodeURIComponent(bookingId)}`, {
+        method: 'DELETE',
+      }).catch(() => {});
+    },
+    [bookingsList, workspaceNodes, playUiSoundEffect, pushRealtimeNotification]
+  );
+
+  // Lắng nghe sự kiện Quét QR Nhận Phòng & Quét QR Hủy Phòng từ Tab Kiosk riêng (/qr-checkin)
+  useEffect(() => {
+    const handleIncomingQrSync = (payload: QrRealtimeSyncPayload) => {
+      if (!payload || !payload.bookingId) return;
+      if (payload.actionType === 'CHECKIN') {
+        handleCheckInBooking(payload.bookingId, payload.scannedAtText);
+      } else if (payload.actionType === 'CANCEL') {
+        handleCancelBooking(payload.bookingId, true, payload.scannedAtText);
+      }
+    };
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel(QR_BROADCAST_CHANNEL_NAME);
+        channel.onmessage = (ev) => {
+          handleIncomingQrSync(ev.data as QrRealtimeSyncPayload);
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    const onStorageEvent = (ev: StorageEvent) => {
+      if (ev.key === QR_STORAGE_EVENT_KEY && ev.newValue) {
+        try {
+          const parsed = JSON.parse(ev.newValue) as QrRealtimeSyncPayload;
+          handleIncomingQrSync(parsed);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('storage', onStorageEvent);
+
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener('storage', onStorageEvent);
+    };
+  }, [handleCheckInBooking, handleCancelBooking]);
+
+  // Bộ quét tự động thu hồi phòng khi quá thời gian cho phép quét QR (Chuyển sang Trạng thái 3: EXPIRED_NO_SHOW)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = new Date();
+      bookingsList.forEach((bk) => {
+        if (
+          bk.bookingStatus === 'CONFIRMED' &&
+          bk.approvalStatus === 'APPROVED'
+        ) {
+          const dateStr = bk.bookingDateIso || now.toISOString().slice(0, 10);
+          const { latestCheckinTime } = buildNormalizedMeetingDateRange(
+            dateStr,
+            bk.startTimeIso,
+            bk.endTimeIso
+          );
+          if (now.getTime() > latestCheckinTime.getTime()) {
+            handlePenalizeNoShowBooking(bk.bookingId, bk.userEmail, bk.nodeId);
+          }
+        }
+      });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [bookingsList, handlePenalizeNoShowBooking]);
+
+  // Chức năng dành riêng cho SYS_ADMIN: Đổi Role người dùng giữa EMPLOYEE và MANAGER (Role SYS_ADMIN chỉ tạo từ DB/Backend)
+  const handleChangeUserRole = (
+    username: string,
+    targetUserEmail: string,
+    nextRole: 'EMPLOYEE' | 'MANAGER'
+  ) => {
+    if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
+    if (nextRole !== 'EMPLOYEE' && nextRole !== 'MANAGER') return;
+
+    setManagedUsers((prev) =>
+      prev.map((u) => {
+        if (u.role === 'SYS_ADMIN') return u;
+        if (
+          u.username.toLowerCase() === username.toLowerCase() ||
+          u.userEmail.toLowerCase() === targetUserEmail.toLowerCase()
+        ) {
+          return { ...u, role: nextRole };
+        }
+        return u;
+      })
+    );
+
+    setTrustProfiles((prev) =>
+      prev.map((tp) => {
+        if (tp.role === 'SYS_ADMIN') return tp;
+        if (tp.userEmail.toLowerCase() === targetUserEmail.toLowerCase()) {
+          return { ...tp, role: nextRole };
+        }
+        return tp;
+      })
+    );
+
+    playUiSoundEffect('SUCCESS');
+
+    recordRealtimeAuditLog(
+      'POLICY_CONFIG_UPDATED',
+      userSession.userProfile.userEmail,
+      targetUserEmail,
+      `[Admin Phân quyền Role] @${userSession.userProfile.username} đã chuyển đổi vai trò của @${username} (${targetUserEmail}) sang [${nextRole}].`
+    );
   };
 
   const handleToggleBlockUser = (username: string) => {
@@ -1503,6 +1753,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleUpsertDepartment = (dept: OrganizationDepartmentItem) => {
+    if (userSession?.userProfile.role === 'EMPLOYEE') return;
     setDepartmentsList((prev) => {
       const idx = prev.findIndex((d) => d.departmentId === dept.departmentId);
       if (idx >= 0) {
@@ -1521,6 +1772,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleDeleteDepartment = (departmentId: string) => {
+    if (userSession?.userProfile.role === 'EMPLOYEE') return;
     setDepartmentsList((prev) => prev.filter((d) => d.departmentId !== departmentId));
     playUiSoundEffect('CLICK');
     fetch(`/api/v1/organization/departments/${encodeURIComponent(departmentId)}`, {
@@ -1594,6 +1846,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleUpsertGroup = (group: OrganizationGroupItem) => {
+    if (userSession?.userProfile.role === 'EMPLOYEE') return;
     setGroupsList((prev) => {
       const idx = prev.findIndex((g) => g.groupId === group.groupId);
       if (idx >= 0) {
@@ -1612,6 +1865,7 @@ const MainWorkspaceRoutes: React.FC = () => {
   };
 
   const handleDeleteGroup = (groupId: string) => {
+    if (userSession?.userProfile.role === 'EMPLOYEE') return;
     setGroupsList((prev) => prev.filter((g) => g.groupId !== groupId));
     playUiSoundEffect('CLICK');
     fetch(`/api/v1/organization/groups/${encodeURIComponent(groupId)}`, {
@@ -1697,11 +1951,38 @@ const MainWorkspaceRoutes: React.FC = () => {
   return (
     <Routes>
       <Route
+        path="/"
+        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
+      />
+
+      <Route
+        path="/welcome"
+        element={
+          <LandingShowcasePages
+            isDark={isDark}
+            webLanguage={webLanguage}
+            isAuthenticated={Boolean(userSession)}
+            onToggleTheme={toggleThemeMode}
+            onChangeWebLanguage={(lang) => {
+              setWebLanguage(lang);
+              playUiSoundEffect('CLICK');
+            }}
+            onNavigateToLogin={() => navigate('/login')}
+            onNavigateToDashboard={() => navigate('/dashboard')}
+          />
+        }
+      />
+
+      <Route
         path="/qr-checkin"
         element={
           <QrCheckinConfirmPages
             isDark={isDark}
+            webLanguage={webLanguage}
             onConfirmCheckinFromUrl={handleCheckInBooking}
+            onConfirmCancelFromUrl={(bkId, cancelTime) =>
+              handleCancelBooking(bkId, true, cancelTime)
+            }
           />
         }
       />
@@ -1712,7 +1993,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           userSession ? (
             <Navigate to="/dashboard" replace />
           ) : (
-            <LoginPages onLoginSuccess={handleLoginSuccess} />
+            <LoginPages
+              onLoginSuccess={handleLoginSuccess}
+              onOpenLandingShowcase={() => navigate('/welcome')}
+            />
           )
         }
       />
@@ -1729,7 +2013,7 @@ const MainWorkspaceRoutes: React.FC = () => {
               }`}
             >
               <aside
-                className={`w-full lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r flex flex-col justify-between p-4 sm:p-5 transition-colors ${
+                className={`w-full lg:w-64 shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:overflow-y-auto z-40 border-b lg:border-b-0 lg:border-r flex flex-col justify-between p-4 sm:p-5 transition-colors ${
                   isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90'
                 }`}
               >
@@ -1792,12 +2076,31 @@ const MainWorkspaceRoutes: React.FC = () => {
                   </nav>
                 </div>
 
-                <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
-                  SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
+                <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playUiSoundEffect('CLICK');
+                      navigate('/welcome');
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600/15 via-blue-600/15 to-emerald-500/15 hover:from-indigo-600 hover:to-emerald-500 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
+                  >
+                    <span>
+                      {webLanguage === 'en'
+                        ? '3D WebGL Showcase'
+                        : webLanguage === 'ja'
+                        ? '3D WebGL 紹介ページ'
+                        : 'Trang Giới Thiệu 3D WebGL'}
+                    </span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="text-[11px] text-slate-400">
+                    SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
+                  </div>
                 </div>
               </aside>
 
-              <div className="flex-1 flex flex-col min-w-0">
+              <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
                 <header
                   className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 sm:px-8 py-3 flex items-center justify-between gap-3 ${
                     isDark
@@ -1809,6 +2112,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <NotificationHeaderBell
                       notifications={notificationsList}
                       userRole={userSession.userProfile.role}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onHandleApprovalDecision={handleApprovalDecision}
@@ -1886,6 +2190,38 @@ const MainWorkspaceRoutes: React.FC = () => {
                         </>
                       )}
                     </button>
+
+                    <div
+                      className={`inline-flex items-center rounded-xl p-1 border ${
+                        isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5 ml-1.5 mr-1 text-indigo-500" />
+                      {(['vi', 'en', 'ja'] as WebLanguageCodeType[]).map((langCode) => (
+                        <button
+                          key={langCode}
+                          type="button"
+                          onClick={() => {
+                            setWebLanguage(langCode);
+                            try {
+                              localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, langCode);
+                            } catch {
+                              // ignore
+                            }
+                            playUiSoundEffect('CLICK');
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase transition ${
+                            webLanguage === langCode
+                              ? 'bg-indigo-600 text-white'
+                              : isDark
+                              ? 'text-slate-400 hover:text-white'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {langCode}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="relative ml-auto" ref={avatarDropdownRef}>
@@ -2145,6 +2481,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onCreateNewBooking={(
                         email: string,
@@ -2177,6 +2514,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onUpsertDepartment={handleUpsertDepartment}
                       onDeleteDepartment={handleDeleteDepartment}
@@ -2197,6 +2535,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <NotificationCenterPages
                       notifications={notificationsList}
                       userRole={userSession.userProfile.role}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onHandleApprovalDecision={handleApprovalDecision}
@@ -2220,6 +2559,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       userEmail={userSession.userProfile.userEmail}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
                     />
@@ -2230,9 +2570,11 @@ const MainWorkspaceRoutes: React.FC = () => {
                       auditLogs={auditLogs}
                       managedUsers={managedUsers}
                       bookingsList={bookingsList}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onToggleBlockUser={handleToggleBlockUser}
                       onDeleteUserAccount={handleDeleteUserAccount}
+                      onChangeUserRole={handleChangeUserRole}
                       onAdminOverrideBookingApproval={handleApprovalDecision}
                       onAdminDeleteBookingWithNotification={
                         handleAdminDeleteBookingWithNotification
@@ -2326,6 +2668,19 @@ const MainWorkspaceRoutes: React.FC = () => {
                   }
                 }}
               />
+
+              <SpotMatrixAiCloudWidget
+                workspaceNodes={workspaceNodes}
+                bookingsList={bookingsList}
+                equipmentsList={equipmentsList}
+                trustProfiles={trustProfiles}
+                departmentsList={departmentsList}
+                groupsList={groupsList}
+                auditLogs={auditLogs}
+                userProfile={userSession.userProfile}
+                webLanguage={webLanguage}
+                isDark={isDark}
+              />
             </div>
           )
         }
@@ -2333,7 +2688,7 @@ const MainWorkspaceRoutes: React.FC = () => {
 
       <Route
         path="*"
-        element={<Navigate to={userSession ? '/dashboard' : '/login'} replace />}
+        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
       />
     </Routes>
   );

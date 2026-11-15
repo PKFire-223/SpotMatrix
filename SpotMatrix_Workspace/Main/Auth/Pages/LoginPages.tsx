@@ -19,6 +19,7 @@ import {
   KeyRound,
   Activity,
   Zap,
+  Compass,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 import { UserRoleType } from '../../../Shared/Types/GlobalSystemTypes';
@@ -38,6 +39,7 @@ export interface AuthenticatedUserSession {
 
 interface LoginPagesProps {
   onLoginSuccess: (sessionData: AuthenticatedUserSession) => void;
+  onOpenLandingShowcase?: () => void;
 }
 
 type AuthTabMode = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
@@ -63,7 +65,10 @@ const INITIAL_MATRIX_CELLS: SimulatedSpotCell[] = [
   { code: 'M-02', label: 'Pitch Room', zone: 'Zone M', status: 'OCCUPIED', aiMatch: 90 },
 ];
 
-export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
+export const LoginPages: React.FC<LoginPagesProps> = ({
+  onLoginSuccess,
+  onOpenLandingShowcase,
+}) => {
   // Mac dinh la che do SANG ('light'), cho phep chuyen doi SANG / TOI muot ma
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('spotmatrix_theme_mode');
@@ -356,22 +361,35 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
           }`}
         />
 
-        {/* HANG TREN CUNG: LOGO SPOTMATRIX & TRANG THAI SERVER */}
+        {/* HANG TREN CUNG: LOGO SPOTMATRIX & NUT XEM TRANG GIOI THIEU 3D */}
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
           <SpotMatrixLogo theme={isDark ? 'dark' : 'light'} variant="full" />
 
-          <div
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border shadow-sm backdrop-blur-md ${
-              isDark
-                ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300'
-                : 'bg-white/90 border-emerald-200 text-emerald-700'
-            }`}
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-            </span>
-            MongoDB Atlas Online • Real-Time 2D Engine
+          <div className="flex flex-wrap items-center gap-2.5">
+            {onOpenLandingShowcase && (
+              <button
+                type="button"
+                onClick={onOpenLandingShowcase}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-extrabold bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 text-white shadow-md shadow-indigo-600/25 hover:opacity-95 transition"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>Khám phá Trang Giới thiệu 3D WebGL</span>
+              </button>
+            )}
+
+            <div
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold border shadow-sm backdrop-blur-md ${
+                isDark
+                  ? 'bg-slate-900/80 border-emerald-500/30 text-emerald-300'
+                  : 'bg-white/90 border-emerald-200 text-emerald-700'
+              }`}
+            >
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-pulse-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              MongoDB Atlas Online • Real-Time 2D/3D Engine
+            </div>
           </div>
         </div>
 
@@ -389,7 +407,7 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
             >
               Đặt chỗ Không gian Làm việc Trực tiếp trên{' '}
               <span className="bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 bg-clip-text text-transparent">
-                Sơ đồ Mặt bằng 2D
+                Sơ đồ Mặt bằng 2D & 3D
               </span>
             </h1>
             <p
@@ -1141,7 +1159,8 @@ export const LoginPages: React.FC<LoginPagesProps> = ({ onLoginSuccess }) => {
                       Quay lại
                     </button>
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={handleConfirmResetSubmit}
                       disabled={isLoading}
                       className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg shadow-emerald-600/20"
                     >

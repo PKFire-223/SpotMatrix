@@ -7,6 +7,7 @@ import {
 
 export type BookingConflictCategoryType =
   | 'NONE'
+  | 'INVALID_TIME_WINDOW'
   | 'ROOM_OCCUPIED_BY_OTHER'
   | 'ROOM_ALREADY_BOOKED_BY_SELF'
   | 'USER_BUSY_IN_OTHER_ROOM'
@@ -71,6 +72,135 @@ export const ROLE_WEEKLY_BOOKING_LIMITS: Record<UserRoleType, number> = {
   SYS_ADMIN: 25,
 };
 
+// Hằng số giờ hoạt động chuẩn của tòa nhà: 07:00 sáng (420 phút) đến 23:00 đêm (1380 phút)
+export const BUILDING_OPEN_MINUTES = 7 * 60; // 07:00
+export const BUILDING_CLOSE_MINUTES = 23 * 60; // 23:00
+export const THREE_DAYS_RETENTION_MS = 3 * 24 * 60 * 60 * 1000; // 3 ngày
+
+export function parseTimeStringToMinutes(timeStr: string): number {
+  if (!timeStr || !timeStr.includes(':')) return -1;
+  const parts = timeStr.trim().split(':').map(Number);
+  const h = parts[0];
+  const m = parts[1];
+  if (
+    typeof h !== 'number' ||
+    typeof m !== 'number' ||
+    Number.isNaN(h) ||
+    Number.isNaN(m) ||
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    return -1;
+  }
+  return h * 60 + m;
+}
+
+export function validateOperatingHoursAndOrder(
+  startTimeIso: string,
+  endTimeIso: string
+): {
+  isValid: boolean;
+  errorReasonVi: string | null;
+  errorReasonEn: string | null;
+  errorReasonJa: string | null;
+  startMinutes: number;
+  endMinutes: number;
+} {
+  const startMinutes = parseTimeStringToMinutes(startTimeIso);
+  const endMinutes = parseTimeStringToMinutes(endTimeIso);
+
+  if (startMinutes < 0 || endMinutes < 0) {
+    return {
+      isValid: false,
+      errorReasonVi: 'Định dạng giờ đặt phòng không hợp lệ (chuẩn HH:mm).',
+      errorReasonEn: 'Invalid booking time format (expected HH:mm).',
+      errorReasonJa: '予約時刻の形式が無効です (HH:mm)。',
+      startMinutes,
+      endMinutes,
+    };
+  }
+
+  if (
+    startMinutes < BUILDING_OPEN_MINUTES ||
+    startMinutes > BUILDING_CLOSE_MINUTES ||
+    endMinutes < BUILDING_OPEN_MINUTES ||
+    endMinutes > BUILDING_CLOSE_MINUTES
+  ) {
+    return {
+      isValid: false,
+      errorReasonVi: `Giờ đặt phòng không hợp lệ (${startTimeIso} – ${endTimeIso})! Tòa nhà chỉ cho phép đặt phòng từ 07:00 sáng đến 23:00 đêm.`,
+      errorReasonEn: `Invalid booking hours (${startTimeIso} – ${endTimeIso})! Reservations are only allowed between 07:00 AM and 23:00 PM.`,
+      errorReasonJa: `予約時間が無効です (${startTimeIso} – ${endTimeIso})！会議室の予約可能時間は 07:00 から 23:00 までです。`,
+      startMinutes,
+      endMinutes,
+    };
+  }
+
+  if (startMinutes >= endMinutes) {
+    return {
+      isValid: false,
+      errorReasonVi: `Sai logic thời gian: Giờ bắt đầu (${startTimeIso}) không được lớn hơn hoặc bằng giờ kết thúc (${endTimeIso})!`,
+      errorReasonEn: `Invalid time logic: Start time (${startTimeIso}) must be strictly earlier than end time (${endTimeIso})!`,
+      errorReasonJa: `時間設定エラー：開始時刻 (${startTimeIso}) は終了時刻 (${endTimeIso}) より前でなければなりません！`,
+      startMinutes,
+      endMinutes,
+    };
+  }
+
+  if (endMinutes - startMinutes < 30) {
+    return {
+      isValid: false,
+      errorReasonVi: `Thời lượng đặt phòng tối thiểu là 30 phút (Hiện tại: ${startTimeIso} – ${endTimeIso}).`,
+      errorReasonEn: `Minimum booking duration is 30 minutes (Current: ${startTimeIso} – ${endTimeIso}).`,
+      errorReasonJa: `最小予約時間は30分です（現在: ${startTimeIso} – ${endTimeIso}）。`,
+      startMinutes,
+      endMinutes,
+    };
+  }
+
+  return {
+    isValid: true,
+    errorReasonVi: null,
+    errorReasonEn: null,
+    errorReasonJa: null,
+    startMinutes,
+    endMinutes,
+  };
+}
+
+// Kiểm tra xem vé có hiển thị trong khung "Vé Đặt lịch & Quét Mã QR" (Hình 3) hay đã chuyển hẳn sang Lịch sử
+export function isBookingVisibleInActivePassBox(
+  booking: BookingPayloadItem,
+  nowMs: number = Date.now()
+): boolean {
+  // 1. Đơn xin phép bị từ chối hoặc đã hủy sẽ biến mất ngay khỏi khung vé hoạt động
+  if (
+    booking.approvalStatus === 'REJECTED' ||
+    booking.bookingStatus === 'CANCELLED'
+  ) {
+    return false;
+  }
+
+  // 2. Đơn đã quét QR (CHECKED_IN) sẽ biến mất khỏi khung này sau 3 ngày
+  if (booking.bookingStatus === 'CHECKED_IN') {
+    const checkInMs = booking.checkedInTimestampMs || nowMs;
+    return nowMs - checkInMs < THREE_DAYS_RETENTION_MS;
+  }
+
+  // 3. Đơn trễ hạn bị thu hồi (EXPIRED_NO_SHOW / AUTO_RELEASED) sẽ hiện ở trạng thái 3 (Trễ hạn) và biến mất sau 3 ngày
+  if (
+    booking.bookingStatus === 'EXPIRED_NO_SHOW' ||
+    booking.bookingStatus === 'AUTO_RELEASED'
+  ) {
+    const expiredMs = booking.expiredAtTimestampMs || nowMs;
+    return nowMs - expiredMs < THREE_DAYS_RETENTION_MS;
+  }
+
+  return true;
+}
+
 export function getRoleWeeklyQuotaConfig(
   userRole: UserRoleType = 'EMPLOYEE'
 ): RoleWeeklyQuotaConfig {
@@ -106,7 +236,7 @@ export function validateBookingTimeWindow(
   startTimeIso: string,
   endTimeIso: string
 ): boolean {
-  return Boolean(startTimeIso && endTimeIso);
+  return validateOperatingHoursAndOrder(startTimeIso, endTimeIso).isValid;
 }
 
 export function getIsoWeekRangeForDate(dateIso: string): {
@@ -114,7 +244,7 @@ export function getIsoWeekRangeForDate(dateIso: string): {
   sundayIso: string;
   weekRangeLabel: string;
 } {
-  const [year = 2026, month = 10, day = 20] = (
+  const [year = 2026, month = 11, day = 15] = (
     dateIso || formatIsoDateString(new Date())
   )
     .split('-')
@@ -156,6 +286,8 @@ export function validateWeeklyRoleBookingQuota(
   for (const existing of existingBookings) {
     if (
       existing.bookingStatus === 'CANCELLED' ||
+      existing.bookingStatus === 'EXPIRED_NO_SHOW' ||
+      existing.bookingStatus === 'AUTO_RELEASED' ||
       existing.approvalStatus === 'REJECTED'
     ) {
       continue;
@@ -219,7 +351,7 @@ export function generateRecurringOccurrenceDates(
   recurringOption: RecurringOptionType = 'NONE'
 ): string[] {
   const safeBase = baseDateIso || formatIsoDateString(new Date());
-  const [year = 2026, month = 10, day = 19] = safeBase.split('-').map(Number);
+  const [year = 2026, month = 11, day = 15] = safeBase.split('-').map(Number);
   const baseDate = new Date(year, month - 1, day, 12, 0, 0);
 
   if (recurringOption === 'NONE') {
@@ -257,8 +389,7 @@ export function generateRecurringOccurrenceDates(
   return [safeBase];
 }
 
-// Chuẩn hóa khoảng thời gian họp & Khung giờ Quét mã QR Check-in chuẩn xác:
-// Mở quét QR từ TRƯỚC 30 PHÚT (startTime - 30p) đến TRỄ TỐI ĐA 30 PHÚT (startTime + 30p) so với giờ bắt đầu
+// Chuẩn hóa khoảng thời gian họp & Khung giờ Quét mã QR Check-in chuẩn xác (Trong cùng ngày 07:00 – 23:00)
 export function buildNormalizedMeetingDateRange(
   bookingDateStr: string,
   startTimeStr: string,
@@ -285,34 +416,19 @@ export function buildNormalizedMeetingDateRange(
     .split(':')
     .map(Number);
 
-  let normalizedStartHour = rawStartHour;
-  if (rawStartHour === 12 && rawEndHour >= 1 && rawEndHour <= 5) {
-    normalizedStartHour = 0;
-  }
+  const safeStartHour = Math.max(7, Math.min(23, rawStartHour));
+  const safeEndHour = Math.max(7, Math.min(23, rawEndHour));
 
   const startDateObj = new Date(
     year,
     month,
     day,
-    normalizedStartHour,
+    safeStartHour,
     rawStartMin,
     0,
     0
   );
-  const endDateObj = new Date(year, month, day, rawEndHour, rawEndMin, 0, 0);
-
-  const isSameDayAsNow =
-    now.getFullYear() === year &&
-    now.getMonth() === month &&
-    now.getDate() === day;
-  if (isSameDayAsNow && now.getHours() >= 21 && normalizedStartHour < 6) {
-    startDateObj.setDate(startDateObj.getDate() + 1);
-    endDateObj.setDate(endDateObj.getDate() + 1);
-  }
-
-  if (endDateObj <= startDateObj) {
-    endDateObj.setDate(endDateObj.getDate() + 1);
-  }
+  const endDateObj = new Date(year, month, day, safeEndHour, rawEndMin, 0, 0);
 
   const earliestCheckinTime = new Date(
     startDateObj.getTime() - 30 * 60 * 1000
@@ -321,7 +437,7 @@ export function buildNormalizedMeetingDateRange(
     startDateObj.getTime() + 30 * 60 * 1000
   );
   const noShowDeadlineTime = new Date(
-    startDateObj.getTime() + 15 * 60 * 1000
+    startDateObj.getTime() + 30 * 60 * 1000
   );
 
   return {
@@ -356,11 +472,24 @@ export function validateQrCheckinTimeWindow(
     };
   }
 
+  if (
+    booking.bookingStatus === 'EXPIRED_NO_SHOW' ||
+    booking.bookingStatus === 'AUTO_RELEASED'
+  ) {
+    return {
+      canScan: false,
+      statusCode: 'TOO_LATE_EXPIRED',
+      reasonText: `Vé ${booking.bookingId} (${booking.nodeId}) đã quá hạn quét QR và bị hệ thống tự động thu hồi phòng!`,
+      earliestCheckinTime,
+      latestCheckinTime,
+    };
+  }
+
   if (booking.approvalStatus === 'PENDING_APPROVAL') {
     return {
       canScan: false,
       statusCode: 'PENDING_APPROVAL',
-      reasonText: `Yêu cầu đặt vị trí ${booking.nodeId} đang chờ System Admin phê duyệt, chưa thể quét mã QR Check-in!`,
+      reasonText: `Yêu cầu đặt vị trí ${booking.nodeId} đang chờ Quản lý / Admin phê duyệt, chưa thể quét mã QR Check-in!`,
       earliestCheckinTime,
       latestCheckinTime,
     };
@@ -387,7 +516,7 @@ export function validateQrCheckinTimeWindow(
     return {
       canScan: false,
       statusCode: 'TOO_EARLY',
-      reasonText: `Chưa tới giờ mở quét QR cho vị trí ${booking.nodeId}! Chỉ được quét mã QR từ trước 30 phút (${earliestTimeFormatted}) đến trễ 30 phút (${latestTimeFormatted}) so với giờ bắt đầu (${booking.startTimeIso}). Vui lòng đợi thêm ${waitMinutes} phút.`,
+      reasonText: `Chưa tới giờ mở quét QR cho vị trí ${booking.nodeId}! Chỉ được quét mã QR từ trước 30 phút (${earliestTimeFormatted}) đến trễ 30 phút (${latestTimeFormatted}) so với giờ bắt đầu (${booking.startTimeIso}). Còn ${waitMinutes} phút nữa mở quét.`,
       earliestCheckinTime,
       latestCheckinTime,
     };
@@ -397,7 +526,7 @@ export function validateQrCheckinTimeWindow(
     return {
       canScan: false,
       statusCode: 'TOO_LATE_EXPIRED',
-      reasonText: `Đã quá hạn 30 phút quét mã QR cho vị trí ${booking.nodeId}! Khung giờ cho phép quét QR là từ ${earliestTimeFormatted} đến ${latestTimeFormatted} (giờ bắt đầu: ${booking.startTimeIso}).`,
+      reasonText: `Đã quá hạn 30 phút quét mã QR cho vị trí ${booking.nodeId} (khung cho phép: ${earliestTimeFormatted} – ${latestTimeFormatted})! Hệ thống tự động thu hồi phòng và trừ điểm tín nhiệm.`,
       earliestCheckinTime,
       latestCheckinTime,
     };
@@ -412,7 +541,6 @@ export function validateQrCheckinTimeWindow(
   };
 }
 
-// Tìm sự kiện thuê cả Hội trường Tầng 5 (H-01) đã được phê duyệt (APPROVED) trong khung giờ
 export function findApprovedHallEventInSlot(
   candidateDateIso: string,
   startTimeIso: string,
@@ -434,6 +562,8 @@ export function findApprovedHallEventInSlot(
   for (const existing of existingBookings) {
     if (
       existing.bookingStatus === 'CANCELLED' ||
+      existing.bookingStatus === 'EXPIRED_NO_SHOW' ||
+      existing.bookingStatus === 'AUTO_RELEASED' ||
       existing.approvalStatus === 'REJECTED'
     ) {
       continue;
@@ -486,7 +616,6 @@ export function generateQrCheckinToken(
   return `QR-SMX-${roomCode.toUpperCase()}-${cleanTag}-${rand}`;
 }
 
-// Overload 1 (9 tham số): Dùng trong BookingService.ts
 export function validateSingleAndRecurringCollision(
   targetNodeId: string,
   baseDateIso: string,
@@ -499,7 +628,6 @@ export function validateSingleAndRecurringCollision(
   currentUserDepartment?: string
 ): ScheduleCollisionValidationResult;
 
-// Overload 2 (10 tham số): Dùng trong BookingCalendarPages.tsx
 export function validateSingleAndRecurringCollision(
   targetNodeId: string,
   userEmail: string,
@@ -513,7 +641,6 @@ export function validateSingleAndRecurringCollision(
   currentUserDepartment?: string
 ): ScheduleCollisionValidationResult;
 
-// Hàm thực thi chung xử lý cả 2 dạng gọi 9 hoặc 10 tham số mà không dùng kiểu any
 export function validateSingleAndRecurringCollision(
   targetNodeId: string,
   arg2: string,
@@ -551,6 +678,32 @@ export function validateSingleAndRecurringCollision(
   const currentUserDepartment: string = isNineArgSignature
     ? arg9 || 'Product & Engineering'
     : arg10 || 'Product & Engineering';
+
+  // BƯỚC 1: KIỂM TRA KHUNG GIỜ HOẠT ĐỘNG (07:00 – 23:00) VÀ LOGIC GIỜ ĐẶT < GIỜ TRẢ
+  const timeValidation = validateOperatingHoursAndOrder(startTimeIso, endTimeIso);
+  if (!timeValidation.isValid) {
+    const errMsg =
+      timeValidation.errorReasonVi ||
+      'Giờ đặt phòng phải nằm trong khoảng 07:00 – 23:00 và giờ bắt đầu phải nhỏ hơn giờ kết thúc!';
+    return {
+      isValid: false,
+      hasCollision: true,
+      occurrenceDates: [baseDateIso],
+      occurrenceChecks: [
+        {
+          occurrenceIndex: 1,
+          dateIso: baseDateIso,
+          hasConflict: true,
+          conflictCategory: 'INVALID_TIME_WINDOW',
+          conflictBooking: null,
+          conflictReasonText: errMsg,
+        },
+      ],
+      firstConflictMessage: errMsg,
+      errorMessage: errMsg,
+      allConflictMessages: [errMsg],
+    };
+  }
 
   const occurrenceDates = generateRecurringOccurrenceDates(
     baseDateIso,
@@ -634,6 +787,8 @@ export function validateSingleAndRecurringCollision(
       for (const existing of existingBookings) {
         if (
           existing.bookingStatus === 'CANCELLED' ||
+          existing.bookingStatus === 'EXPIRED_NO_SHOW' ||
+          existing.bookingStatus === 'AUTO_RELEASED' ||
           existing.approvalStatus === 'REJECTED'
         ) {
           continue;
