@@ -23,6 +23,7 @@ import {
   OrganizationGroupItem,
   UserRoleType,
   UserTrustProfileItem,
+  WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
 import { DepartmentGroupsPanel } from '../Groups/DepartmentGroupsPanel';
 
@@ -34,6 +35,7 @@ export interface OrganizationPagesProps {
   userEmail: string;
   userRole: UserRoleType;
   userDepartment: string;
+  webLanguage?: WebLanguageCodeType;
   isDark: boolean;
   onUpsertDepartment: (dept: OrganizationDepartmentItem) => void;
   onDeleteDepartment: (departmentId: string) => void;
@@ -59,7 +61,6 @@ const STANDARD_FLOOR_LOCATIONS = [
   'Toàn bộ 5 Tầng Tòa nhà',
 ];
 
-// Danh mục nhân sự mở rộng của công ty để chọn Quản lý / Thêm thành viên thực tế
 const EXTENDED_COMPANY_DIRECTORY: UserTrustProfileItem[] = [
   {
     userEmail: 'sysadmin@spotmatrix.vn',
@@ -140,6 +141,114 @@ const EXTENDED_COMPANY_DIRECTORY: UserTrustProfileItem[] = [
   },
 ];
 
+const ORG_I18N: Record<
+  WebLanguageCodeType,
+  {
+    title: string;
+    roleBadgeAdmin: string;
+    roleBadgeOther: (r: string) => string;
+    subTitle: string;
+    tab1: (c: number) => string;
+    tab2: string;
+    loggedAccountLabel: string;
+    singleDeptLabel: string;
+    searchDeptPlaceholder: string;
+    createDeptBtn: string;
+    createGroupBtn: string;
+    viewingBadge: string;
+    managerLabel: string;
+    floorZoneLabel: string;
+    membersCount: (c: number) => string;
+    groupsCount: (c: number) => string;
+    addMemberBtn: string;
+    detailBadge: string;
+    addFromDirectoryBtn: string;
+    empListHeader: (d: string) => string;
+    searchEmpPlaceholder: string;
+    joinedGroupsLabel: (c: number) => string;
+    noGroupYet: string;
+  }
+> = {
+  vi: {
+    title: 'Cơ cấu Tổ chức — Quản lý Phòng ban & Các Nhóm Chuyên biệt Trực thuộc',
+    roleBadgeAdmin: 'SYS_ADMIN • Toàn quyền Tạo / Sửa / Xóa & Xem Tất cả',
+    roleBadgeOther: (r) => `${r} • Chỉ hiển thị Phòng ban & Nhóm của bạn`,
+    subTitle:
+      'Bấm vào từng ô Phòng ban để xem danh sách Nhân viên và các Nhóm chuyên biệt con bên trong • Một người chỉ thuộc duy nhất 1 Phòng ban.',
+    tab1: (c) => `Phòng ban & Nhóm Trực thuộc (${c})`,
+    tab2: 'Liên kết Thành viên & Sự kiện Hội trường (Admin)',
+    loggedAccountLabel: 'Tài khoản đang đăng nhập:',
+    singleDeptLabel: 'Phòng ban duy nhất của bạn:',
+    searchDeptPlaceholder: 'Tìm phòng ban, mã, quản lý...',
+    createDeptBtn: 'Tạo Phòng ban Mới',
+    createGroupBtn: 'Tạo Nhóm Mới',
+    viewingBadge: 'Đang xem chi tiết',
+    managerLabel: 'Quản lý Phụ trách:',
+    floorZoneLabel: 'Khu vực Tầng Hoạt động:',
+    membersCount: (c) => `${c} nhân sự`,
+    groupsCount: (c) => `${c} nhóm chuyên biệt`,
+    addMemberBtn: '+ Thêm Thành viên',
+    detailBadge: 'CHI TIẾT PHÒNG BAN',
+    addFromDirectoryBtn: '+ Thêm Thành viên từ Danh sách Công ty',
+    empListHeader: (d) => `1. Danh sách Nhân viên thuộc Phòng ban “${d}”`,
+    searchEmpPlaceholder: 'Tìm nhân viên trong phòng ban...',
+    joinedGroupsLabel: (c) => `Nhóm tham gia (${c}):`,
+    noGroupYet: 'Chưa vào nhóm',
+  },
+  en: {
+    title: 'Organization Structure — Departments & Specialized Sub-Groups',
+    roleBadgeAdmin: 'SYS_ADMIN • Full Create / Edit / Delete & Global View',
+    roleBadgeOther: (r) => `${r} • Viewing Your Assigned Department & Groups`,
+    subTitle:
+      'Click any Department card to inspect its Employees and Sub-Groups • Each employee belongs to exactly 1 Department.',
+    tab1: (c) => `Departments & Sub-Groups (${c})`,
+    tab2: 'Member Matrix & Hall Events (Admin)',
+    loggedAccountLabel: 'Signed-in Account:',
+    singleDeptLabel: 'Your Assigned Department:',
+    searchDeptPlaceholder: 'Search department, code, manager...',
+    createDeptBtn: 'New Department',
+    createGroupBtn: 'New Sub-Group',
+    viewingBadge: 'Inspecting',
+    managerLabel: 'Department Manager:',
+    floorZoneLabel: 'Primary Floor Zone:',
+    membersCount: (c) => `${c} members`,
+    groupsCount: (c) => `${c} sub-groups`,
+    addMemberBtn: '+ Add Member',
+    detailBadge: 'DEPARTMENT DETAILS',
+    addFromDirectoryBtn: '+ Add Member from Company Directory',
+    empListHeader: (d) => `1. Employees in Department “${d}”`,
+    searchEmpPlaceholder: 'Search employee in department...',
+    joinedGroupsLabel: (c) => `Joined Groups (${c}):`,
+    noGroupYet: 'No group yet',
+  },
+  ja: {
+    title: '組織構造 — 部署管理および所属専門グループ',
+    roleBadgeAdmin: 'SYS_ADMIN • 全作成・編集・削除・全体閲覧権限',
+    roleBadgeOther: (r) => `${r} • 所属部署とグループのみ表示`,
+    subTitle:
+      '各部署カードをクリックすると所属社員と専門サブグループを表示します • 1人の社員は単一の部署にのみ所属します。',
+    tab1: (c) => `部署＆専門グループ (${c})`,
+    tab2: 'メンバー連携＆5階ホールイベント (Admin)',
+    loggedAccountLabel: 'ログイン中のアカウント:',
+    singleDeptLabel: 'あなたの所属部署:',
+    searchDeptPlaceholder: '部署名、コード、マネージャーで検索...',
+    createDeptBtn: '新規部署を作成',
+    createGroupBtn: '新規グループを作成',
+    viewingBadge: '詳細表示中',
+    managerLabel: '担当マネージャー:',
+    floorZoneLabel: '主要活動フロア:',
+    membersCount: (c) => `${c} 名の社員`,
+    groupsCount: (c) => `${c} 専門グループ`,
+    addMemberBtn: '+ メンバー追加',
+    detailBadge: '部署詳細',
+    addFromDirectoryBtn: '+ 社員名簿からメンバーを追加',
+    empListHeader: (d) => `1. 部署「${d}」の所属社員一覧`,
+    searchEmpPlaceholder: '部署内の社員を検索...',
+    joinedGroupsLabel: (c) => `参加グループ (${c}):`,
+    noGroupYet: '未参加',
+  },
+};
+
 export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   departmentsList,
   groupsList,
@@ -148,6 +257,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   userEmail,
   userRole,
   userDepartment,
+  webLanguage = 'vi',
   isDark,
   onUpsertDepartment,
   onDeleteDepartment,
@@ -158,6 +268,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   onNavigateToHallBooking,
 }) => {
   const isSysAdmin = userRole === 'SYS_ADMIN';
+  const t = ORG_I18N[webLanguage] || ORG_I18N.vi;
 
   const [activeTab, setActiveTab] = useState<'DEPARTMENTS' | 'MEMBER_MATRIX'>(
     'DEPARTMENTS'
@@ -168,7 +279,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
   );
   const [detailEmployeeSearch, setDetailEmployeeSearch] = useState<string>('');
 
-  // Hợp nhất danh bạ nhân sự từ trustProfiles + danh bạ mở rộng
   const allCompanyMembers = useMemo(() => {
     const map = new Map<string, UserTrustProfileItem>();
     EXTENDED_COMPANY_DIRECTORY.forEach((item) => {
@@ -189,14 +299,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     return Array.from(map.values());
   }, [trustProfiles, departmentsList]);
 
-  // Danh sách nhân sự hiển thị theo Role: Admin thấy tất cả (bao gồm chính mình), Role khác KHÔNG thấy SYS_ADMIN
   const roleFilteredCompanyMembers = useMemo(() => {
     return allCompanyMembers.filter(
       (m) => isSysAdmin || m.role !== 'SYS_ADMIN'
     );
   }, [allCompanyMembers, isSysAdmin]);
 
-  // Lọc Phòng ban theo Role + Thanh tìm kiếm
   const visibleDepartments = useMemo(() => {
     const q = deptSearchQuery.trim().toLowerCase();
     return departmentsList.filter((dept) => {
@@ -219,7 +327,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     });
   }, [departmentsList, isSysAdmin, userDepartment, userEmail, deptSearchQuery]);
 
-  // Phòng ban đang được bấm chọn để xem chi tiết Nhân viên & Nhóm con
   const activeDetailDepartment = useMemo(() => {
     return (
       visibleDepartments.find((d) => d.departmentId === selectedDetailDeptId) ||
@@ -228,9 +335,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     );
   }, [visibleDepartments, selectedDetailDeptId]);
 
-  // ============================================================================
-  // MODAL 1: TẠO / CHỈNH SỬA PHÒNG BAN (CHỌN QUẢN LÝ & TẦNG TỪ DROPDOWN)
-  // ============================================================================
   const [isDeptModalOpen, setIsDeptModalOpen] = useState<boolean>(false);
   const [editingDept, setEditingDept] =
     useState<OrganizationDepartmentItem | null>(null);
@@ -308,9 +412,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     setIsDeptModalOpen(false);
   };
 
-  // ============================================================================
-  // MODAL 2: TẠO / CHỈNH SỬA NHÓM CON THUỘC PHÒNG BAN (CHỌN TRƯỞNG NHÓM TỪ DANH SÁCH)
-  // ============================================================================
   const [isGroupModalOpen, setIsGroupModalOpen] = useState<boolean>(false);
   const [editingGroup, setEditingGroup] =
     useState<OrganizationGroupItem | null>(null);
@@ -401,9 +502,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
     setIsGroupModalOpen(false);
   };
 
-  // ============================================================================
-  // MODAL 3: CHỦ ĐỘNG "+ THÊM THÀNH VIÊN VÀO PHÒNG BAN" (LÀM XÁM NGƯỜI ĐÃ CÓ PHÒNG BAN)
-  // ============================================================================
   const [assignMemberModalDept, setAssignMemberModalDept] =
     useState<OrganizationDepartmentItem | null>(null);
   const [assignMemberSearch, setAssignMemberSearch] = useState<string>('');
@@ -443,9 +541,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <span className="p-2 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
               <Building2 className="w-5 h-5" />
             </span>
-            <h1 className="text-lg font-black tracking-tight">
-              Cơ cấu Tổ chức — Quản lý Phòng ban & Các Nhóm Chuyên biệt Trực thuộc
-            </h1>
+            <h1 className="text-lg font-black tracking-tight">{t.title}</h1>
             <span
               className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
                 isSysAdmin
@@ -453,17 +549,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                   : 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
               }`}
             >
-              {isSysAdmin
-                ? 'SYS_ADMIN • Toàn quyền Tạo / Sửa / Xóa & Xem Tất cả'
-                : `${userRole} • Chỉ hiển thị Phòng ban & Nhóm của bạn`}
+              {isSysAdmin ? t.roleBadgeAdmin : t.roleBadgeOther(userRole)}
             </span>
           </div>
-          <p className="text-xs text-slate-400">
-            Bấm vào từng ô Phòng ban để xem danh sách Nhân viên và các Nhóm chuyên biệt con bên trong • Một người chỉ thuộc duy nhất 1 Phòng ban.
-          </p>
+          <p className="text-xs text-slate-400">{t.subTitle}</p>
         </div>
 
-        {/* Nút Chuyển Tab: Tab "Liên kết Thành viên & Sự kiện Hội trường" CHỈ HIỂN THỊ CHO SYS_ADMIN */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -477,9 +568,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>
-              Phòng ban & Nhóm Trực thuộc ({visibleDepartments.length})
-            </span>
+            <span>{t.tab1(visibleDepartments.length)}</span>
           </button>
 
           {isSysAdmin && (
@@ -495,7 +584,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               }`}
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
-              <span>Liên kết Thành viên & Sự kiện Hội trường (Admin)</span>
+              <span>{t.tab2}</span>
             </button>
           )}
         </div>
@@ -513,12 +602,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
           <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
           <div className="text-xs">
             <span className="text-slate-500 dark:text-slate-400">
-              Tài khoản đang đăng nhập:{' '}
+              {t.loggedAccountLabel}{' '}
             </span>
             <strong>{userEmail}</strong>
             <span className="mx-2 text-slate-400">•</span>
             <span className="text-slate-500 dark:text-slate-400">
-              Phòng ban duy nhất của bạn:{' '}
+              {t.singleDeptLabel}{' '}
             </span>
             <span className="px-2 py-0.5 rounded bg-indigo-600 text-white font-bold">
               {userDepartment}
@@ -533,7 +622,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               type="text"
               value={deptSearchQuery}
               onChange={(e) => setDeptSearchQuery(e.target.value)}
-              placeholder="Tìm phòng ban, mã, quản lý..."
+              placeholder={t.searchDeptPlaceholder}
               className={`w-full pl-8 pr-7 py-2 rounded-xl border text-xs font-semibold outline-none ${
                 isDark
                   ? 'bg-slate-950 border-slate-800 text-white'
@@ -559,7 +648,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Tạo Phòng ban Mới</span>
+                <span>{t.createDeptBtn}</span>
               </button>
               <button
                 type="button"
@@ -567,17 +656,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Tạo Nhóm Mới</span>
+                <span>{t.createGroupBtn}</span>
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* TAB 1: DANH SÁCH Ô PHÒNG BAN & BẢNG CHI TIẾT PHÒNG BAN (NHÂN VIÊN + CÁC NHÓM CON) */}
+      {/* TAB 1: DANH SÁCH Ô PHÒNG BAN & BẢNG CHI TIẾT PHÒNG BAN */}
       {activeTab === 'DEPARTMENTS' && (
         <div className="space-y-6">
-          {/* Lưới các Ô Phòng ban: Click vào ô nào sẽ mở chi tiết Nhân sự & Nhóm của Phòng ban đó */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {visibleDepartments.map((dept) => {
               const isSelectedCard =
@@ -627,7 +715,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                           {isSelectedCard && (
                             <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-300 flex items-center gap-1">
                               <Eye className="w-3 h-3" />
-                              Đang xem chi tiết
+                              {t.viewingBadge}
                             </span>
                           )}
                         </div>
@@ -645,7 +733,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                             type="button"
                             onClick={() => openEditDepartmentModal(dept)}
                             className="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            title="Chỉnh sửa Phòng ban"
                           >
                             <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
                           </button>
@@ -655,7 +742,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                               onDeleteDepartment(dept.departmentId)
                             }
                             className="p-2 rounded-xl border border-rose-500/20 text-rose-500 hover:bg-rose-500/10"
-                            title="Xóa Phòng ban"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -672,7 +758,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     >
                       <div>
                         <span className="text-[10px] text-slate-400 block">
-                          Quản lý Phụ trách:
+                          {t.managerLabel}
                         </span>
                         <strong className="font-bold">
                           {dept.managerName}
@@ -680,7 +766,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                       </div>
                       <div>
                         <span className="text-[10px] text-slate-400 block">
-                          Khu vực Tầng Hoạt động:
+                          {t.floorZoneLabel}
                         </span>
                         <strong className="font-bold text-indigo-500">
                           {dept.floorLocation}
@@ -692,14 +778,14 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                       <div className="flex items-center gap-3 text-xs font-extrabold">
                         <span className="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
                           <Users className="w-3.5 h-3.5" />
-                          {deptMembers.length} nhân sự
+                          {t.membersCount(deptMembers.length)}
                         </span>
                         <span className="text-slate-300 dark:text-slate-700">
                           •
                         </span>
                         <span className="inline-flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
                           <Layers className="w-3.5 h-3.5" />
-                          {subGroupsCount} nhóm chuyên biệt
+                          {t.groupsCount(subGroupsCount)}
                         </span>
                       </div>
 
@@ -714,7 +800,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                           className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
-                          <span>+ Thêm Thành viên</span>
+                          <span>{t.addMemberBtn}</span>
                         </button>
                       )}
                     </div>
@@ -724,7 +810,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             })}
           </div>
 
-          {/* BẢNG CHI TIẾT PHÒNG BAN ĐANG CHỌN: HIỂN THỊ NHÂN VIÊN TRONG PHÒNG BAN & CÁC NHÓM CON */}
           {activeDetailDepartment && (
             <div
               className={`p-6 rounded-3xl border space-y-6 ${
@@ -737,7 +822,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-indigo-600 text-white">
-                      CHI TIẾT PHÒNG BAN
+                      {t.detailBadge}
                     </span>
                     <h3 className="text-base font-black">
                       {activeDetailDepartment.departmentName} (
@@ -745,7 +830,9 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     </h3>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Quản lý: <strong>{activeDetailDepartment.managerName}</strong> • Tầng hoạt động:{' '}
+                    {t.managerLabel}{' '}
+                    <strong>{activeDetailDepartment.managerName}</strong> •{' '}
+                    {t.floorZoneLabel}{' '}
                     <strong className="text-indigo-500">
                       {activeDetailDepartment.floorLocation}
                     </strong>
@@ -762,18 +849,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition"
                   >
                     <UserPlus className="w-3.5 h-3.5" />
-                    <span>+ Thêm Thành viên từ Danh sách Công ty</span>
+                    <span>{t.addFromDirectoryBtn}</span>
                   </button>
                 )}
               </div>
 
-              {/* PHẦN A: DANH SÁCH NHÂN SỰ TRỰC THUỘC PHÒNG BAN NÀY */}
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                     <Users className="w-4 h-4" />
-                    1. Danh sách Nhân viên thuộc Phòng ban “
-                    {activeDetailDepartment.departmentName}”
+                    {t.empListHeader(activeDetailDepartment.departmentName)}
                   </h4>
 
                   <div className="relative w-56">
@@ -782,7 +867,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                       type="text"
                       value={detailEmployeeSearch}
                       onChange={(e) => setDetailEmployeeSearch(e.target.value)}
-                      placeholder="Tìm nhân viên trong phòng ban..."
+                      placeholder={t.searchEmpPlaceholder}
                       className={`w-full pl-8 pr-3 py-1.5 rounded-xl border text-xs font-semibold outline-none ${
                         isDark
                           ? 'bg-slate-950 border-slate-800 text-white'
@@ -870,7 +955,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                                   )
                                 }
                                 className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"
-                                title="Gỡ nhân sự khỏi phòng ban này (về trạng thái Chưa phân bổ)"
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
@@ -879,11 +963,11 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
                           <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center gap-1">
                             <span className="text-[10px] text-slate-400">
-                              Nhóm tham gia ({empGroups.length}):
+                              {t.joinedGroupsLabel(empGroups.length)}
                             </span>
                             {empGroups.length === 0 ? (
                               <span className="text-[10px] italic text-slate-400">
-                                Chưa vào nhóm
+                                {t.noGroupYet}
                               </span>
                             ) : (
                               empGroups.map((eg) => (
@@ -902,7 +986,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 </div>
               </div>
 
-              {/* PHẦN B: DANH SÁCH CÁC NHÓM CHUYÊN BIỆT TRỰC THUỘC PHÒNG BAN NÀY (THƯ MỤC GROUPS RIÊNG) */}
               <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800">
                 <DepartmentGroupsPanel
                   parentDepartment={activeDetailDepartment}
@@ -924,7 +1007,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
         </div>
       )}
 
-      {/* TAB 2 (CHỈ DÀNH RIÊNG CHO SYS_ADMIN): MA TRẬN LIÊN KẾT THÀNH VIÊN & SỰ KIỆN HỘI TRƯỜNG */}
       {activeTab === 'MEMBER_MATRIX' && isSysAdmin && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div
@@ -1012,7 +1094,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                           <div className="flex flex-wrap gap-1">
                             {userGroups.length === 0 ? (
                               <span className="text-[11px] text-slate-400 italic">
-                                Chưa tham gia nhóm
+                                {t.noGroupYet}
                               </span>
                             ) : (
                               userGroups.map((ug) => (
@@ -1054,68 +1136,60 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                   onClick={onNavigateToHallBooking}
                   className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold"
                 >
-                  Đến Hội trường
+                  H-01
                 </button>
               )}
             </div>
 
             <div className="space-y-3">
-              {hallEventsList.length === 0 ? (
-                <div className="p-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-xs text-slate-400 text-center">
-                  Hiện chưa có sự kiện thuê Hội trường (H-01) nào.
-                </div>
-              ) : (
-                hallEventsList.map((ev) => (
-                  <div
-                    key={ev.bookingId}
-                    className={`p-4 rounded-2xl border space-y-2 ${
-                      isDark
-                        ? 'bg-slate-950/70 border-slate-800'
-                        : 'bg-slate-50 border-slate-200/80'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-extrabold text-indigo-500 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {ev.bookingDateIso || 'Hôm nay'} ({ev.startTimeIso} –{' '}
-                        {ev.endTimeIso})
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          ev.approvalStatus === 'APPROVED'
-                            ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
-                            : 'bg-amber-500/15 text-amber-600'
-                        }`}
-                      >
-                        {ev.approvalStatus === 'APPROVED'
-                          ? 'ĐÃ PHÊ DUYỆT THUÊ'
-                          : 'CHỜ ADMIN DUYỆT'}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold">{ev.purposeNote}</p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {(ev.allowedDepartments &&
-                      ev.allowedDepartments.length > 0
-                        ? ev.allowedDepartments
-                        : ['Tất cả các Phòng ban']
-                      ).map((deptName) => (
-                        <span
-                          key={deptName}
-                          className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
-                        >
-                          ✓ {deptName}
-                        </span>
-                      ))}
-                    </div>
+              {hallEventsList.map((ev) => (
+                <div
+                  key={ev.bookingId}
+                  className={`p-4 rounded-2xl border space-y-2 ${
+                    isDark
+                      ? 'bg-slate-950/70 border-slate-800'
+                      : 'bg-slate-50 border-slate-200/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-indigo-500 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {ev.bookingDateIso || 'Today'} ({ev.startTimeIso} –{' '}
+                      {ev.endTimeIso})
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                        ev.approvalStatus === 'APPROVED'
+                          ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400'
+                          : 'bg-amber-500/15 text-amber-600'
+                      }`}
+                    >
+                      {ev.approvalStatus === 'APPROVED'
+                        ? 'APPROVED'
+                        : 'PENDING'}
+                    </span>
                   </div>
-                ))
-              )}
+                  <p className="text-xs font-bold">{ev.purposeNote}</p>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {(ev.allowedDepartments && ev.allowedDepartments.length > 0
+                      ? ev.allowedDepartments
+                      : ['ALL']
+                    ).map((deptName) => (
+                      <span
+                        key={deptName}
+                        className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                      >
+                        ✓ {deptName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL CHỦ ĐỘNG "+ THÊM THÀNH VIÊN VÀO PHÒNG BAN" (AI ĐÃ CÓ PHÒNG BAN THÌ XÁM NHẠT KHÔNG THỂ CHỈ ĐỊNH) */}
       {assignMemberModalDept && isSysAdmin && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div
@@ -1128,14 +1202,8 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="text-sm font-black">
-                  Thêm Thành viên vào Phòng ban:{' '}
-                  {assignMemberModalDept.departmentName}
+                  {t.addMemberBtn}: {assignMemberModalDept.departmentName}
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Quy tắc: Mỗi nhân sự chỉ thuộc duy nhất 1 Phòng ban. Những
-                  người đã thuộc phòng ban khác sẽ hiện màu xám nhạt (không thể
-                  chỉ định trùng).
-                </p>
               </div>
               <button
                 type="button"
@@ -1152,7 +1220,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 type="text"
                 value={assignMemberSearch}
                 onChange={(e) => setAssignMemberSearch(e.target.value)}
-                placeholder="Tìm kiếm nhân sự theo tên, email hoặc trạng thái phòng ban..."
+                placeholder={t.searchEmpPlaceholder}
                 className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
@@ -1202,7 +1270,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                         </span>
                       </div>
                       <p className="text-[11px] mt-0.5">
-                        {person.userEmail} • Hiện tại:{' '}
+                        {person.userEmail} •{' '}
                         <strong>
                           {person.departmentName || 'Chưa phân bổ'}
                         </strong>
@@ -1212,12 +1280,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     {isAlreadyInThisDept ? (
                       <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center gap-1 shrink-0">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Đã ở Phòng ban này
+                        Joined
                       </span>
                     ) : hasAnotherDept ? (
                       <span className="px-3 py-1.5 rounded-xl text-[10px] font-extrabold bg-slate-300/50 dark:bg-slate-800 text-slate-500 flex items-center gap-1 shrink-0">
                         <Lock className="w-3 h-3" />
-                        Không thể chỉ định (Đã thuộc {person.departmentName})
+                        Không thể chỉ định ({person.departmentName})
                       </span>
                     ) : (
                       <button
@@ -1231,7 +1299,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                         className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm transition shrink-0"
                       >
                         <UserPlus className="w-3.5 h-3.5" />
-                        <span>Chỉ định vào Phòng ban</span>
+                        <span>{t.addMemberBtn}</span>
                       </button>
                     )}
                   </div>
@@ -1245,14 +1313,13 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 onClick={() => setAssignMemberModalDept(null)}
                 className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-extrabold"
               >
-                Đóng
+                OK
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL TẠO / SỬA PHÒNG BAN: CHỌN NGƯỜI QUẢN LÝ & TẦNG HOẠT ĐỘNG TỪ DANH SÁCH */}
       {isDeptModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <form
@@ -1264,11 +1331,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             }`}
           >
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-black">
-                {editingDept
-                  ? 'Chỉnh sửa Phòng ban Tổ chức'
-                  : 'Thiết lập Phòng ban Tổ chức Mới'}
-              </h3>
+              <h3 className="text-base font-black">{t.createDeptBtn}</h3>
               <button
                 type="button"
                 onClick={() => setIsDeptModalOpen(false)}
@@ -1280,9 +1343,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Mã Phòng ban
-                </label>
+                <label className="text-xs font-bold block mb-1">Code</label>
                 <input
                   type="text"
                   required
@@ -1296,15 +1357,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Tên Phòng ban
-                </label>
+                <label className="text-xs font-bold block mb-1">Name</label>
                 <input
                   type="text"
                   required
                   value={deptNameInput}
                   onChange={(e) => setDeptNameInput(e.target.value)}
-                  placeholder="VD: Cloud & DevSecOps"
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
                     isDark
                       ? 'bg-slate-950 border-slate-800'
@@ -1317,7 +1375,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Chọn Người Quản lý (Từ Danh sách)
+                  {t.managerLabel}
                 </label>
                 <select
                   value={deptManagerEmailInput}
@@ -1337,7 +1395,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               </div>
               <div>
                 <label className="text-xs font-bold block mb-1">
-                  Chọn Tầng Hoạt động Chính
+                  {t.floorZoneLabel}
                 </label>
                 <select
                   value={deptFloorInput}
@@ -1358,9 +1416,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">
-                Mô tả chức năng nhiệm vụ
-              </label>
               <textarea
                 rows={3}
                 value={deptDescInput}
@@ -1375,24 +1430,16 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="flex justify-end gap-2 pt-2">
               <button
-                type="button"
-                onClick={() => setIsDeptModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
-              >
-                Hủy
-              </button>
-              <button
                 type="submit"
                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-md"
               >
-                Lưu Phòng ban lên Database
+                Save
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* MODAL TẠO / SỬA NHÓM CON: CHỌN PHÒNG BAN CHỦ QUẢN & CHỌN TRƯỞNG NHÓM TỪ DANH SÁCH */}
       {isGroupModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <form
@@ -1404,11 +1451,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             }`}
           >
             <div className="flex items-center justify-between border-b border-slate-200/70 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-black">
-                {editingGroup
-                  ? 'Chỉnh sửa Nhóm Chuyên biệt'
-                  : 'Tạo Nhóm Chuyên biệt Trực thuộc Phòng ban'}
-              </h3>
+              <h3 className="text-base font-black">{t.createGroupBtn}</h3>
               <button
                 type="button"
                 onClick={() => setIsGroupModalOpen(false)}
@@ -1420,7 +1463,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold block mb-1">Mã Nhóm</label>
+                <label className="text-xs font-bold block mb-1">Code</label>
                 <input
                   type="text"
                   required
@@ -1434,9 +1477,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 />
               </div>
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Thuộc Phòng ban Chủ quản
-                </label>
+                <label className="text-xs font-bold block mb-1">Department</label>
                 <select
                   value={grpDeptInput}
                   onChange={(e) => {
@@ -1467,15 +1508,11 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1">
-                Tên Nhóm Chuyên biệt / Dự án
-              </label>
               <input
                 type="text"
                 required
                 value={grpNameInput}
                 onChange={(e) => setGrpNameInput(e.target.value)}
-                placeholder="VD: Nhóm Tối ưu Không gian 3D & AI"
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
                   isDark
                     ? 'bg-slate-950 border-slate-800'
@@ -1486,9 +1523,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Chọn Trưởng nhóm (Từ Phòng ban)
-                </label>
                 <select
                   value={grpLeaderEmailInput}
                   onChange={(e) => setGrpLeaderEmailInput(e.target.value)}
@@ -1506,9 +1540,6 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold block mb-1">
-                  Tag Dự án
-                </label>
                 <input
                   type="text"
                   value={grpTagInput}
@@ -1522,35 +1553,12 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold block mb-1">
-                Mô tả nhiệm vụ của nhóm
-              </label>
-              <textarea
-                rows={2}
-                value={grpDescInput}
-                onChange={(e) => setGrpDescInput(e.target.value)}
-                className={`w-full px-3.5 py-2 rounded-xl border text-xs ${
-                  isDark
-                    ? 'bg-slate-950 border-slate-800'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              />
-            </div>
-
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsGroupModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold"
-              >
-                Hủy
-              </button>
               <button
                 type="submit"
                 className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-md"
               >
-                Lưu Nhóm lên Database
+                Save
               </button>
             </div>
           </form>

@@ -7,6 +7,14 @@ import {
   listUserTrustProfiles,
 } from '../../../Main/Datamanager/Function/Services/DatamanagerService';
 
+interface IncomingAiAttachmentItem {
+  fileName: string;
+  mimeType: string;
+  sizeBytes?: number;
+  base64DataUrl?: string;
+  textContentPreview?: string;
+}
+
 export async function handleRecommendOptimalWorkspace(
   req: Request,
   res: Response,
@@ -21,8 +29,8 @@ export async function handleRecommendOptimalWorkspace(
       success: true,
       recommendation: recommendedNode,
       reasoning: recommendedNode
-        ? `AI de xuat ${recommendedNode.nodeLabel} voi diem toi uu ${recommendedNode.aiScore}/100.`
-        : 'Hien khong co vi tri trong phu hop voi quy mo nhom.',
+        ? `AI đề xuất ${recommendedNode.nodeLabel} với điểm tối ưu ${recommendedNode.aiScore}/100.`
+        : 'Hiện không có vị trí trống phù hợp với quy mô nhóm.',
     });
   } catch (err) {
     next(err);
@@ -45,7 +53,9 @@ export async function handleSynthesizeDashboardAiReport(
     const availableCount = nodes.filter((n) => n.status === 'AVAILABLE').length;
     const avgTrust =
       trustList.length > 0
-        ? Math.round(trustList.reduce((acc, u) => acc + u.trustScore, 0) / trustList.length)
+        ? Math.round(
+            trustList.reduce((acc, u) => acc + u.trustScore, 0) / trustList.length
+          )
         : 95;
     const brokenCount = equipments.filter((e) => e.status === 'BROKEN').length;
 
@@ -70,10 +80,14 @@ export async function handleAskGeminiCoPilot(
       personaLabel,
       workspaceContextText,
       conversationHistory,
+      attachments,
+      webLanguage,
     } = req.body || {};
 
     const geminiApiKey = (process.env.GEMINI_API_KEY || '').trim();
-    const geminiModel = (process.env.GEMINI_MODEL_NAME || 'gemini-2.5-flash').trim();
+    const geminiModel = (
+      process.env.GEMINI_MODEL_NAME || 'gemini-2.5-flash'
+    ).trim();
     const geminiBaseUrl = (
       process.env.GEMINI_API_BASE_URL ||
       'https://generativelanguage.googleapis.com/v1beta/models'
@@ -82,7 +96,7 @@ export async function handleAskGeminiCoPilot(
     if (!geminiApiKey || geminiApiKey === 'YOUR_GEMINI_API_KEY_HERE') {
       res.json({
         success: true,
-        provider: 'SPOTMATRIX_AI',
+        provider: 'SPOTMATRIX_LOCAL_ENGINE',
         replyText: null,
       });
       return;
@@ -94,39 +108,81 @@ export async function handleAskGeminiCoPilot(
 
     const historyText = Array.isArray(conversationHistory)
       ? conversationHistory
-          .slice(-5)
+          .slice(-6)
           .map(
             (m: { sender?: string; contentText?: string }) =>
-              `${m.sender === 'USER' ? 'Người dùng' : 'Trợ lý'}: ${m.contentText || ''}`
+              `${m.sender === 'USER' ? 'Người dùng' : 'AURA-X AI'}: ${
+                m.contentText || ''
+              }`
           )
           .join('\n')
       : '';
 
-    const fullSystemInstruction = `[VAI TRÒ NỀN: ${
-      personaLabel || 'Kiến trúc sư Không gian 3D'
+    const langDirective =
+      webLanguage === 'en'
+        ? 'Respond in clear, structured English.'
+        : webLanguage === 'ja'
+        ? '明確で整理された日本語で回答してください。'
+        : 'Trả lời bằng tiếng Việt mạch lạc, có bố cục rõ ràng.';
+
+    const fullSystemInstruction = `[DANH TÍNH AI ĐỘC QUYỀN: ${
+      personaLabel || 'AURA-X — Trợ lý Không gian 3D SpotMatrix'
     }]
 ${
   systemPersonaPrompt ||
-  'Bạn là Trợ lý thông minh của hệ thống Quản lý Không gian & Đặt lịch Phòng họp 3D/2D SpotMatrix.'
+  'Bạn là AURA-X, Trí tuệ Nhân tạo độc quyền của hệ thống Quản lý & Đặt phòng họp Nội bộ 5 Tầng SpotMatrix.'
 }
-- Trả lời đầy đủ, trọn vẹn câu, tự nhiên, linh hoạt bằng tiếng Việt.
-- Nếu người dùng hỏi toán học, đố vui hoặc chào hỏi (ví dụ "1+1 bằng 3 ư?"), hãy trả lời chính xác, dí dỏm rồi liên hệ hỗ trợ phòng họp.
-- Dựa trực tiếp vào số liệu thực tế của tòa nhà 5 tầng bên dưới.
+- ${langDirective}
+- Phân quyền bảo mật dữ liệu theo đúng tài khoản đang đăng nhập (SYS_ADMIN thấy toàn bộ IP và toàn bộ công ty; MANAGER thấy phòng ban mình quản lý và các đơn chờ duyệt; EMPLOYEE thấy lịch cá nhân, phòng ban của mình và trạng thái phòng trống).
+- Khi người dùng hỏi kiến thức bên ngoài trang web (toán học, lập trình, kỹ thuật, viết email, phân tích file/ảnh đính kèm...), hãy trả lời chính xác, chuyên sâu, có cấu trúc gạch đầu dòng rõ ràng.
 
-[DỮ LIỆU TÒA NHÀ 5 TẦNG SPOTMATRIX]
+[DỮ LIỆU HỆ THỐNG SPOTMATRIX THEO TÀI KHOẢN HIỆN TẠI]
 ${workspaceContextText || 'Không có ngữ cảnh bổ sung.'}
 ${historyText ? `\n[LỊCH SỬ HỘI THOẠI]\n${historyText}` : ''}`;
+
+    const userParts: Array<
+      | { text: string }
+      | { inline_data: { mime_type: string; data: string } }
+    > = [
+      {
+        text: `${fullSystemInstruction}\n\n[YÊU CẦU TỪ NGƯỜI DÙNG]: ${
+          promptText || 'Hãy phân tích dữ liệu hoặc tệp đính kèm.'
+        }`,
+      },
+    ];
+
+    if (Array.isArray(attachments)) {
+      (attachments as IncomingAiAttachmentItem[]).forEach((att) => {
+        if (
+          att.base64DataUrl &&
+          att.mimeType &&
+          att.mimeType.startsWith('image/')
+        ) {
+          const commaIdx = att.base64DataUrl.indexOf(',');
+          const rawBase64 =
+            commaIdx >= 0
+              ? att.base64DataUrl.slice(commaIdx + 1)
+              : att.base64DataUrl;
+          if (rawBase64) {
+            userParts.push({
+              inline_data: {
+                mime_type: att.mimeType,
+                data: rawBase64,
+              },
+            });
+          }
+        } else if (att.textContentPreview) {
+          userParts.push({
+            text: `\n[NỘI DUNG TỆP ĐÍNH KÈM "${att.fileName}"]:\n${att.textContentPreview}`,
+          });
+        }
+      });
+    }
 
     const baseContents = [
       {
         role: 'user',
-        parts: [
-          {
-            text: `${fullSystemInstruction}\n\n[CÂU HỎI]: ${
-              promptText || 'Hãy tổng hợp tình hình hệ thống hiện tại.'
-            }`,
-          },
-        ],
+        parts: userParts,
       },
     ];
 
@@ -136,26 +192,18 @@ ${historyText ? `\n[LỊCH SỬ HỘI THOẠI]\n${historyText}` : ''}`;
       body: JSON.stringify({
         contents: baseContents,
         generationConfig: {
-          temperature: 0.65,
+          temperature: 0.55,
           maxOutputTokens: 2048,
-          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     });
 
     if (!response.ok) {
-      response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: baseContents,
-          generationConfig: { temperature: 0.65, maxOutputTokens: 2048 },
-        }),
+      res.json({
+        success: true,
+        provider: 'SPOTMATRIX_LOCAL_ENGINE',
+        replyText: null,
       });
-    }
-
-    if (!response.ok) {
-      res.json({ success: true, provider: 'SPOTMATRIX_AI', replyText: null });
       return;
     }
 
@@ -174,7 +222,7 @@ ${historyText ? `\n[LỊCH SỬ HỘI THOẠI]\n${historyText}` : ''}`;
 
     res.json({
       success: true,
-      provider: 'SPOTMATRIX_AI',
+      provider: 'SPOTMATRIX_GEMINI_ENGINE',
       replyText: joinedText.length > 0 ? joinedText : null,
     });
   } catch (err) {

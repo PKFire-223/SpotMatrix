@@ -24,6 +24,7 @@ import {
   Award,
   Music,
   VolumeX,
+  Globe,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
@@ -56,6 +57,7 @@ import {
   LoginPages,
 } from '../../Main/Auth/Pages/LoginPages';
 import { LandingShowcasePages } from '../../Main/Auth/Pages/LandingShowcasePages';
+import { SpotMatrixAiCloudWidget } from '../../Ai/Function/Components/SpotMatrixAiCloudWidget';
 import {
   ProfilePages,
   UserProfileCustomization,
@@ -1256,6 +1258,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       startTimeIso: timeWindow?.start || '08:00',
       endTimeIso: timeWindow?.end || '10:00',
       purposeNote: note || `Đặt lịch ${targetNode.nodeLabel}`,
+      approvalRequestReason: timeWindow?.approvalRequestReason,
       recurringOption: timeWindow?.recurringOption || 'NONE',
       occurrenceDates: timeWindow?.occurrenceDates || [baseDate],
       lockVersion: timeWindow?.lockVersion || (targetNode.lockVersion || 1) + 1,
@@ -1298,9 +1301,12 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
 
     if (needsApproval) {
+      const reasonSuffix = timeWindow?.approvalRequestReason
+        ? ` Lý do xin phép: "${timeWindow.approvalRequestReason}".`
+        : "";
       pushRealtimeNotification(
         `[Cần Phê Duyệt] Yêu cầu đặt ${codeToBook}`,
-        `Nhân viên @${userSession?.userProfile.username} xin đặt phòng ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+        `@${userSession?.userProfile.username} xin đặt ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).${reasonSuffix}`,
         'BOOKING_APPROVAL_REQUEST',
         targetNode.nodeId,
         { approvalBookingId: newBookingId, approvalHandledStatus: 'PENDING' }
@@ -1828,7 +1834,13 @@ const MainWorkspaceRoutes: React.FC = () => {
                     }}
                     className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600/15 via-blue-600/15 to-emerald-500/15 hover:from-indigo-600 hover:to-emerald-500 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
                   >
-                    <span>Trang Giới Thiệu 3D WebGL</span>
+                    <span>
+                      {webLanguage === 'en'
+                        ? '3D WebGL Showcase'
+                        : webLanguage === 'ja'
+                        ? '3D WebGL 紹介ページ'
+                        : 'Trang Giới Thiệu 3D WebGL'}
+                    </span>
                     <Sparkles className="w-3.5 h-3.5" />
                   </button>
                   <div className="text-[11px] text-slate-400">
@@ -1849,6 +1861,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <NotificationHeaderBell
                       notifications={notificationsList}
                       userRole={userSession.userProfile.role}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onHandleApprovalDecision={handleApprovalDecision}
@@ -1926,6 +1939,38 @@ const MainWorkspaceRoutes: React.FC = () => {
                         </>
                       )}
                     </button>
+
+                    <div
+                      className={`inline-flex items-center rounded-xl p-1 border ${
+                        isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5 ml-1.5 mr-1 text-indigo-500" />
+                      {(['vi', 'en', 'ja'] as WebLanguageCodeType[]).map((langCode) => (
+                        <button
+                          key={langCode}
+                          type="button"
+                          onClick={() => {
+                            setWebLanguage(langCode);
+                            try {
+                              localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, langCode);
+                            } catch {
+                              // ignore
+                            }
+                            playUiSoundEffect('CLICK');
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase transition ${
+                            webLanguage === langCode
+                              ? 'bg-indigo-600 text-white'
+                              : isDark
+                              ? 'text-slate-400 hover:text-white'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {langCode}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="relative ml-auto" ref={avatarDropdownRef}>
@@ -2185,6 +2230,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onCreateNewBooking={(
                         email: string,
@@ -2217,6 +2263,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userEmail={userSession.userProfile.userEmail}
                       userRole={userSession.userProfile.role}
                       userDepartment={userSession.userProfile.departmentName}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onUpsertDepartment={handleUpsertDepartment}
                       onDeleteDepartment={handleDeleteDepartment}
@@ -2237,6 +2284,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <NotificationCenterPages
                       notifications={notificationsList}
                       userRole={userSession.userProfile.role}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
                       onHandleApprovalDecision={handleApprovalDecision}
@@ -2260,6 +2308,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       selectedNode={selectedNode}
                       userRole={userSession.userProfile.role}
                       userEmail={userSession.userProfile.userEmail}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
                     />
@@ -2270,6 +2319,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                       auditLogs={auditLogs}
                       managedUsers={managedUsers}
                       bookingsList={bookingsList}
+                      webLanguage={webLanguage}
                       isDark={isDark}
                       onToggleBlockUser={handleToggleBlockUser}
                       onDeleteUserAccount={handleDeleteUserAccount}
@@ -2365,6 +2415,19 @@ const MainWorkspaceRoutes: React.FC = () => {
                     setActivePage('NOTIFICATION');
                   }
                 }}
+              />
+
+              <SpotMatrixAiCloudWidget
+                workspaceNodes={workspaceNodes}
+                bookingsList={bookingsList}
+                equipmentsList={equipmentsList}
+                trustProfiles={trustProfiles}
+                departmentsList={departmentsList}
+                groupsList={groupsList}
+                auditLogs={auditLogs}
+                userProfile={userSession.userProfile}
+                webLanguage={webLanguage}
+                isDark={isDark}
               />
             </div>
           )

@@ -59,6 +59,7 @@ export interface BookingPayloadItem {
   startTimeIso: string;
   endTimeIso: string;
   purposeNote: string;
+  approvalRequestReason?: string;
   recurringOption?: RecurringOptionType;
   recurringSeriesId?: string | null;
   occurrenceDates?: string[];

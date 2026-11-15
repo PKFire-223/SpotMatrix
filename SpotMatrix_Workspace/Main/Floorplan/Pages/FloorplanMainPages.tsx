@@ -68,10 +68,193 @@ interface ColosseumSeatSpec {
   worldZ: number;
 }
 
-/**
- * Tạo hình hộp chữ nhật bo góc & vát cạnh kiến trúc (Beveled Architectural Box)
- * giúp bắt tia sáng phản xạ Specular Highlight dọc theo mọi gờ cạnh kim loại/kính/bàn ghế.
- */
+interface FloorplanTranslationPack {
+  floorTabPrefix: string;
+  floor5Tab: string;
+  mode3DBtn: string;
+  mode2DBtn: string;
+  badge3DFloor: (fl: number) => string;
+  badge2DFloor: (fl: number) => string;
+  hint3D: string;
+  hint2D: string;
+  statusFree: string;
+  statusHold: string;
+  statusBooked: string;
+  resetCamBtn: string;
+  rightPanelTitleHall: string;
+  rightPanelTitleRoom: (fl: number) => string;
+  capacityLabel: string;
+  seatsUnit: string;
+  codeLabel: string;
+  selectSlotLabel: (dateIso: string) => string;
+  selectedBadge: string;
+  pickSlotBadge: string;
+  hallEventStatusTitle: string;
+  hallApprovedBadge: string;
+  hallNoEventBadge: string;
+  allowedDeptsLabel: string;
+  allDeptsText: string;
+  noEventWarningText: (start: string, end: string) => string;
+  rentWholeHallAdminBtn: string;
+  rentWholeHallManagerBtn: string;
+  employeeCannotRentHallNote: string;
+  bookHallSeatActiveBtn: (seat: string, start: string, end: string) => string;
+  bookHallSeatLockedBtn: (seat: string) => string;
+  bookStandardRoomBtn: (code: string, start: string, end: string) => string;
+  corridor2DLabel: (fl: number) => string;
+  colosseum2DTitle: string;
+  stage2DTitle: string;
+  stage2DSub: string;
+  led2DTitle: string;
+}
+
+const FLOORPLAN_I18N: Record<WebLanguageCodeType, FloorplanTranslationPack> = {
+  vi: {
+    floorTabPrefix: 'Tầng',
+    floor5Tab: 'Tầng 5 • Hội trường La Mã',
+    mode3DBtn: 'Mô hình 3D PBR Sắc Nét',
+    mode2DBtn: 'Bản vẽ Mặt bằng 2D',
+    badge3DFloor: (fl) =>
+      fl === 5
+        ? 'Mô hình 3D Tầng 5 — Hội trường Đấu Trường La Mã (H-01)'
+        : `Mô hình 3D Tầng ${fl} — 6 Phòng họp Kính Không Mái (Open-Top)`,
+    badge2DFloor: (fl) =>
+      fl === 5
+        ? 'Bản vẽ Kiến trúc 2D Tầng 5 — Hội trường Đấu Trường La Mã (30 Ghế)'
+        : `Bản vẽ Kiến trúc 2D Tầng ${fl} — Mặt bằng 6 Phòng họp & Nội thất`,
+    hint3D: 'Giữ chuột trái xoay 360° • Cuộn chuột thu phóng • Click phòng/ghế để chọn',
+    hint2D: 'Bản vẽ mặt bằng 2D trực quan • Click trực tiếp vào từng phòng hoặc ghế để đặt lịch',
+    statusFree: 'Còn trống',
+    statusHold: 'Giữ / Chờ duyệt',
+    statusBooked: 'Đã đặt',
+    resetCamBtn: 'Góc nhìn chuẩn',
+    rightPanelTitleHall: 'Điều phối Hội trường Tầng 5 (2 Chế độ)',
+    rightPanelTitleRoom: (fl) => `Thông tin Phòng họp Tầng ${fl}`,
+    capacityLabel: 'Sức chứa',
+    seatsUnit: 'chỗ',
+    codeLabel: 'Mã',
+    selectSlotLabel: (d) => `Chọn Khung giờ Hoạt động Hôm nay (${d}):`,
+    selectedBadge: 'Đang chọn',
+    pickSlotBadge: 'Chọn ca',
+    hallEventStatusTitle: 'Trạng thái Sự kiện Hội trường:',
+    hallApprovedBadge: 'ĐÃ THUÊ & DUYỆT',
+    hallNoEventBadge: 'CHƯA CÓ SỰ KIỆN',
+    allowedDeptsLabel: 'Phòng ban được phép đặt ghế:',
+    allDeptsText: 'Tất cả phòng ban',
+    noEventWarningText: (s, e) =>
+      `Khung giờ ${s}–${e} hiện chưa có sự kiện nào được duyệt thuê. Ghế ngồi đang khóa cho đến khi Admin hoặc Quản lý thuê Hội trường thành công.`,
+    rentWholeHallAdminBtn: 'Thuê Cả Hội Trường H-01 (Tự động duyệt)',
+    rentWholeHallManagerBtn: 'Đăng ký Thuê Cả Hội Trường (Chờ Admin duyệt)',
+    employeeCannotRentHallNote:
+      'Vai trò Nhân viên (EMPLOYEE) chỉ có quyền đặt chỗ ghế ngồi khi có sự kiện, không thể thuê cả Hội trường.',
+    bookHallSeatActiveBtn: (seat, s, e) => `Đặt Ghế Ngồi ${seat} (${s} – ${e})`,
+    bookHallSeatLockedBtn: (seat) => `Đặt Ghế ${seat} (Chưa có sự kiện)`,
+    bookStandardRoomBtn: (code, s, e) => `Đặt Phòng ${code} (${s} – ${e})`,
+    corridor2DLabel: (fl) => `HÀNH LANG GIAO THÔNG TRUNG TÂM TẦNG ${fl}`,
+    colosseum2DTitle:
+      'MẶT BẰNG KIẾN TRÚC 2D HỘI TRƯỜNG LA MÃ H-01 (3 DÃY GHẾ VÒM A, B, C & SÂN KHẤU TRUNG TÂM)',
+    stage2DTitle: 'SÂN KHẤU TRÒN',
+    stage2DSub: 'Bục Diễn Giả 360°',
+    led2DTitle: 'MÀN HÌNH LED CONG PANORAMA 360°',
+  },
+  en: {
+    floorTabPrefix: 'Floor',
+    floor5Tab: 'Floor 5 • Colosseum Hall',
+    mode3DBtn: '3D PBR Interactive Model',
+    mode2DBtn: '2D Architectural Blueprint',
+    badge3DFloor: (fl) =>
+      fl === 5
+        ? '3D Model Floor 5 — Colosseum Amphitheater (H-01)'
+        : `3D Model Floor ${fl} — 6 Open-Top Glass Meeting Rooms`,
+    badge2DFloor: (fl) =>
+      fl === 5
+        ? '2D Blueprint Floor 5 — Colosseum Amphitheater (30 Tiered Seats)'
+        : `2D Architectural Blueprint Floor ${fl} — 6 Meeting Rooms & Furniture Layout`,
+    hint3D: 'Left-drag to rotate 360° • Scroll to zoom • Click any room/seat to select',
+    hint2D: 'Top-down 2D architectural blueprint • Click any room or seat to book',
+    statusFree: 'Available',
+    statusHold: 'Holding / Pending',
+    statusBooked: 'Booked',
+    resetCamBtn: 'Standard View',
+    rightPanelTitleHall: 'Floor 5 Hall Governance (2 Modes)',
+    rightPanelTitleRoom: (fl) => `Floor ${fl} Meeting Room Details`,
+    capacityLabel: 'Capacity',
+    seatsUnit: 'seats',
+    codeLabel: 'Code',
+    selectSlotLabel: (d) => `Select Time Slot Today (${d}):`,
+    selectedBadge: 'Selected',
+    pickSlotBadge: 'Select',
+    hallEventStatusTitle: 'Hall Event Status:',
+    hallApprovedBadge: 'APPROVED EVENT',
+    hallNoEventBadge: 'NO EVENT YET',
+    allowedDeptsLabel: 'Allowed Departments:',
+    allDeptsText: 'All Departments',
+    noEventWarningText: (s, e) =>
+      `Time slot ${s}–${e} currently has no approved event. Individual seats remain locked until an Admin or Manager rents the Hall.`,
+    rentWholeHallAdminBtn: 'Rent Entire Hall H-01 (Instant Approval)',
+    rentWholeHallManagerBtn: 'Request Hall Rental H-01 (Pending Admin)',
+    employeeCannotRentHallNote:
+      'Employees (EMPLOYEE) can only book individual seats during approved events and cannot rent the entire Hall.',
+    bookHallSeatActiveBtn: (seat, s, e) => `Book Seat ${seat} (${s} – ${e})`,
+    bookHallSeatLockedBtn: (seat) => `Book Seat ${seat} (No Active Event)`,
+    bookStandardRoomBtn: (code, s, e) => `Book Room ${code} (${s} – ${e})`,
+    corridor2DLabel: (fl) => `FLOOR ${fl} CENTRAL TRAFFIC CORRIDOR`,
+    colosseum2DTitle:
+      '2D ARCHITECTURAL BLUEPRINT — COLOSSEUM HALL H-01 (TIERED ARCS A, B, C & CENTRAL STAGE)',
+    stage2DTitle: 'CENTRAL STAGE',
+    stage2DSub: '360° Keynote Podium',
+    led2DTitle: '360° CURVED PANORAMA LED WALL',
+  },
+  ja: {
+    floorTabPrefix: 'フロア',
+    floor5Tab: '5階 • コロッセオ大ホール',
+    mode3DBtn: '3D PBR 立体モデル',
+    mode2DBtn: '2D 建築平面図 (Blueprint)',
+    badge3DFloor: (fl) =>
+      fl === 5
+        ? '3Dモデル 5階 — コロッセオ大ホール (H-01)'
+        : `3Dモデル ${fl}階 — ガラス会議室 6室 (オープントップ構造)`,
+    badge2DFloor: (fl) =>
+      fl === 5
+        ? '2D建築平面図 5階 — コロッセオ大ホール (円弧30席)'
+        : `2D建築平面図 ${fl}階 — 6会議室・テーブル＆チェア配置図`,
+    hint3D: '左ドラッグで360°回転 • ホイールで拡大縮小 • 部屋/座席をクリックして選択',
+    hint2D: '2D建築平面図 • 部屋または座席をクリックして予約枠を確認',
+    statusFree: '空室',
+    statusHold: '承認待ち / 一時保持',
+    statusBooked: '予約済',
+    resetCamBtn: '標準カメラ視点',
+    rightPanelTitleHall: '5階大ホール管理 (2モード制御)',
+    rightPanelTitleRoom: (fl) => `${fl}階 会議室詳細情報`,
+    capacityLabel: '定員',
+    seatsUnit: '名',
+    codeLabel: 'コード',
+    selectSlotLabel: (d) => `本日の利用時間帯を選択 (${d}):`,
+    selectedBadge: '選択中',
+    pickSlotBadge: '選択',
+    hallEventStatusTitle: 'ホールイベント状態:',
+    hallApprovedBadge: '承認済イベント有',
+    hallNoEventBadge: 'イベント未登録',
+    allowedDeptsLabel: '参加許可部署:',
+    allDeptsText: '全部署対象',
+    noEventWarningText: (s, e) =>
+      `時間帯 ${s}–${e} には承認済みのホール貸切イベントがありません。管理者またはマネージャーがホールを予約するまで座席予約はロックされます。`,
+    rentWholeHallAdminBtn: 'ホール全体 H-01 を貸切予約 (即時承認)',
+    rentWholeHallManagerBtn: 'ホール全体貸切を申請 (Admin承認待ち)',
+    employeeCannotRentHallNote:
+      '一般社員 (EMPLOYEE) はイベント開催時の個別座席予約のみ可能で、ホール全体の貸切はできません。',
+    bookHallSeatActiveBtn: (seat, s, e) => `座席 ${seat} を予約 (${s} – ${e})`,
+    bookHallSeatLockedBtn: (seat) => `座席 ${seat} (イベント未開催)`,
+    bookStandardRoomBtn: (code, s, e) => `会議室 ${code} を予約 (${s} – ${e})`,
+    corridor2DLabel: (fl) => `${fl}階 中央メインコリドー (通路)`,
+    colosseum2DTitle:
+      '2D建築平面図 — コロッセオ大ホール H-01 (円弧座席 A・B・C列 ＆ 中央ステージ)',
+    stage2DTitle: '中央ステージ',
+    stage2DSub: '360° 講演演台',
+    led2DTitle: '360° 湾曲パノラマLEDスクリーン',
+  },
+};
+
 function createBeveledBoxGeometry(
   width: number,
   height: number,
@@ -111,10 +294,6 @@ function createBeveledBoxGeometry(
   return geometry;
 }
 
-/**
- * Tạo bản đồ phản xạ môi trường Studio HDRI giả lập (Procedural Lightbox Environment)
- * dùng PMREMGenerator để kính cường lực, nhôm Anodized và mặt bàn có phản chiếu sắc nét.
- */
 function buildInteriorStudioEnvMap(
   renderer: THREE.WebGLRenderer,
   isDarkTheme: boolean
@@ -165,9 +344,6 @@ function buildInteriorStudioEnvMap(
   return envTarget.texture;
 }
 
-/**
- * Tạo Texture màn hình Panorama 360° độ phân giải cao cho Hội trường La Mã H-01
- */
 function createColosseumPanoramaTexture(eventTitle: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -222,7 +398,6 @@ function createColosseumPanoramaTexture(eventTitle: string): THREE.CanvasTexture
   return texture;
 }
 
-// Xây dựng 28 ghế vòm Đấu trường La Mã (A1..A7, B1..B9, C1..C12) khớp 100% ảnh 2D & 3D
 function buildColosseumArcSeats(): ColosseumSeatSpec[] {
   const list: ColosseumSeatSpec[] = [];
   const tiers: Array<{
@@ -232,9 +407,9 @@ function buildColosseumArcSeats(): ColosseumSeatSpec[] {
     radius3D: number;
     height3D: number;
   }> = [
-    { row: 'A', count: 7, radius2D: 112, radius3D: 3.6, height3D: 0.42 },
-    { row: 'B', count: 9, radius2D: 162, radius3D: 5.2, height3D: 0.88 },
-    { row: 'C', count: 12, radius2D: 214, radius3D: 6.8, height3D: 1.36 },
+    { row: 'A', count: 7, radius2D: 118, radius3D: 3.6, height3D: 0.42 },
+    { row: 'B', count: 9, radius2D: 168, radius3D: 5.2, height3D: 0.88 },
+    { row: 'C', count: 12, radius2D: 218, radius3D: 6.8, height3D: 1.36 },
   ];
 
   const centerX = 400;
@@ -271,12 +446,12 @@ function buildColosseumArcSeats(): ColosseumSeatSpec[] {
 
 const COLOSSEUM_SEATS_LIST = buildColosseumArcSeats();
 
-// Hàm tạo Sprite nhãn 3D Retina (512x192) sắc nét lơ lửng trên từng phòng họp (M1-01 .. M4-06)
 function createRoomLabelSprite(
   roomCode: string,
   capacityCount: number,
   status: SeatStatusType,
-  isSelected: boolean
+  isSelected: boolean,
+  lang: WebLanguageCodeType
 ): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -309,19 +484,31 @@ function createRoomLabelSprite(
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '900 56px Inter, Arial, sans-serif';
+    ctx.font = '900 54px Inter, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${roomCode} • ${capacityCount}P`, 256, 98);
+    ctx.fillText(`${roomCode} • ${capacityCount}P`, 256, 96);
 
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.font = 'bold 30px Inter, Arial, sans-serif';
+    ctx.font = 'bold 28px Inter, Arial, sans-serif';
     const statusLabel =
       status === 'AVAILABLE'
-        ? '● CÒN TRỐNG'
+        ? lang === 'en'
+          ? '● AVAILABLE'
+          : lang === 'ja'
+          ? '● 空室'
+          : '● CÒN TRỐNG'
         : status === 'HOLDING'
-        ? '◐ CHỜ DUYỆT / GIỮ 5P'
-        : '■ ĐÃ ĐẶT / ĐANG HỌP';
-    ctx.fillText(statusLabel, 256, 146);
+        ? lang === 'en'
+          ? '◐ PENDING / HOLD'
+          : lang === 'ja'
+          ? '◐ 承認待ち'
+          : '◐ CHỜ DUYỆT'
+        : lang === 'en'
+        ? '■ BOOKED / BUSY'
+        : lang === 'ja'
+        ? '■ 予約済 / 使用中'
+        : '■ ĐÃ ĐẶT / BẬN';
+    ctx.fillText(statusLabel, 256, 144);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -336,7 +523,6 @@ function createRoomLabelSprite(
   return sprite;
 }
 
-// Hàm tạo Sprite nhãn ghế La Mã 3D nhỏ gọn cho ghế đang chọn trên Tầng 5
 function createSeatBadgeSprite(seatCode: string, isBooked: boolean): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -363,11 +549,11 @@ function createSeatBadgeSprite(seatCode: string, isBooked: boolean): THREE.Sprit
 }
 
 const STANDARD_TIME_SLOTS = [
-  { start: '08:00', end: '10:00', label: 'Ca 1: 08:00 – 10:00' },
-  { start: '10:00', end: '12:00', label: 'Ca 2: 10:00 – 12:00' },
-  { start: '13:00', end: '15:00', label: 'Ca 3: 13:00 – 15:00' },
-  { start: '15:00', end: '17:00', label: 'Ca 4: 15:00 – 17:00' },
-  { start: '17:00', end: '19:00', label: 'Ca 5: 17:00 – 19:00' },
+  { start: '08:00', end: '10:00', idx: 1 },
+  { start: '10:00', end: '12:00', idx: 2 },
+  { start: '13:00', end: '15:00', idx: 3 },
+  { start: '15:00', end: '17:00', idx: 4 },
+  { start: '17:00', end: '19:00', idx: 5 },
 ];
 
 const DEFAULT_CAMERA_SPHERICAL = {
@@ -382,6 +568,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
   selectedNode,
   userRole = 'SYS_ADMIN',
   userDepartment = 'Product & Engineering',
+  webLanguage = 'vi',
   isDark = false,
   onSelectNode,
   onNavigateToBookingWithSlot,
@@ -401,6 +588,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     type: 'WARNING' | 'INFO';
     text: string;
   } | null>(null);
+
+  const t = FLOORPLAN_I18N[webLanguage] || FLOORPLAN_I18N.vi;
 
   useEffect(() => {
     if (selectedNode?.floorLevel) {
@@ -476,14 +665,14 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
 
       setHallSeatAlertMessage({
         type: 'INFO',
-        text: `Đã chọn ghế ${seatCode} tham gia sự kiện "${approvedEvent.purposeNote}" (${selectedSlot.start} – ${selectedSlot.end}). Bấm nút "Đặt Ghế ${seatCode}" ở cột bên phải để nhận mã QR!`,
+        text: `Đã chọn ghế ${seatCode} tham gia sự kiện "${approvedEvent.purposeNote}" (${selectedSlot.start} – ${selectedSlot.end}). Bấm nút đặt ghế ở cột bên phải để nhận mã QR!`,
       });
     },
     [currentSlotHallEventInfo, selectedSlot, userRole, userDepartment]
   );
 
   // ============================================================================
-  // THREE.JS PBR 3D ENGINE VỚI ENVIRONMENT MAP, VÁT CẠNH BEVEL & NỘI THẤT CHI TIẾT
+  // THREE.JS PBR 3D ENGINE (ĐÃ XÓA BỎ HOÀN TOÀN MÁI TAM GIÁC PHÍA TRÊN PHÒNG HỌP)
   // ============================================================================
   const mount3DRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -512,7 +701,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     renderer.render(scene, cam);
   }, []);
 
-  // Hàm Lia Camera mượt mà về Góc nhìn chuẩn ngay lập tức khi bấm nút (420ms ease-out cubic)
   const handleSmoothResetStandardCamera = useCallback(() => {
     if (cameraTweenFrameRef.current) {
       cancelAnimationFrame(cameraTweenFrameRef.current);
@@ -583,12 +771,10 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Gắn PBR Environment Map để kính và kim loại có phản xạ ánh sáng sắc nét
     const envMapTexture = buildInteriorStudioEnvMap(renderer, isDark);
     scene.environment = envMapTexture;
 
-    // Hệ thống ánh sáng PBR 4 nguồn có đổ bóng 2048px
-    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.9 : 1.25);
+    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.92 : 1.28);
     scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, isDark ? 2.1 : 2.4);
@@ -614,7 +800,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     accentLight.position.set(10, 7, 8);
     scene.add(accentLight);
 
-    // Mặt sàn chính Beveled & Lưới tọa độ kiến trúc
     const floorSlabGeo = createBeveledBoxGeometry(19.2, 0.32, 14.0, 0.55, 0.05);
     const floorSlabMat = new THREE.MeshPhysicalMaterial({
       color: isDark ? 0x0f172a : 0xf8fafc,
@@ -637,7 +822,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     gridHelper.position.y = 0.01;
     scene.add(gridHelper);
 
-    // Tường bao quanh tòa nhà có gờ nhôm đỉnh tường
     const wallMat = new THREE.MeshPhysicalMaterial({
       color: isDark ? 0x1e293b : 0xcbd5e1,
       roughness: 0.28,
@@ -680,7 +864,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     const animatedPulseRings: THREE.Mesh[] = [];
     const animatedHoloOrbs: THREE.Mesh[] = [];
 
-    // Dùng chung Beveled Geometry cho ghế văn phòng công thái học để sắc nét & mượt
     const sharedSeatCushionGeo = createBeveledBoxGeometry(0.4, 0.075, 0.4, 0.08, 0.015);
     const sharedSeatBackGeo = createBeveledBoxGeometry(0.4, 0.42, 0.065, 0.08, 0.015);
     const sharedArmrestGeo = createBeveledBoxGeometry(0.05, 0.16, 0.28, 0.02, 0.008);
@@ -732,12 +915,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     };
 
     if (selectedFloor === 5) {
-      // ====================================================================
-      // MÔ HÌNH 3D TẦNG 5: ĐẤU TRƯỜNG LA MÃ H-01 (PBR COLOSSEUM AMPHITHEATER)
-      // ====================================================================
       const stageCenterZ = 1.65;
 
-      // Sân khấu tròn trung tâm 2 tầng ốp đá & viền LED Ngọc lục bảo
       const stageOuter = new THREE.Mesh(
         new THREE.CylinderGeometry(2.35, 2.55, 0.34, 64),
         new THREE.MeshPhysicalMaterial({
@@ -780,7 +959,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       stageRing.position.set(0, 0.35, stageCenterZ);
       scene.add(stageRing);
 
-      // Bục phát biểu Keynote vát cạnh + Khối Hologram xoay lơ lửng trên sân khấu
       const podium = new THREE.Mesh(
         createBeveledBoxGeometry(0.78, 0.78, 0.52, 0.1, 0.025),
         chromeMat
@@ -804,7 +982,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       scene.add(stageHoloCrystal);
       animatedHoloOrbs.push(stageHoloCrystal);
 
-      // Hàng cột trụ kiến trúc La Mã (Colonnade) quanh vòm khán đài
       const pillarCount = 14;
       for (let p = 0; p < pillarCount; p++) {
         const pRatio = p / (pillarCount - 1);
@@ -820,10 +997,9 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         scene.add(colMesh);
       }
 
-      // Màn hình LED Cong Panorama 360° có CanvasTexture hiển thị tên sự kiện thực tế
       const eventTitleText =
         currentSlotHallEventInfo.approvedEvent?.purposeNote ||
-        'SẴN SÀNG TỔ CHỨC SỰ KIỆN • HALL_EVENT_RENTAL & SEAT_BOOKING';
+        'COLOSSEUM H-01 • READY FOR HALL_EVENT_RENTAL & SEAT_BOOKING';
       const panoramaTex = createColosseumPanoramaTexture(eventTitleText);
       const screenGeo = new THREE.CylinderGeometry(
         4.2,
@@ -856,7 +1032,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         const group = new THREE.Group();
         group.position.set(seat.worldX, 0, seat.worldZ + 1.4);
 
-        // Bệ đá bậc thang vát cạnh cho từng ghế vòm La Mã
         const stepBlockGeo = createBeveledBoxGeometry(
           0.96,
           seat.worldY,
@@ -911,9 +1086,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       });
     } else {
       // ====================================================================
-      // MÔ HÌNH 3D TẦNG 1 - 4 PBR SẮC NÉT:
-      // Hành lang bóng gương + 6 Phòng họp Kính Vát Cạnh IOR 1.5 + Bàn Dài/Tròn
-      // + Ghế công thái học có tay vịn + Màn hình TV 4K Bezel + Nhãn 3D Retina
+      // MÔ HÌNH 3D TẦNG 1 - 4 KHÔNG MÁI CHE (OPEN-TOP GLASS PODS):
+      // Đã xóa bỏ hoàn toàn khối tam giác trên đỉnh phòng để nhìn rõ 100% nội thất
       // ====================================================================
       const corridorCarpet = new THREE.Mesh(
         new THREE.PlaneGeometry(17.8, 1.85),
@@ -931,7 +1105,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
       corridorCarpet.receiveShadow = true;
       scene.add(corridorCarpet);
 
-      // 2 Dải đèn LED dẫn hướng dọc hành lang trung tâm
       [-0.88, 0.88].forEach((railZ) => {
         const railLine = new THREE.Mesh(
           new THREE.BoxGeometry(17.6, 0.02, 0.05),
@@ -976,7 +1149,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         const roomGroup = new THREE.Group();
         roomGroup.position.set(posX, 0, posZ);
 
-        // 1. Nền sàn gỗ/đá vát cạnh riêng cho từng phòng + viền LED trạng thái
         const basePlatform = new THREE.Mesh(
           sharedRoomPlatformGeo,
           new THREE.MeshPhysicalMaterial({
@@ -1008,7 +1180,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         borderStrip.position.y = 0.03;
         roomGroup.add(borderStrip);
 
-        // 2. Vách kính cường lực quang học PBR (Clearcoat 1.0 + IOR 1.5 + Khung nhôm vát cạnh)
         const glassHeight = 1.52;
         const glassMat = new THREE.MeshPhysicalMaterial({
           color: isSelected ? 0x7dd3fc : 0xbae6fd,
@@ -1056,7 +1227,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         rightGlass.position.set(roomW / 2, glassHeight / 2 + 0.16, 0);
         roomGroup.add(rightGlass);
 
-        // Vách kính mặt hành lang (chừa lối cửa kính mở 1.25m kèm tay nắm Inox)
         const frontGlassSegmentW = (roomW - 1.25) / 2;
         const frontLeftGlass = new THREE.Mesh(
           new THREE.BoxGeometry(frontGlassSegmentW, glassHeight, 0.065),
@@ -1080,7 +1250,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         );
         roomGroup.add(frontRightGlass);
 
-        // Cánh cửa kính cường lực hé mở góc 35 độ + tay nắm kim loại
         const doorLeaf = new THREE.Mesh(
           new THREE.BoxGeometry(0.88, glassHeight - 0.12, 0.05),
           glassMat
@@ -1093,15 +1262,34 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         doorLeaf.rotation.y = isTopRow ? 0.52 : -0.52;
         roomGroup.add(doorLeaf);
 
-        // Khung viền đỉnh phòng bằng nhôm Anodized vát cạnh
-        const topCrownFrame = new THREE.Mesh(
-          new THREE.EdgesGeometry(new THREE.BoxGeometry(roomW, 0.05, roomD)),
-          new THREE.LineBasicMaterial({
-            color: isSelected ? 0x38bdf8 : 0x94a3b8,
-          })
+        // Thanh giằng nhôm mảnh trên đỉnh 4 mặt tường kính (Open-Top, tuyệt đối không có mái che)
+        const topRailBack = new THREE.Mesh(
+          new THREE.BoxGeometry(roomW + 0.08, 0.045, 0.075),
+          frameMat
         );
-        topCrownFrame.position.y = glassHeight + 0.18;
-        roomGroup.add(topCrownFrame);
+        topRailBack.position.set(0, glassHeight + 0.16, outerGlassZ);
+        roomGroup.add(topRailBack);
+
+        const topRailLeft = new THREE.Mesh(
+          new THREE.BoxGeometry(0.075, 0.045, roomD + 0.08),
+          frameMat
+        );
+        topRailLeft.position.set(-roomW / 2, glassHeight + 0.16, 0);
+        roomGroup.add(topRailLeft);
+
+        const topRailRight = new THREE.Mesh(
+          new THREE.BoxGeometry(0.075, 0.045, roomD + 0.08),
+          frameMat
+        );
+        topRailRight.position.set(roomW / 2, glassHeight + 0.16, 0);
+        roomGroup.add(topRailRight);
+
+        const topRailFront = new THREE.Mesh(
+          new THREE.BoxGeometry(roomW + 0.08, 0.045, 0.075),
+          frameMat
+        );
+        topRailFront.position.set(0, glassHeight + 0.16, innerCorridorZ);
+        roomGroup.add(topRailFront);
 
         // 4 cột trụ nhôm góc phòng
         [
@@ -1119,7 +1307,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           roomGroup.add(pillar);
         });
 
-        // 3. Màn hình Hội nghị 4K gắn trên vách trong của mỗi phòng + Loa Soundbar
         const tvBoard = new THREE.Mesh(
           createBeveledBoxGeometry(1.85, 0.84, 0.08, 0.06, 0.015),
           frameMat
@@ -1143,7 +1330,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         tvScreenGlow.position.copy(tvBoard.position);
         roomGroup.add(tvScreenGlow);
 
-        // 4. Bàn Họp Trung Tâm Vát Cạnh Bóng Gương (Bàn tròn Collab hoặc Bàn dài Boardroom)
         const isRoundTable =
           room.zoneType === 'COLLAB_HUB' ||
           room.nodeCode.endsWith('-04') ||
@@ -1228,7 +1414,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           });
         }
 
-        // 5. Ghế xoay công thái học 3D xếp quanh bàn đúng theo sức chứa (capacityCount)
         const chairCount = Math.min(12, Math.max(2, room.capacityCount));
         for (let cIdx = 0; cIdx < chairCount; cIdx++) {
           const chairGroup = buildErgonomicChair(statusColor, isSelected);
@@ -1260,7 +1445,6 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           roomGroup.add(chairGroup);
         }
 
-        // 6. Vòng xung nhịp ánh sáng + Nhãn 3D Retina nổi hiển thị mã phòng và sức chứa
         if (isSelected) {
           const selectRingGeo = new THREE.RingGeometry(2.45, 2.62, 48);
           selectRingGeo.rotateX(-Math.PI / 2);
@@ -1282,7 +1466,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
           room.nodeCode,
           room.capacityCount,
           room.status,
-          isSelected
+          isSelected,
+          webLanguage
         );
         labelSprite.position.set(0, 2.18, 0);
         roomGroup.add(labelSprite);
@@ -1378,21 +1563,20 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     domElem.addEventListener('wheel', onWheel, { passive: false });
     domElem.addEventListener('click', onClickCanvas);
 
-    // Vòng lặp hoạt ảnh nhẹ 60 FPS giúp khối Hologram & vòng chọn phòng phát sáng sống động
     let idleAnimFrame = 0;
     const clock = new THREE.Clock();
     const animateSceneLoop = () => {
       idleAnimFrame = requestAnimationFrame(animateSceneLoop);
-      const t = clock.getElapsedTime();
+      const elapsed = clock.getElapsedTime();
 
       animatedHoloOrbs.forEach((orb) => {
-        orb.rotation.y = t * 1.4;
-        orb.rotation.x = t * 0.8;
-        orb.position.y = 1.65 + Math.sin(t * 2.2) * 0.08;
+        orb.rotation.y = elapsed * 1.4;
+        orb.rotation.x = elapsed * 0.8;
+        orb.position.y = 1.65 + Math.sin(elapsed * 2.2) * 0.08;
       });
 
       animatedPulseRings.forEach((ring) => {
-        const sc = 1 + Math.sin(t * 3.0) * 0.04;
+        const sc = 1 + Math.sin(elapsed * 3.0) * 0.04;
         ring.scale.set(sc, sc, 1);
       });
 
@@ -1422,6 +1606,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
     bookedHallSeatCodes,
     currentSlotHallEventInfo,
     isDark,
+    webLanguage,
     workspaceNodes,
     onSelectNode,
     handleSelectColosseumSeat,
@@ -1484,7 +1669,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>
-                  {fl === 5 ? 'Tầng 5 • Hội trường La Mã' : `Tầng ${fl}`}
+                  {fl === 5 ? t.floor5Tab : `${t.floorTabPrefix} ${fl}`}
                 </span>
               </button>
             );
@@ -1504,7 +1689,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             }`}
           >
             <Box className="w-3.5 h-3.5" />
-            <span>Mô hình 3D PBR Sắc Nét</span>
+            <span>{t.mode3DBtn}</span>
           </button>
 
           <button
@@ -1519,12 +1704,12 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             }`}
           >
             <Map className="w-3.5 h-3.5" />
-            <span>Bản vẽ Mặt bằng 2D</span>
+            <span>{t.mode2DBtn}</span>
           </button>
         </div>
       </div>
 
-      {/* Bố cục chính: Cột Trái (Canvas 3D / Bản vẽ 2D) + Cột Phải (Điều phối Đặt phòng / Hội trường 2 chế độ) */}
+      {/* Bố cục chính: Cột Trái (Canvas 3D / Bản vẽ Kiến trúc 2D) + Cột Phải (Điều phối Đặt phòng / Hội trường) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-8 p-5 rounded-3xl border flex flex-col justify-between ${
@@ -1535,38 +1720,34 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
         >
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-indigo-600 text-white flex items-center gap-1">
-                  <Box className="w-3 h-3" />
+                  {viewDimension === '3D' ? (
+                    <Box className="w-3 h-3" />
+                  ) : (
+                    <Map className="w-3 h-3" />
+                  )}
                   {viewDimension === '3D'
-                    ? `Mô hình 3D PBR Tầng ${selectedFloor} — ${
-                        selectedFloor === 5
-                          ? 'Hội trường Đấu Trường La Mã (Colosseum H-01)'
-                          : 'Khu Phòng họp Kính Vát Cạnh IOR 1.5'
-                      }`
-                    : `Bản vẽ 2D Tầng ${selectedFloor} — ${
-                        selectedFloor === 5
-                          ? 'Hội trường Lớn (Tầng 5)'
-                          : '6 Phòng họp Chuẩn'
-                      }`}
+                    ? t.badge3DFloor(selectedFloor)
+                    : t.badge2DFloor(selectedFloor)}
                 </span>
                 <span className="text-xs text-slate-400">
-                  Giữ chuột trái xoay 360° • Click vào từng phòng/ghế để xem Slot trống
+                  {viewDimension === '3D' ? t.hint3D : t.hint2D}
                 </span>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-bold">
                 <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-teal-500" />
-                  Còn trống
+                  {t.statusFree}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  Giữ / Chờ duyệt
+                  {t.statusHold}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                  Đã đặt
+                  {t.statusBooked}
                 </span>
 
                 {viewDimension === '3D' ? (
@@ -1578,10 +1759,9 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                         ? 'bg-slate-800 border-slate-700 text-indigo-300 hover:bg-slate-700'
                         : 'bg-white border-slate-200 text-indigo-700 hover:bg-indigo-50'
                     }`}
-                    title="Lia camera mượt mà về lại Góc nhìn chuẩn mặc định"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Góc nhìn chuẩn</span>
+                    <span>{t.resetCamBtn}</span>
                   </button>
                 ) : (
                   <div className="inline-flex items-center gap-1">
@@ -1603,7 +1783,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       type="button"
                       onClick={() =>
                         setZoom2D((z) =>
-                          Math.min(1.4, Number((z + 0.1).toFixed(2)))
+                          Math.min(1.35, Number((z + 0.1).toFixed(2)))
                         )
                       }
                       className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700"
@@ -1637,50 +1817,83 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
 
           {viewDimension === '3D' ? (
             <div
+              key={`canvas-3d-floor-${selectedFloor}`}
               ref={mount3DRef}
               className="w-full h-[460px] rounded-2xl overflow-hidden border border-slate-200/70 dark:border-slate-800 cursor-grab active:cursor-grabbing"
             />
           ) : (
-            <div className="w-full h-[460px] rounded-2xl overflow-auto border border-slate-200/70 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-2">
+            <div
+              key={`blueprint-2d-floor-${selectedFloor}`}
+              className="w-full h-[460px] rounded-2xl overflow-hidden border border-slate-200/70 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-2"
+            >
               <svg
-                viewBox="0 0 800 460"
-                className="w-full h-full max-w-[780px] transition-transform"
-                style={{ transform: `scale(${zoom2D})` }}
+                viewBox="0 0 820 470"
+                className="w-full h-full transition-transform duration-200 select-none"
+                style={{ transform: `scale(${zoom2D})`, transformOrigin: 'center center' }}
               >
+                <defs>
+                  <pattern
+                    id="blueprintGrid"
+                    width="24"
+                    height="24"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <path
+                      d="M 24 0 L 0 0 0 24"
+                      fill="none"
+                      stroke={isDark ? '#1e293b' : '#e2e8f0'}
+                      strokeWidth="1"
+                    />
+                  </pattern>
+                </defs>
+
+                {/* Nền lưới bản vẽ kỹ thuật CAD 2D */}
+                <rect
+                  x="12"
+                  y="12"
+                  width="796"
+                  height="446"
+                  rx="22"
+                  fill={isDark ? '#0b1120' : '#f8fafc'}
+                  stroke={isDark ? '#334155' : '#cbd5e1'}
+                  strokeWidth="2.5"
+                />
+                <rect
+                  x="14"
+                  y="14"
+                  width="792"
+                  height="442"
+                  rx="20"
+                  fill="url(#blueprintGrid)"
+                />
+
                 {selectedFloor === 5 ? (
                   <>
-                    <rect
-                      x="20"
-                      y="15"
-                      width="760"
-                      height="430"
-                      rx="22"
-                      fill={isDark ? '#0f172a' : '#f8fafc'}
-                      stroke={isDark ? '#334155' : '#cbd5e1'}
-                      strokeWidth="2"
-                    />
                     <text
-                      x="400"
-                      y="42"
+                      x="410"
+                      y="38"
                       textAnchor="middle"
                       fill={isDark ? '#94a3b8' : '#475569'}
-                      fontSize="12"
+                      fontSize="11.5"
                       fontWeight="800"
                     >
-                      HỘI TRƯỜNG ĐẤU TRƯỜNG LA MÃ H-01 (3 HÀNG GHẾ VÒM A, B, C & SÂN KHẤU TRUNG TÂM)
+                      {t.colosseum2DTitle}
                     </text>
 
-                    {[112, 162, 214].map((r, idx) => (
+                    {/* 3 Vòng cung bậc thềm Đấu trường La Mã */}
+                    {[118, 168, 218].map((r, idx) => (
                       <path
                         key={r}
                         d={`M ${400 - r} 305 A ${r} ${r} 0 0 1 ${400 + r} 305`}
                         fill="none"
                         stroke={isDark ? '#1e293b' : '#e2e8f0'}
-                        strokeWidth="18"
-                        strokeDasharray={idx === 1 ? '6 4' : undefined}
+                        strokeWidth="24"
+                        strokeLinecap="round"
+                        strokeDasharray={idx === 1 ? '8 4' : undefined}
                       />
                     ))}
 
+                    {/* 28 Ghế vòm La Mã (H01-A1..C12) */}
                     {COLOSSEUM_SEATS_LIST.map((seat) => {
                       const isBooked = bookedHallSeatCodes.has(seat.seatCode);
                       const isSelected = selectedHallSeatCode === seat.seatCode;
@@ -1689,7 +1902,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                         : isBooked
                         ? '#4338ca'
                         : !hasApprovedHallEventInSlot
-                        ? '#94a3b8'
+                        ? '#64748b'
                         : '#0d9488';
 
                       return (
@@ -1703,10 +1916,10 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                             y={seat.svgY - 14}
                             width="36"
                             height="28"
-                            rx="7"
+                            rx="8"
                             fill={fillHex}
-                            stroke={isSelected ? '#ffffff' : 'none'}
-                            strokeWidth="2.5"
+                            stroke={isSelected ? '#38bdf8' : '#ffffff'}
+                            strokeWidth={isSelected ? '3' : '1.2'}
                           />
                           <text
                             x={seat.svgX}
@@ -1722,13 +1935,23 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       );
                     })}
 
+                    {/* Sân khấu tròn trung tâm */}
                     <circle
                       cx="400"
                       cy="315"
-                      r="56"
+                      r="58"
                       fill="#0f172a"
                       stroke="#10b981"
                       strokeWidth="4"
+                    />
+                    <circle
+                      cx="400"
+                      cy="315"
+                      r="44"
+                      fill="none"
+                      stroke="#38bdf8"
+                      strokeWidth="1.5"
+                      strokeDasharray="4 4"
                     />
                     <text
                       x="400"
@@ -1738,7 +1961,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       fontSize="11"
                       fontWeight="800"
                     >
-                      SÂN KHẤU TRÒN
+                      {t.stage2DTitle}
                     </text>
                     <text
                       x="400"
@@ -1747,65 +1970,81 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       fill="#94a3b8"
                       fontSize="9"
                     >
-                      Bục Diễn Giả 360°
+                      {t.stage2DSub}
                     </text>
 
+                    {/* Màn hình LED Panorama 360° */}
                     <rect
-                      x="250"
-                      y="390"
-                      width="300"
-                      height="28"
-                      rx="8"
+                      x="235"
+                      y="392"
+                      width="330"
+                      height="30"
+                      rx="9"
                       fill="#1e3a8a"
+                      stroke="#38bdf8"
+                      strokeWidth="1.5"
                     />
                     <text
                       x="400"
-                      y="408"
+                      y="411"
                       textAnchor="middle"
-                      fill="#93c5fd"
+                      fill="#e0f2fe"
                       fontSize="10"
                       fontWeight="800"
                     >
-                      MÀN HÌNH LED CONG PANORAMA 360°
+                      {t.led2DTitle}
                     </text>
                   </>
                 ) : (
                   <>
+                    {/* HÀNH LANG GIAO THÔNG TRUNG TÂM TẦNG 1..4 */}
                     <rect
-                      x="20"
-                      y="15"
-                      width="760"
-                      height="430"
-                      rx="22"
-                      fill={isDark ? '#0f172a' : '#f8fafc'}
-                      stroke={isDark ? '#334155' : '#cbd5e1'}
-                      strokeWidth="2"
+                      x="26"
+                      y="212"
+                      width="768"
+                      height="46"
+                      rx="10"
+                      fill={isDark ? '#111c33' : '#e0e7ff'}
+                      stroke={isDark ? '#1e3a8a' : '#c7d2fe'}
+                      strokeWidth="1.5"
                     />
-                    <rect
-                      x="30"
-                      y="208"
-                      width="740"
-                      height="44"
-                      fill={isDark ? '#1e293b' : '#f1f5f9'}
+                    <line
+                      x1="40"
+                      y1="235"
+                      x2="780"
+                      y2="235"
+                      stroke={isDark ? '#38bdf8' : '#6366f1'}
+                      strokeWidth="1.5"
+                      strokeDasharray="8 6"
+                      strokeOpacity="0.45"
                     />
                     <text
-                      x="400"
-                      y="234"
+                      x="410"
+                      y="239"
                       textAnchor="middle"
-                      fill="#94a3b8"
+                      fill={isDark ? '#93c5fd' : '#4338ca'}
                       fontSize="11"
-                      fontWeight="700"
+                      fontWeight="800"
                       letterSpacing="2"
                     >
-                      HÀNH LANG GIAO THÔNG TRUNG TÂM TẦNG {selectedFloor}
+                      {t.corridor2DLabel(selectedFloor)}
                     </text>
 
+                    {/* BẢN VẼ KIẾN TRÚC 2D CHI TIẾT CHO 6 PHÒNG HỌP (TƯỜNG KÍNH, CỬA MỞ VÒNG CUNG, BÀN HỌP, GHẾ XOAY & TV 4K) */}
                     {currentFloorNodes.map((room, idx) => {
                       const col = idx % 3;
                       const row = Math.floor(idx / 3);
-                      const rx = 45 + col * 245;
-                      const ry = row === 0 ? 32 : 268;
+                      const rx = 34 + col * 254;
+                      const ry = row === 0 ? 28 : 272;
+                      const rw = 238;
+                      const rh = 168;
+                      const isTopRow = row === 0;
                       const isSel = selectedNode?.nodeCode === room.nodeCode;
+                      const isRoundTable =
+                        room.zoneType === 'COLLAB_HUB' ||
+                        room.nodeCode.endsWith('-04') ||
+                        room.nodeCode.endsWith('-05');
+
                       const badgeColor =
                         room.status === 'AVAILABLE'
                           ? '#0d9488'
@@ -1813,33 +2052,179 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                           ? '#d97706'
                           : '#4f46e5';
 
+                      const centerX = rx + rw / 2;
+                      const centerY = ry + rh / 2 + (isTopRow ? -6 : 6);
+                      const chairCount = Math.min(10, Math.max(2, room.capacityCount));
+
                       return (
                         <g
                           key={room.nodeCode}
                           onClick={() => onSelectNode(room)}
                           className="cursor-pointer"
                         >
+                          {/* Nền phòng họp & Tường kính bao quanh */}
                           <rect
                             x={rx}
                             y={ry}
-                            width="220"
-                            height="155"
+                            width={rw}
+                            height={rh}
                             rx="16"
-                            fill={isDark ? '#1e293b' : '#ffffff'}
-                            stroke={isSel ? '#4f46e5' : badgeColor}
-                            strokeWidth={isSel ? '3.5' : '2'}
+                            fill={
+                              isSel
+                                ? isDark
+                                  ? '#1e1b4b'
+                                  : '#eef2ff'
+                                : isDark
+                                ? '#0f172a'
+                                : '#ffffff'
+                            }
+                            stroke={isSel ? '#38bdf8' : badgeColor}
+                            strokeWidth={isSel ? '3.5' : '2.2'}
                           />
+
+                          {/* Ký hiệu Cửa kính mở ra hành lang (Architectural Door Swing Arc) */}
                           <rect
-                            x={rx + 14}
+                            x={rx + rw - 64}
+                            y={isTopRow ? ry + rh - 4 : ry - 2}
+                            width="34"
+                            height="6"
+                            fill={isDark ? '#0b1120' : '#f8fafc'}
+                          />
+                          <line
+                            x1={rx + rw - 64}
+                            y1={isTopRow ? ry + rh : ry}
+                            x2={rx + rw - 64}
+                            y2={isTopRow ? ry + rh - 24 : ry + 24}
+                            stroke={badgeColor}
+                            strokeWidth="2.5"
+                          />
+                          <path
+                            d={
+                              isTopRow
+                                ? `M ${rx + rw - 64} ${ry + rh - 24} A 24 24 0 0 1 ${
+                                    rx + rw - 40
+                                  } ${ry + rh}`
+                                : `M ${rx + rw - 64} ${ry + 24} A 24 24 0 0 0 ${
+                                    rx + rw - 40
+                                  } ${ry}`
+                            }
+                            fill="none"
+                            stroke={badgeColor}
+                            strokeWidth="1.2"
+                            strokeDasharray="3 2"
+                          />
+
+                          {/* Thanh Màn hình TV 4K gắn tường */}
+                          <rect
+                            x={centerX - 42}
+                            y={isTopRow ? ry + 6 : ry + rh - 12}
+                            width="84"
+                            height="6"
+                            rx="3"
+                            fill="#38bdf8"
+                          />
+
+                          {/* Bàn họp trung tâm (Bàn tròn Collab hoặc Bàn dài Boardroom) + Ghế ngồi xung quanh */}
+                          {isRoundTable ? (
+                            <>
+                              <circle
+                                cx={centerX}
+                                cy={centerY + 12}
+                                r="26"
+                                fill={badgeColor}
+                                fillOpacity="0.16"
+                                stroke={badgeColor}
+                                strokeWidth="2"
+                              />
+                              <circle
+                                cx={centerX}
+                                cy={centerY + 12}
+                                r="10"
+                                fill={badgeColor}
+                                fillOpacity="0.35"
+                              />
+                              {Array.from({ length: chairCount }).map((_, cIdx) => {
+                                const ang = (cIdx / chairCount) * Math.PI * 2;
+                                const cx = centerX + Math.cos(ang) * 37;
+                                const cy = centerY + 12 + Math.sin(ang) * 37;
+                                return (
+                                  <circle
+                                    key={cIdx}
+                                    cx={cx}
+                                    cy={cy}
+                                    r="5.5"
+                                    fill={badgeColor}
+                                  />
+                                );
+                              })}
+                            </>
+                          ) : (
+                            <>
+                              <rect
+                                x={centerX - 52}
+                                y={centerY - 6}
+                                width="104"
+                                height="36"
+                                rx="8"
+                                fill={badgeColor}
+                                fillOpacity="0.16"
+                                stroke={badgeColor}
+                                strokeWidth="2"
+                              />
+                              <rect
+                                x={centerX - 34}
+                                y={centerY + 7}
+                                width="68"
+                                height="10"
+                                rx="4"
+                                fill={badgeColor}
+                                fillOpacity="0.32"
+                              />
+                              {Array.from({ length: Math.ceil(chairCount / 2) }).map(
+                                (_, cIdx) => {
+                                  const half = Math.ceil(chairCount / 2);
+                                  const step = 84 / Math.max(1, half);
+                                  const cx =
+                                    centerX - 42 + step * cIdx + step / 2;
+                                  return (
+                                    <g key={cIdx}>
+                                      <rect
+                                        x={cx - 6}
+                                        y={centerY - 16}
+                                        width="12"
+                                        height="6"
+                                        rx="3"
+                                        fill={badgeColor}
+                                      />
+                                      {cIdx + half <= chairCount && (
+                                        <rect
+                                          x={cx - 6}
+                                          y={centerY + 34}
+                                          width="12"
+                                          height="6"
+                                          rx="3"
+                                          fill={badgeColor}
+                                        />
+                                      )}
+                                    </g>
+                                  );
+                                }
+                              )}
+                            </>
+                          )}
+
+                          {/* Nhãn Mã phòng & Sức chứa góc trên */}
+                          <rect
+                            x={rx + 12}
                             y={ry + 14}
                             width="64"
-                            height="24"
+                            height="22"
                             rx="6"
                             fill={badgeColor}
                           />
                           <text
-                            x={rx + 46}
-                            y={ry + 30}
+                            x={rx + 44}
+                            y={ry + 29}
                             textAnchor="middle"
                             fill="#ffffff"
                             fontSize="11"
@@ -1847,36 +2232,36 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                           >
                             {room.nodeCode}
                           </text>
+
+                          <rect
+                            x={rx + rw - 68}
+                            y={ry + 14}
+                            width="56"
+                            height="22"
+                            rx="6"
+                            fill={isDark ? '#1e293b' : '#f1f5f9'}
+                          />
                           <text
-                            x={rx + 195}
-                            y={ry + 30}
-                            textAnchor="end"
-                            fill="#64748b"
-                            fontSize="11"
-                            fontWeight="700"
-                          >
-                            {room.capacityCount} chỗ
-                          </text>
-                          <text
-                            x={rx + 16}
-                            y={ry + 62}
-                            fill={isDark ? '#f1f5f9' : '#1e293b'}
-                            fontSize="12"
+                            x={rx + rw - 40}
+                            y={ry + 29}
+                            textAnchor="middle"
+                            fill={isDark ? '#cbd5e1' : '#475569'}
+                            fontSize="10.5"
                             fontWeight="800"
                           >
-                            {room.nodeLabel.slice(0, 26)}
+                            {room.capacityCount} {t.seatsUnit}
                           </text>
-                          <rect
-                            x={rx + 55}
-                            y={ry + 85}
-                            width="110"
-                            height="46"
-                            rx="10"
-                            fill={badgeColor}
-                            fillOpacity="0.18"
-                            stroke={badgeColor}
-                            strokeWidth="1.5"
-                          />
+
+                          {/* Tên phòng họp */}
+                          <text
+                            x={rx + 14}
+                            y={ry + 52}
+                            fill={isDark ? '#f1f5f9' : '#0f172a'}
+                            fontSize="11.5"
+                            fontWeight="800"
+                          >
+                            {room.nodeLabel.slice(0, 28)}
+                          </text>
                         </g>
                       );
                     })}
@@ -1899,8 +2284,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             <div>
               <span className="text-[11px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400">
                 {selectedFloor === 5
-                  ? 'Điều phối Hội trường Tầng 5 (2 Chế độ)'
-                  : `Thông tin Phòng họp Tầng ${selectedFloor}`}
+                  ? t.rightPanelTitleHall
+                  : t.rightPanelTitleRoom(selectedFloor)}
               </span>
               <h2
                 className={`text-base font-extrabold mt-1 ${
@@ -1911,7 +2296,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                   'Hội trường Đấu Trường La Mã (Tầng 5)'}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Sức chứa: {activeRightPanelNode?.capacityCount || 30} chỗ • Mã:{' '}
+                {t.capacityLabel}: {activeRightPanelNode?.capacityCount || 30}{' '}
+                {t.seatsUnit} • {t.codeLabel}:{' '}
                 <strong>{activeRightPanelNode?.nodeCode || 'H-01'}</strong>
               </p>
             </div>
@@ -1919,16 +2305,23 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
             <div>
               <label className="text-xs font-extrabold mb-2 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                Chọn Khung giờ Hoạt động Hôm nay ({todayIso}):
+                {t.selectSlotLabel(todayIso)}
               </label>
               <div className="space-y-1.5">
                 {STANDARD_TIME_SLOTS.map((slot) => {
                   const isSlotSelected =
                     selectedSlot.start === slot.start &&
                     selectedSlot.end === slot.end;
+                  const slotLabel =
+                    webLanguage === 'en'
+                      ? `Slot ${slot.idx}: ${slot.start} – ${slot.end}`
+                      : webLanguage === 'ja'
+                      ? `第${slot.idx}枠: ${slot.start} – ${slot.end}`
+                      : `Ca ${slot.idx}: ${slot.start} – ${slot.end}`;
+
                   return (
                     <button
-                      key={slot.label}
+                      key={slot.start}
                       type="button"
                       onClick={() => {
                         setSelectedSlot({ start: slot.start, end: slot.end });
@@ -1942,9 +2335,9 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                           : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-indigo-300'
                       }`}
                     >
-                      <span>{slot.label}</span>
+                      <span>{slotLabel}</span>
                       <span className="text-[10px] font-extrabold uppercase">
-                        {isSlotSelected ? 'Đang chọn' : 'Chọn ca'}
+                        {isSlotSelected ? t.selectedBadge : t.pickSlotBadge}
                       </span>
                     </button>
                   );
@@ -1961,7 +2354,7 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                 }`}
               >
                 <div className="font-extrabold flex items-center justify-between">
-                  <span>Trạng thái Sự kiện Hội trường:</span>
+                  <span>{t.hallEventStatusTitle}</span>
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] ${
                       hasApprovedHallEventInSlot
@@ -1970,8 +2363,8 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                     }`}
                   >
                     {hasApprovedHallEventInSlot
-                      ? 'ĐÃ THUÊ & DUYỆT'
-                      : 'CHƯA CÓ SỰ KIỆN'}
+                      ? t.hallApprovedBadge
+                      : t.hallNoEventBadge}
                   </span>
                 </div>
 
@@ -1981,22 +2374,20 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                       “{currentSlotHallEventInfo.approvedEvent.purposeNote}”
                     </p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Phòng ban được phép đặt ghế:{' '}
+                      {t.allowedDeptsLabel}{' '}
                       <strong>
                         {currentSlotHallEventInfo.approvedEvent
                           .allowedDepartments?.length
                           ? currentSlotHallEventInfo.approvedEvent.allowedDepartments.join(
                               ', '
                             )
-                          : 'Tất cả phòng ban'}
+                          : t.allDeptsText}
                       </strong>
                     </p>
                   </>
                 ) : (
                   <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                    Khung giờ {selectedSlot.start}–{selectedSlot.end} hiện chưa có
-                    sự kiện nào được duyệt thuê. Ghế ngồi đang khóa cho đến khi
-                    Admin hoặc Quản lý thuê Hội trường thành công.
+                    {t.noEventWarningText(selectedSlot.start, selectedSlot.end)}
                   </p>
                 )}
               </div>
@@ -2024,13 +2415,13 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                     <Sparkles className="w-4 h-4" />
                     <span>
                       {userRole === 'SYS_ADMIN'
-                        ? 'Thuê Cả Hội Trường H-01 (Tự động duyệt)'
-                        : 'Đăng ký Thuê Cả Hội Trường (Chờ Admin duyệt)'}
+                        ? t.rentWholeHallAdminBtn
+                        : t.rentWholeHallManagerBtn}
                     </span>
                   </button>
                 ) : (
                   <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/70 text-[11px] text-slate-500 text-center font-semibold">
-                    Vai trò Nhân viên (`EMPLOYEE`) chỉ có quyền đặt chỗ ghế ngồi, không thể thuê cả Hội trường.
+                    {t.employeeCannotRentHallNote}
                   </div>
                 )}
 
@@ -2058,8 +2449,12 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
                 >
                   <span>
                     {hasApprovedHallEventInSlot
-                      ? `Đặt Ghế Ngồi ${selectedHallSeatCode} (${selectedSlot.start} – ${selectedSlot.end})`
-                      : `Đặt Ghế ${selectedHallSeatCode} (Chưa có sự kiện)`}
+                      ? t.bookHallSeatActiveBtn(
+                          selectedHallSeatCode,
+                          selectedSlot.start,
+                          selectedSlot.end
+                        )
+                      : t.bookHallSeatLockedBtn(selectedHallSeatCode)}
                   </span>
                 </button>
               </>
@@ -2079,8 +2474,11 @@ export const FloorplanMainPages: React.FC<FloorplanMainPagesProps> = ({
               >
                 <Sparkles className="w-4 h-4" />
                 <span>
-                  Đặt Phòng {activeRightPanelNode?.nodeCode} ({selectedSlot.start} –{' '}
-                  {selectedSlot.end})
+                  {t.bookStandardRoomBtn(
+                    activeRightPanelNode?.nodeCode || 'M1-01',
+                    selectedSlot.start,
+                    selectedSlot.end
+                  )}
                 </span>
               </button>
             )}

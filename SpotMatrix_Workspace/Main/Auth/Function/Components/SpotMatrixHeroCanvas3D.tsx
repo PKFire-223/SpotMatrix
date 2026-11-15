@@ -43,10 +43,6 @@ interface DataPulsePacketEntry {
   offset: number;
 }
 
-/**
- * Tạo hình hộp chữ nhật bo góc và vát cạnh sắc nét (Beveled Architectural Box)
- * giúp bắt tia sáng phản xạ Specular Highlight dọc theo mọi gờ cạnh kim loại/kính.
- */
 function createBeveledBoxGeometry(
   width: number,
   height: number,
@@ -86,10 +82,6 @@ function createBeveledBoxGeometry(
   return geometry;
 }
 
-/**
- * Khởi tạo môi trường ánh sáng Studio HDRI giả lập (Procedural Lightbox Environment)
- * dùng PMREMGenerator để toàn bộ kính, kim loại, mặt bàn có phản chiếu sắc nét như Ray-Tracing.
- */
 function buildStudioEnvironmentTexture(
   renderer: THREE.WebGLRenderer,
   isDarkTheme: boolean
@@ -100,7 +92,6 @@ function buildStudioEnvironmentTexture(
   const envScene = new THREE.Scene();
   envScene.background = new THREE.Color(isDarkTheme ? 0x050816 : 0xeef4ff);
 
-  // Tấm sáng trần chính (Top Softbox Studio Light)
   const topPanel = new THREE.Mesh(
     new THREE.PlaneGeometry(28, 28),
     new THREE.MeshBasicMaterial({
@@ -112,7 +103,6 @@ function buildStudioEnvironmentTexture(
   topPanel.rotation.x = Math.PI / 2;
   envScene.add(topPanel);
 
-  // Dải sáng Neon Cyan bên phải (Key Specular Strip)
   const cyanStrip = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 7),
     new THREE.MeshBasicMaterial({
@@ -124,7 +114,6 @@ function buildStudioEnvironmentTexture(
   cyanStrip.lookAt(0, 0, 0);
   envScene.add(cyanStrip);
 
-  // Dải sáng Indigo/Violet bên trái (Rim Specular Strip)
   const indigoStrip = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 7),
     new THREE.MeshBasicMaterial({
@@ -136,7 +125,6 @@ function buildStudioEnvironmentTexture(
   indigoStrip.lookAt(0, 0, 0);
   envScene.add(indigoStrip);
 
-  // Dải sáng Emerald ấm phía trước
   const emeraldStrip = new THREE.Mesh(
     new THREE.PlaneGeometry(18, 5),
     new THREE.MeshBasicMaterial({
@@ -153,9 +141,6 @@ function buildStudioEnvironmentTexture(
   return envRenderTarget.texture;
 }
 
-/**
- * Tạo Texture màn hình Panorama 360° độ phân giải cao cho Hội trường La Mã H-01
- */
 function createPanoramaScreenTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 1024;
@@ -171,7 +156,6 @@ function createPanoramaScreenTexture(): THREE.CanvasTexture {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1024, 256);
 
-    // Lưới sóng âm thanh & biểu đồ Hologram trên màn hình LED
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
     ctx.lineWidth = 2;
     for (let x = 0; x < 1024; x += 32) {
@@ -204,7 +188,7 @@ function createPanoramaScreenTexture(): THREE.CanvasTexture {
 
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 20px Inter, Arial, sans-serif';
-    ctx.fillText('HALL_EVENT_RENTAL & 30-SEAT TIERED AMPHITHEATER', 512, 208);
+    ctx.fillText('INTERNAL ENTERPRISE ROOM & HALL BOOKING SYSTEM', 512, 208);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.needsUpdate = true;
@@ -269,11 +253,9 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
     containerEl.innerHTML = '';
     containerEl.appendChild(renderer.domElement);
 
-    // Khởi tạo PBR Studio Environment Map cho độ bóng kính & kim loại sắc nét
     const studioEnvTexture = buildStudioEnvironmentTexture(renderer, isDarkRef.current);
     scene.environment = studioEnvTexture;
 
-    // 1. Hệ thống ánh sáng Đa tầng (Studio Key + Rim + Specular Accent)
     const ambientLight = new THREE.AmbientLight(
       isDarkRef.current ? 0x94a3b8 : 0xffffff,
       isDarkRef.current ? 0.95 : 1.4
@@ -304,10 +286,9 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
     scene.add(cyanAccentLight);
 
     const colosseumCrownLight = new THREE.PointLight(0x10b981, 6.2, 30);
-    colosseumCrownLight.position.set(0, 12.5, 0);
+    colosseumCrownLight.position.set(2.2, 12.5, 0);
     scene.add(colosseumCrownLight);
 
-    // 2. Dải sóng Lụa Khúc xạ WebGL 3.0 (Iridescent Liquid Ribbon có tính toán Pháp tuyến Normals thời gian thực)
     const waveGeometry = new THREE.PlaneGeometry(48, 30, 96, 64);
     waveGeometry.rotateX(-Math.PI / 2);
     const waveBasePositions = new Float32Array(
@@ -329,7 +310,7 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       side: THREE.DoubleSide,
     });
     const waveSurfaceMesh = new THREE.Mesh(waveGeometry, waveMaterial);
-    waveSurfaceMesh.position.set(0, -3.55, 0);
+    waveSurfaceMesh.position.set(1.8, -3.55, 0);
     waveSurfaceMesh.receiveShadow = true;
     scene.add(waveSurfaceMesh);
 
@@ -340,22 +321,25 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       opacity: isDarkRef.current ? 0.16 : 0.1,
     });
     const waveWireMesh = new THREE.Mesh(waveGeometry, waveWireMaterial);
-    waveWireMesh.position.set(0, -3.53, 0);
+    waveWireMesh.position.set(1.8, -3.53, 0);
     scene.add(waveWireMesh);
 
-    // 3. Khối Tinh thể & Quả cầu Thủy tinh Khúc xạ IOR 1.52 (Refractive Crystal Orbs & Octahedrons)
+    // Đặt Tòa nhà 5 tầng lệch sang bên phải (x = +2.35) để cột chữ bên trái hoàn toàn thoáng, không bị đè
+    const towerRootGroup = new THREE.Group();
+    towerRootGroup.position.set(2.35, 0, 0);
+    scene.add(towerRootGroup);
+
     const floatingCrystals: FloatingCrystalEntry[] = [];
     const crystalConfigs = [
-      { radius: 0.68, orbit: 7.8, speed: 0.44, y: 1.4, phase: 0.2, color: 0x38bdf8 },
-      { radius: 0.52, orbit: 8.9, speed: -0.35, y: 4.1, phase: 2.1, color: 0xa855f7 },
-      { radius: 0.58, orbit: 7.1, speed: 0.52, y: 6.2, phase: 4.0, color: 0x10b981 },
-      { radius: 0.45, orbit: 9.5, speed: -0.4, y: -0.2, phase: 5.1, color: 0xf59e0b },
+      { radius: 0.65, orbit: 7.4, speed: 0.44, y: 1.4, phase: 0.2, color: 0x38bdf8 },
+      { radius: 0.5, orbit: 8.5, speed: -0.35, y: 4.1, phase: 2.1, color: 0xa855f7 },
+      { radius: 0.55, orbit: 6.9, speed: 0.52, y: 6.2, phase: 4.0, color: 0x10b981 },
+      { radius: 0.42, orbit: 9.0, speed: -0.4, y: -0.2, phase: 5.1, color: 0xf59e0b },
     ];
 
     crystalConfigs.forEach((cfg) => {
       const crystalGroup = new THREE.Group();
 
-      // Lớp vỏ cầu thủy tinh quang học trong suốt có độ bóng gương cao
       const outerSphereGeo = new THREE.SphereGeometry(cfg.radius, 48, 48);
       const outerSphereMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
@@ -375,7 +359,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       const outerSphereMesh = new THREE.Mesh(outerSphereGeo, outerSphereMat);
       crystalGroup.add(outerSphereMesh);
 
-      // Lõi kim cương đa diện (Faceted Octahedron) xoay bên trong quả cầu
       const innerCoreGeo = new THREE.OctahedronGeometry(cfg.radius * 0.48, 0);
       const innerCoreMat = new THREE.MeshStandardMaterial({
         color: cfg.color,
@@ -388,7 +371,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       const innerCoreMesh = new THREE.Mesh(innerCoreGeo, innerCoreMat);
       crystalGroup.add(innerCoreMesh);
 
-      // Vòng quỹ đạo Chrome mảnh bao quanh quả cầu
       const ringGeo = new THREE.TorusGeometry(cfg.radius * 1.28, 0.018, 16, 64);
       const ringMat = new THREE.MeshStandardMaterial({
         color: cfg.color,
@@ -401,7 +383,7 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       ringMesh.rotation.x = Math.PI / 3;
       crystalGroup.add(ringMesh);
 
-      scene.add(crystalGroup);
+      towerRootGroup.add(crystalGroup);
       floatingCrystals.push({
         group: crystalGroup,
         coreMesh: innerCoreMesh,
@@ -413,20 +395,14 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       });
     });
 
-    // 4. Khối Tổ hợp Tòa nhà Kiến trúc 5 Tầng Vát Cạnh Sắc Nét (Architectural Beveled 5-Floor Matrix)
-    const towerRootGroup = new THREE.Group();
-    scene.add(towerRootGroup);
-
     const floorGroups: THREE.Group[] = [];
     const floorEdgeMaterials: THREE.LineBasicMaterial[] = [];
     const roomBeacons: RoomBeaconEntry[] = [];
     const colosseumSeats: ColosseumSeatEntry[] = [];
 
-    // Dùng chung các Geometry đã vát cạnh (Beveled) để tối ưu FPS và tạo gờ bắt sáng sắc nét
     const sharedSlabBevelGeo = createBeveledBoxGeometry(8.2, 0.24, 5.6, 0.38, 0.045);
     const sharedSlabSubFrameGeo = createBeveledBoxGeometry(7.95, 0.08, 5.35, 0.34, 0.02);
     const sharedGlassRoomShellGeo = createBeveledBoxGeometry(2.18, 0.62, 1.86, 0.16, 0.022);
-    const sharedRoomRoofFrameGeo = createBeveledBoxGeometry(2.22, 0.045, 1.9, 0.16, 0.012);
     const sharedRectTableGeo = createBeveledBoxGeometry(1.16, 0.07, 0.56, 0.08, 0.015);
     const sharedChairSeatGeo = createBeveledBoxGeometry(0.18, 0.05, 0.18, 0.04, 0.01);
     const sharedChairBackGeo = createBeveledBoxGeometry(0.18, 0.16, 0.04, 0.03, 0.008);
@@ -459,7 +435,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       floorGroup.position.y = floorIdx * 1.18 - 1.25;
 
       if (floorIdx < 4) {
-        // Mặt sàn kính cường lực vát cạnh kim loại Tầng 1..4
         const slabMat = new THREE.MeshPhysicalMaterial({
           color: isDarkRef.current ? 0x0f172a : 0xf8fafc,
           emissive: isDarkRef.current ? 0x1e293b : 0xe2e8f0,
@@ -477,12 +452,10 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         slabMesh.receiveShadow = true;
         floorGroup.add(slabMesh);
 
-        // Khung sườn kim loại Anodized dưới đáy mỗi tầng
         const subFrameMesh = new THREE.Mesh(sharedSlabSubFrameGeo, chromeFrameMaterial);
         subFrameMesh.position.y = -0.14;
         floorGroup.add(subFrameMesh);
 
-        // Đường viền ánh sáng kiến trúc quanh sàn
         const edgesGeo = new THREE.EdgesGeometry(sharedSlabBevelGeo, 22);
         const edgeMat = new THREE.LineBasicMaterial({
           color: floorIdx % 2 === 0 ? 0x38bdf8 : 0x818cf8,
@@ -493,7 +466,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         const edgeLines = new THREE.LineSegments(edgesGeo, edgeMat);
         floorGroup.add(edgeLines);
 
-        // Hành lang trung tâm bóng gương kèm 2 dải LED dẫn hướng
         const corridorGeo = new THREE.PlaneGeometry(7.6, 0.82);
         corridorGeo.rotateX(-Math.PI / 2);
         const corridorMat = new THREE.MeshPhysicalMaterial({
@@ -508,16 +480,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         corridorMesh.position.y = 0.125;
         floorGroup.add(corridorMesh);
 
-        [-0.38, 0.38].forEach((railZ) => {
-          const railMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(7.5, 0.015, 0.03),
-            new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-          );
-          railMesh.position.set(0, 0.13, railZ);
-          floorGroup.add(railMesh);
-        });
-
-        // 6 Phòng họp Kính Vát Cạnh 3D trên mỗi tầng (Tổng 24 phòng M1-01..M4-06)
         roomOffsets.forEach((rm, rmIdx) => {
           const roomPodGroup = new THREE.Group();
           roomPodGroup.position.set(rm.x, 0.42, rm.z);
@@ -529,7 +491,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
               ? 0xf59e0b
               : rm.statusColor;
 
-          // Đế sàn riêng từng phòng có viền LED phát sáng
           const podBaseGeo = createBeveledBoxGeometry(2.14, 0.05, 1.82, 0.14, 0.01);
           const podBaseMat = new THREE.MeshStandardMaterial({
             color: isDarkRef.current ? 0x1e293b : 0xffffff,
@@ -542,7 +503,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
           podBaseMesh.position.y = -0.28;
           roomPodGroup.add(podBaseMesh);
 
-          // Khối buồng kính quang học PBR có độ bóng Clearcoat và phản xạ HDRI
           const glassBoxMat = new THREE.MeshPhysicalMaterial({
             color: isDarkRef.current ? 0xbae6fd : 0xe0f2fe,
             emissive: dynamicStatusColor,
@@ -562,12 +522,7 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
           glassBoxMesh.castShadow = true;
           roomPodGroup.add(glassBoxMesh);
 
-          // Viền khung nhôm Titanium trên đỉnh phòng kính
-          const roofFrameMesh = new THREE.Mesh(sharedRoomRoofFrameGeo, chromeFrameMaterial);
-          roofFrameMesh.position.y = 0.31;
-          roomPodGroup.add(roofFrameMesh);
-
-          // 4 Trụ góc nhôm Anodized sắc nét cho từng phòng
+          // 4 Trụ góc nhôm Anodized sắc nét (Không dùng mái đậy để nhìn rõ bàn ghế bên trong)
           [
             [-1.02, -0.86],
             [1.02, -0.86],
@@ -582,7 +537,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
             roomPodGroup.add(cornerPost);
           });
 
-          // Bàn họp bên trong (Bàn tròn Collab hoặc Bàn dài Boardroom vát cạnh)
           const isRoundTable = rmIdx === 3 || rmIdx === 4;
           const tableMat = new THREE.MeshPhysicalMaterial({
             color: isDarkRef.current ? 0xe2e8f0 : 0xffffff,
@@ -627,7 +581,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
             roomPodGroup.add(runnerInlay);
           }
 
-          // Ghế xoay 3D chi tiết xếp quanh bàn họp
           const chairMat = new THREE.MeshStandardMaterial({
             color: dynamicStatusColor,
             roughness: 0.25,
@@ -651,7 +604,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
             roomPodGroup.add(miniChair);
           }
 
-          // Màn hình Hội nghị 4K treo tường có khung Bezel và mặt phát sáng
           const tvFrameMesh = new THREE.Mesh(
             new THREE.BoxGeometry(0.78, 0.34, 0.04),
             chromeFrameMaterial
@@ -672,7 +624,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
           tvGlowMesh.position.copy(tvFrameMesh.position);
           roomPodGroup.add(tvGlowMesh);
 
-          // Đèn Beacon Kim cương (Octahedron) báo trạng thái phòng trên nóc
           const beaconGeo = new THREE.OctahedronGeometry(0.095, 0);
           const beaconMat = new THREE.MeshStandardMaterial({
             color: dynamicStatusColor,
@@ -721,9 +672,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
           floorGroup.add(roomPodGroup);
         });
       } else {
-        // ===================================================================
-        // TẦNG 5 (H-01): ĐẤU TRƯỜNG LA MÃ (COLOSSEUM AMPHITHEATER 360° PBR)
-        // ===================================================================
         const arenaBaseGeo = new THREE.CylinderGeometry(4.35, 4.65, 0.3, 64);
         const arenaBaseMat = new THREE.MeshPhysicalMaterial({
           color: isDarkRef.current ? 0x0f172a : 0xf1f5f9,
@@ -740,7 +688,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         arenaBaseMesh.receiveShadow = true;
         floorGroup.add(arenaBaseMesh);
 
-        // Vòng vương miện Chrome + LED Ngọc lục bảo bao quanh Đấu trường
         const crownTorusGeo = new THREE.TorusGeometry(4.42, 0.06, 20, 96);
         crownTorusGeo.rotateX(Math.PI / 2);
         const crownTorusMat = new THREE.MeshStandardMaterial({
@@ -754,7 +701,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         crownTorusMesh.position.y = 0.15;
         floorGroup.add(crownTorusMesh);
 
-        // Hàng cột trụ kiến trúc Colosseum bao quanh chu vi Tầng 5
         const colonnadeCount = 16;
         for (let c = 0; c < colonnadeCount; c++) {
           const colAngle = (c / colonnadeCount) * Math.PI * 2;
@@ -771,14 +717,12 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
           floorGroup.add(colPillar);
         }
 
-        // Vòng giàn đèn đỉnh Đấu trường (Upper Colosseum Halo Arch)
         const upperArchGeo = new THREE.TorusGeometry(4.22, 0.055, 16, 96);
         upperArchGeo.rotateX(Math.PI / 2);
         const upperArchMesh = new THREE.Mesh(upperArchGeo, chromeFrameMaterial);
         upperArchMesh.position.y = 1.06;
         floorGroup.add(upperArchMesh);
 
-        // Sân khấu tròn trung tâm 3 bậc (Multi-Tiered Central Stage Podium)
         const stageCenterZ = -0.58;
         const stageOuterGeo = new THREE.CylinderGeometry(1.32, 1.46, 0.24, 48);
         const stageOuterMat = new THREE.MeshPhysicalMaterial({
@@ -801,13 +745,11 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         stageNeonRing.position.set(0, 0.36, stageCenterZ);
         floorGroup.add(stageNeonRing);
 
-        // Bục phát biểu Keynote ở tâm sân khấu
         const lecternGeo = createBeveledBoxGeometry(0.42, 0.42, 0.28, 0.06, 0.015);
         const lecternMesh = new THREE.Mesh(lecternGeo, chromeFrameMaterial);
         lecternMesh.position.set(0, 0.52, stageCenterZ);
         floorGroup.add(lecternMesh);
 
-        // Màn hình LED Panorama 360° vòm cong có CanvasTexture sắc nét
         const panoramaTex = createPanoramaScreenTexture();
         const panoramaGeo = new THREE.CylinderGeometry(
           3.78,
@@ -832,7 +774,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         panoramaMesh.position.set(0, 0.76, -0.22);
         floorGroup.add(panoramaMesh);
 
-        // 3 Dãy ghế vòng cung La Mã (A1..A7, B1..B9, C1..C12 — Tổng 28-30 ghế bậc thang)
         const rowDefinitions = [
           { rowIndex: 0, count: 7, radius: 1.98, yOffset: 0.26, color: 0x10b981 },
           { rowIndex: 1, count: 9, radius: 2.74, yOffset: 0.44, color: 0x38bdf8 },
@@ -840,7 +781,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         ];
 
         rowDefinitions.forEach((rowDef) => {
-          // Bậc thềm đá vòm cung đỡ từng hàng ghế
           const tierStepGeo = new THREE.RingGeometry(
             rowDef.radius - 0.3,
             rowDef.radius + 0.3,
@@ -904,7 +844,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       towerRootGroup.add(floorGroup);
     }
 
-    // 5. Trụ Dữ liệu Quang học & Xung ánh sáng chạy dọc 5 tầng (Vertical Fiber Optic Columns)
     const pillarCorners = [
       { x: -3.95, z: -2.65 },
       { x: 3.95, z: -2.65 },
@@ -930,7 +869,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       towerRootGroup.add(pillarMesh);
       verticalPillars.push(pillarMesh);
 
-      // Các hạt xung năng lượng chạy dọc theo cột khi tách tầng
       const packetGeo = new THREE.CapsuleGeometry(0.065, 0.35, 8, 16);
       const packetMat = new THREE.MeshBasicMaterial({
         color: cIdx % 2 === 0 ? 0x38bdf8 : 0x10b981,
@@ -946,7 +884,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       });
     });
 
-    // 6. Vòng Khiên Bảo mật Optimistic Lock & Quét QR (Security & QR Gyroscope Rings)
     const orbitalShieldGroup = new THREE.Group();
     const outerRingGeo = new THREE.TorusGeometry(5.85, 0.042, 20, 120);
     const outerRingMat = new THREE.MeshStandardMaterial({
@@ -979,7 +916,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
     orbitalShieldGroup.position.y = 2.45;
     towerRootGroup.add(orbitalShieldGroup);
 
-    // 7. Trường Hạt Không gian 3D (Spatial Starfield)
     const particleCount = 460;
     const particlePositions = new Float32Array(particleCount * 3);
     for (let i = 0; i < particleCount; i++) {
@@ -998,7 +934,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
     const particleSystem = new THREE.Points(particleGeo, particleMat);
     scene.add(particleSystem);
 
-    // 8. Tương tác Chuột (Pointer Parallax) & Cuộn trang mượt (Smooth Damped Camera Rig)
     let pointerNormX = 0;
     let pointerNormY = 0;
 
@@ -1021,10 +956,10 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
     window.addEventListener('resize', handleWindowResize);
 
     let smoothedScroll = scrollTargetRef.current;
-    const currentCamPos = new THREE.Vector3(11.8, 8.4, 13.8);
-    const currentLookTarget = new THREE.Vector3(0, 1.8, 0);
-    const desiredCamPos = new THREE.Vector3(11.8, 8.4, 13.8);
-    const desiredLookTarget = new THREE.Vector3(0, 1.8, 0);
+    const currentCamPos = new THREE.Vector3(11.8, 8.4, 14.2);
+    const currentLookTarget = new THREE.Vector3(0.4, 1.8, 0);
+    const desiredCamPos = new THREE.Vector3(11.8, 8.4, 14.2);
+    const desiredLookTarget = new THREE.Vector3(0.4, 1.8, 0);
 
     let currentFloorGap = 1.18;
     let animationFrameId = 0;
@@ -1034,7 +969,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
       animationFrameId = window.requestAnimationFrame(animateLoop);
       const elapsed = clock.getElapsedTime();
 
-      // Đồng bộ nền Sáng / Tối theo thời gian thực
       scene.fog = new THREE.FogExp2(isDarkRef.current ? 0x040711 : 0xeef4ff, 0.018);
       ambientLight.intensity = isDarkRef.current ? 0.95 : 1.45;
       waveMaterial.color.setHex(isDarkRef.current ? 0x0f172a : 0xdbeafe);
@@ -1049,37 +983,37 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
         targetFloorGap = 2.55;
         const focusFloorY = (manualFloor - 1) * targetFloorGap - 1.25;
         if (manualFloor === 5) {
-          desiredCamPos.set(0.0, focusFloorY + 5.2, 6.2);
-          desiredLookTarget.set(0.0, focusFloorY + 0.35, -0.15);
+          desiredCamPos.set(2.35, focusFloorY + 5.2, 6.4);
+          desiredLookTarget.set(2.35, focusFloorY + 0.35, -0.15);
         } else {
-          desiredCamPos.set(6.9, focusFloorY + 2.65, 7.6);
-          desiredLookTarget.set(0.0, focusFloorY + 0.2, 0.0);
+          desiredCamPos.set(8.8, focusFloorY + 2.65, 7.8);
+          desiredLookTarget.set(1.8, focusFloorY + 0.2, 0.0);
         }
       } else if (smoothedScroll < 0.28) {
         const t = smoothedScroll / 0.28;
         targetFloorGap = 1.18 + t * 0.45;
-        desiredCamPos.set(11.8 - t * 2.1, 8.4 - t * 1.2, 13.8 - t * 2.5);
-        desiredLookTarget.set(0.0, 1.8, 0.0);
+        desiredCamPos.set(11.8 - t * 2.1, 8.4 - t * 1.2, 14.2 - t * 2.5);
+        desiredLookTarget.set(0.4, 1.8, 0.0);
       } else if (smoothedScroll < 0.58) {
         const t = (smoothedScroll - 0.28) / 0.3;
         targetFloorGap = 2.65 + Math.sin(t * Math.PI) * 0.25;
-        desiredCamPos.set(8.2 - t * 2.4, 5.8 + t * 3.2, 9.5 - t * 1.6);
-        desiredLookTarget.set(0.0, 2.2 + t * 1.2, 0.0);
+        desiredCamPos.set(8.8 - t * 2.0, 5.8 + t * 3.2, 9.8 - t * 1.6);
+        desiredLookTarget.set(0.6, 2.2 + t * 1.2, 0.0);
       } else if (smoothedScroll < 0.82) {
         const t = (smoothedScroll - 0.58) / 0.24;
         targetFloorGap = 1.85;
         const topFloorY = 4 * targetFloorGap - 1.25;
-        desiredCamPos.set(Math.sin(t * 1.2) * 2.2, topFloorY + 5.3, 6.3 - t * 0.8);
-        desiredLookTarget.set(0.0, topFloorY + 0.3, -0.2);
+        desiredCamPos.set(2.35 + Math.sin(t * 1.2) * 2.0, topFloorY + 5.3, 6.5 - t * 0.8);
+        desiredLookTarget.set(1.6, topFloorY + 0.3, -0.2);
       } else {
         const t = (smoothedScroll - 0.82) / 0.18;
         targetFloorGap = 1.32 - t * 0.14;
-        desiredCamPos.set(9.6, 6.8, 10.6);
-        desiredLookTarget.set(0.0, 2.0, 0.0);
+        desiredCamPos.set(10.2, 6.8, 11.2);
+        desiredLookTarget.set(0.5, 2.0, 0.0);
       }
 
-      desiredCamPos.x += pointerNormX * 1.4;
-      desiredCamPos.y += -pointerNormY * 0.9;
+      desiredCamPos.x += pointerNormX * 1.3;
+      desiredCamPos.y += -pointerNormY * 0.85;
 
       currentCamPos.lerp(desiredCamPos, 0.065);
       currentLookTarget.lerp(desiredLookTarget, 0.075);
@@ -1115,7 +1049,6 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
 
       towerRootGroup.rotation.y = elapsed * 0.15 + smoothedScroll * Math.PI * 1.18;
 
-      // Cập nhật bề mặt Sóng Lụa Khúc Xạ & tính lại Vertex Normals để ánh sáng phản chiếu mượt như lụa
       const posAttr = waveGeometry.attributes.position as THREE.BufferAttribute;
       for (let i = 0; i < posAttr.count; i++) {
         const bx = waveBasePositions[i * 3];

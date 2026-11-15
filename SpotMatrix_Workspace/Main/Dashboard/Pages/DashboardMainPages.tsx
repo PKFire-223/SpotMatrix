@@ -63,86 +63,194 @@ interface HourlyBarSlot {
   levelTag: 'LOW' | 'OPTIMAL' | 'HIGH';
 }
 
-const DASHBOARD_I18N: Record<
-  WebLanguageCodeType,
-  {
-    kpi1Title: string;
-    kpi2Title: string;
-    kpi3Title: string;
-    kpi4Title: string;
-    chart1Title: string;
-    chart1Sub: string;
-    chart2Title: string;
-    chart2Sub: string;
-    aiTitle: string;
-    aiSub: string;
-    ttsPlayBtn: string;
-    ttsStopBtn: string;
-    askPlaceholder: string;
-    sendBtn: string;
-  }
-> = {
+interface DashboardI18nPack {
+  kpi1Title: string;
+  kpi1FreeSuffix: string;
+  kpi1Sub: (busy: number, hold: number) => string;
+  kpi2Title: string;
+  kpi2SubSuffix: string;
+  kpi2Sub: (qr: number, pending: number) => string;
+  kpi3Title: string;
+  kpi3WorkingSuffix: string;
+  kpi3Sub: (broken: number) => string;
+  kpi4Title: string;
+  kpi4StandardSuffix: string;
+  kpi4Sub: string;
+  pendingApprovalHeader: (c: number) => string;
+  requesterLabel: string;
+  reasonLabel: string;
+  approveBtn: string;
+  rejectBtn: string;
+  chart1Title: string;
+  chart1Badge: string;
+  chart1Sub: string;
+  legendLow: string;
+  legendOptimal: string;
+  legendHigh: string;
+  roomsUnit: string;
+  chart1FooterInsight: string;
+  chart2Title: string;
+  chart2Sub: string;
+  totalRoomsLabel: string;
+  donutFreeLabel: string;
+  donutBusyLabel: string;
+  donutHoldLabel: string;
+  floorBreakdownHeader: string;
+  floorBusyFreeStat: (busy: number, total: number, pct: number, free: number) => string;
+  aiTitle: string;
+  aiSub: string;
+  ttsPlayBtn: string;
+  ttsStopBtn: string;
+  askPlaceholder: string;
+  sendBtn: string;
+  youLabel: string;
+  assistantLabel: string;
+}
+
+const DASHBOARD_I18N: Record<WebLanguageCodeType, DashboardI18nPack> = {
   vi: {
     kpi1Title: '1. Tổng Phòng & Hội trường (5 Tầng)',
+    kpi1FreeSuffix: 'phòng đang trống',
+    kpi1Sub: (busy, hold) => `Đang bận: ${busy} phòng • Giữ chỗ: ${hold} phòng`,
     kpi2Title: '2. Lịch Đặt & Sự kiện Đang Hoạt động',
+    kpi2SubSuffix: 'phiên hôm nay',
+    kpi2Sub: (qr, pending) => `Đã quét QR: ${qr} vé • Chờ duyệt: ${pending} đơn`,
     kpi3Title: '3. Thiết bị Phòng họp Sẵn sàng (25 Phòng)',
+    kpi3WorkingSuffix: 'hoạt động tốt',
+    kpi3Sub: (broken) => `Bảo trì / Hỏng: ${broken} thiết bị cần kiểm tra`,
     kpi4Title: '4. Điểm Tín nhiệm Trung bình Toàn Hệ thống',
-    chart1Title:
-      'Biểu đồ 1: Tỷ lệ Lấp đầy 25 Phòng họp theo 6 Khung giờ trong Ngày (%)',
+    kpi4StandardSuffix: 'điểm chuẩn mực',
+    kpi4Sub: 'Thưởng Check-in QR đúng hạn (+2đ) • Phạt No-Show (-10đ)',
+    pendingApprovalHeader: (c) =>
+      `Yêu cầu Đặt phòng / Thuê Hội trường Đang chờ Phê duyệt (${c})`,
+    requesterLabel: 'Người xin:',
+    reasonLabel: 'Lý do xin phép:',
+    approveBtn: 'Chấp nhận',
+    rejectBtn: 'Từ chối',
+    chart1Title: 'Biểu đồ 1: Tỷ lệ Lấp đầy 25 Phòng họp theo 6 Khung giờ trong Ngày (%)',
+    chart1Badge: 'Đơn vị: % Lấp đầy & Số phòng / 25 Phòng',
     chart1Sub:
-      'Trục tung (Y): Công suất sử dụng phòng từ 0% đến 100% • Trục hoành (X): 6 Ca làm việc (08:00 – 20:00) • Hiển thị rõ % và số phòng thực tế (X/25 phòng)',
-    chart2Title:
-      'Biểu đồ 2: Cơ cấu Trạng thái Thời gian thực & Phân bổ theo Tầng 1–5',
+      'Trục tung (Y): Công suất sử dụng phòng từ 0% đến 100% • Trục hoành (X): 6 Ca làm việc (08:00 – 21:00)',
+    legendLow: 'Thấp (<50% • Dễ đặt phòng)',
+    legendOptimal: 'Tối ưu (50%–79% • Hoạt động chuẩn)',
+    legendHigh: 'Cao điểm (≥80% • Khuyến nghị đặt trước)',
+    roomsUnit: 'phòng',
+    chart1FooterInsight:
+      'Nhận định dữ liệu biểu đồ: Khung giờ cao điểm nhất là Ca 3 (13:00–15:00) đạt 84% (21/25 phòng); khung giờ trống nhiều nhất là Ca 5 & Ca 6.',
+    chart2Title: 'Biểu đồ 2: Cơ cấu Trạng thái Thời gian thực & Phân bổ theo Tầng 1–5',
     chart2Sub:
       'Vòng tròn Donut thể hiện tỷ trọng Còn trống / Giữ chỗ / Đang họp và thanh tiến độ chi tiết từng tầng',
+    totalRoomsLabel: 'Tổng phòng',
+    donutFreeLabel: 'Còn trống sẵn sàng:',
+    donutBusyLabel: 'Đang họp / Đã đặt:',
+    donutHoldLabel: 'Đang giữ / Chờ duyệt:',
+    floorBreakdownHeader: 'Phân bổ Công suất Chi tiết theo Tầng (Tầng 1 – Tầng 5):',
+    floorBusyFreeStat: (busy, total, pct, free) =>
+      `Đang dùng ${busy}/${total} (${pct}%) • Trống ${free}`,
     aiTitle: 'Trợ lý Phân tích Không gian & Hỏi đáp Tức thì',
-    aiSub:
-      'Tự động trả lời và phát giọng đọc tóm tắt theo đúng ngôn ngữ đã chọn',
+    aiSub: 'Tự động trả lời và phát giọng đọc tóm tắt theo đúng ngôn ngữ đã chọn',
     ttsPlayBtn: 'Đọc Tóm tắt bằng Giọng nói (vi-VN)',
     ttsStopBtn: 'Dừng đọc',
-    askPlaceholder:
-      'Hỏi về phòng trống, thiết bị, sự kiện Hội trường Tầng 5...',
+    askPlaceholder: 'Hỏi về phòng trống, thiết bị, sự kiện Hội trường Tầng 5...',
     sendBtn: 'Gửi câu hỏi',
+    youLabel: 'Bạn',
+    assistantLabel: 'Trợ lý Hệ thống',
   },
   en: {
     kpi1Title: '1. Total Rooms & Amphitheater (5 Floors)',
+    kpi1FreeSuffix: 'available rooms',
+    kpi1Sub: (busy, hold) => `Occupied: ${busy} rooms • Holding: ${hold} rooms`,
     kpi2Title: '2. Active Room & Hall Bookings',
+    kpi2SubSuffix: 'sessions today',
+    kpi2Sub: (qr, pending) => `QR Checked-in: ${qr} • Pending Approval: ${pending}`,
     kpi3Title: '3. Ready Room Equipment (All 25 Rooms)',
+    kpi3WorkingSuffix: 'working normally',
+    kpi3Sub: (broken) => `Maintenance / Broken: ${broken} units need attention`,
     kpi4Title: '4. System-wide Average Trust Score',
+    kpi4StandardSuffix: 'standard score',
+    kpi4Sub: 'On-time QR Check-in (+2 pts) • 15m No-Show Penalty (-10 pts)',
+    pendingApprovalHeader: (c) =>
+      `Pending Room / Hall Rental Approval Requests (${c})`,
+    requesterLabel: 'Requester:',
+    reasonLabel: 'Permission Reason:',
+    approveBtn: 'Approve',
+    rejectBtn: 'Reject',
     chart1Title: 'Chart 1: Hourly Room Occupancy Rate Across 25 Rooms (%)',
+    chart1Badge: 'Unit: % Occupancy & Room Count / 25 Rooms',
     chart1Sub:
-      'Y-Axis: Room Utilization (0%–100%) • X-Axis: 6 Time Slots (08:00–20:00) • Displays exact % and room count (X/25 rooms)',
+      'Y-Axis: Room Utilization (0%–100%) • X-Axis: 6 Time Slots (08:00–21:00)',
+    legendLow: 'Low (<50% • Easy to book)',
+    legendOptimal: 'Optimal (50%–79% • Normal load)',
+    legendHigh: 'Peak (≥80% • Book in advance)',
+    roomsUnit: 'rooms',
+    chart1FooterInsight:
+      'Chart Insight: Peak utilization occurs in Slot 3 (13:00–15:00) at 84% (21/25 rooms); Slots 5 & 6 have the highest availability.',
     chart2Title: 'Chart 2: Real-Time Room Status Donut & Floor 1–5 Breakdown',
     chart2Sub:
       'Donut chart of Available / Holding / Occupied rooms alongside per-floor utilization bars',
+    totalRoomsLabel: 'Total Rooms',
+    donutFreeLabel: 'Available Now:',
+    donutBusyLabel: 'Occupied / Booked:',
+    donutHoldLabel: 'Holding / Pending:',
+    floorBreakdownHeader: 'Detailed Capacity Breakdown by Floor (Floors 1 – 5):',
+    floorBusyFreeStat: (busy, total, pct, free) =>
+      `In Use ${busy}/${total} (${pct}%) • Free ${free}`,
     aiTitle: 'Smart Workspace Analytics & Instant Q&A Assistant',
-    aiSub:
-      'Answers workspace queries and reads voice summaries in English (en-US)',
+    aiSub: 'Answers workspace queries and reads voice summaries in English (en-US)',
     ttsPlayBtn: 'Speak AI Summary (en-US)',
     ttsStopBtn: 'Stop Speaking',
-    askPlaceholder:
-      'Ask about available rooms, equipment, or Floor 5 Hall events...',
+    askPlaceholder: 'Ask about available rooms, equipment, or Floor 5 Hall events...',
     sendBtn: 'Send',
+    youLabel: 'You',
+    assistantLabel: 'System Assistant',
   },
   ja: {
     kpi1Title: '1. 全会議室・5階大ホール総数 (全25室)',
+    kpi1FreeSuffix: '室が空室',
+    kpi1Sub: (busy, hold) => `使用中: ${busy}室 • 承認待ち/一時保持: ${hold}室`,
     kpi2Title: '2. 有効な会議室・ホール予約件数',
+    kpi2SubSuffix: '件 (本日)',
+    kpi2Sub: (qr, pending) => `QRチェックイン済: ${qr}件 • 承認待ち: ${pending}件`,
     kpi3Title: '3. 稼働可能な会議室設備 (全25室完備)',
+    kpi3WorkingSuffix: '台が正常稼働',
+    kpi3Sub: (broken) => `メンテナンス / 故障中: ${broken}台の点検が必要`,
     kpi4Title: '4. 全社平均信頼スコア (Trust Score)',
+    kpi4StandardSuffix: '標準スコア',
+    kpi4Sub: '時間内QR読取 (+2点) • 15分無断キャンセル (-10点)',
+    pendingApprovalHeader: (c) =>
+      `承認待ちの会議室予約・ホール貸切リクエスト (${c}件)`,
+    requesterLabel: '申請者:',
+    reasonLabel: '申請理由:',
+    approveBtn: '承認する',
+    rejectBtn: '却下する',
     chart1Title: 'チャート1：時間帯別の会議室稼働率推移（全25室・0%〜100%）',
+    chart1Badge: '単位：稼働率(％) ＆ 使用室数 / 全25室',
     chart1Sub:
-      '縦軸(Y)：稼働率(0%〜100%) • 横軸(X)：6つの時間帯(08:00〜20:00) • 各バーに正確な％と使用室数(X/25室)を表示',
+      '縦軸(Y)：稼働率(0%〜100%) • 横軸(X)：6つの時間帯(08:00〜21:00)',
+    legendLow: '低稼働 (<50% • 予約しやすい)',
+    legendOptimal: '適正稼働 (50%–79% • 通常運用)',
+    legendHigh: 'ピーク (≥80% • 事前予約推奨)',
+    roomsUnit: '室',
+    chart1FooterInsight:
+      'データ分析：最も混雑する時間帯は第3枠 (13:00–15:00) の84% (21/25室) で、第5枠・第6枠が最も空いています。',
     chart2Title: 'チャート2：リアルタイム状態内訳ドーナツ＆1階〜5階別稼働状況',
     chart2Sub:
       '空室・承認待ち・使用中の割合と各フロア（1F〜5F）の利用状況を可視化',
+    totalRoomsLabel: '総室数',
+    donutFreeLabel: '利用可能 (空室):',
+    donutBusyLabel: '使用中 / 予約済:',
+    donutHoldLabel: '一時保持 / 承認待ち:',
+    floorBreakdownHeader: 'フロア別の稼働率内訳 (1階 〜 5階):',
+    floorBusyFreeStat: (busy, total, pct, free) =>
+      `使用中 ${busy}/${total} (${pct}%) • 空室 ${free}`,
     aiTitle: 'スマート空間分析＆即時Q&Aアシスタント',
-    aiSub:
-      '選択された言語（日本語 ja-JP）で要約レポートを音声読み上げします',
+    aiSub: '選択された言語（日本語 ja-JP）で要約レポートを音声読み上げします',
     ttsPlayBtn: 'AI要約を音声読み上げ (ja-JP)',
     ttsStopBtn: '停止する',
-    askPlaceholder:
-      '空室状況、設備、5階コロッセオホールのイベントについて質問...',
+    askPlaceholder: '空室状況、設備、5階コロッセオホールのイベントについて質問...',
     sendBtn: '送信',
+    youLabel: 'あなた',
+    assistantLabel: 'システムAI',
   },
 };
 
@@ -165,7 +273,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   const t = DASHBOARD_I18N[webLanguage] || DASHBOARD_I18N.vi;
 
-  // Thống kê số liệu thực tế từ 25 phòng (Tầng 1..5)
   const metrics = useMemo(() => {
     const totalRooms = workspaceNodes.length || 25;
     const availableRooms = workspaceNodes.filter(
@@ -226,7 +333,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     };
   }, [workspaceNodes, bookingsList, equipmentsList, trustProfiles]);
 
-  // Tạo bản tóm tắt thông minh theo đúng ngôn ngữ đang chọn (vi / en / ja)
   const localizedAiSummaryReport = useMemo(() => {
     if (webLanguage === 'en') {
       return `SpotMatrix 5-Floor Real-Time Summary: Currently ${metrics.availableRooms} of ${metrics.totalRooms} rooms are available (${metrics.occupiedRooms} occupied, ${metrics.holdingRooms} holding). There are ${metrics.activeBookingsCount} active bookings today and ${metrics.healthyEquipments}/${metrics.totalEquipments} equipment units operating normally. Average system trust score is ${metrics.avgTrust} points.`;
@@ -237,16 +343,18 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
     return `Báo cáo Tóm tắt Hệ thống 5 Tầng SpotMatrix: Hiện có ${metrics.availableRooms}/${metrics.totalRooms} phòng đang trống (${metrics.occupiedRooms} phòng đang họp/đặt chỗ, ${metrics.holdingRooms} phòng chờ duyệt). Hôm nay có ${metrics.activeBookingsCount} lịch hoạt động và ${metrics.healthyEquipments}/${metrics.totalEquipments} thiết bị vận hành tốt. Điểm tín nhiệm trung bình đạt ${metrics.avgTrust}/100 điểm.`;
   }, [webLanguage, metrics]);
 
-  // Dữ liệu Biểu đồ 1: Công suất lấp đầy theo 6 khung giờ trong ngày
   const hourlyOccupancyBars: HourlyBarSlot[] = useMemo(() => {
     const total = metrics.totalRooms || 25;
+    const slotPrefix =
+      webLanguage === 'en' ? 'Slot' : webLanguage === 'ja' ? '第' : 'Ca';
+    const slotSuffix = webLanguage === 'ja' ? '枠' : '';
     const baseSlots = [
-      { code: 'Ca 1', range: '08:00–10:00', baseBooked: 11 },
-      { code: 'Ca 2', range: '10:00–12:00', baseBooked: 16 },
-      { code: 'Ca 3', range: '13:00–15:00', baseBooked: 21 },
-      { code: 'Ca 4', range: '15:00–17:00', baseBooked: 18 },
-      { code: 'Ca 5', range: '17:00–19:00', baseBooked: 9 },
-      { code: 'Ca 6', range: '19:00–21:00', baseBooked: 5 },
+      { code: `${slotPrefix} 1${slotSuffix}`, range: '08:00–10:00', baseBooked: 11 },
+      { code: `${slotPrefix} 2${slotSuffix}`, range: '10:00–12:00', baseBooked: 16 },
+      { code: `${slotPrefix} 3${slotSuffix}`, range: '13:00–15:00', baseBooked: 21 },
+      { code: `${slotPrefix} 4${slotSuffix}`, range: '15:00–17:00', baseBooked: 18 },
+      { code: `${slotPrefix} 5${slotSuffix}`, range: '17:00–19:00', baseBooked: 9 },
+      { code: `${slotPrefix} 6${slotSuffix}`, range: '19:00–21:00', baseBooked: 5 },
     ];
 
     return baseSlots.map((slot) => {
@@ -271,9 +379,8 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         levelTag,
       };
     });
-  }, [bookingsList, metrics.totalRooms]);
+  }, [bookingsList, metrics.totalRooms, webLanguage]);
 
-  // Dữ liệu Biểu đồ 2: Phân bổ công suất theo từng Tầng (Tầng 1 .. Tầng 5)
   const floorBreakdownList = useMemo(() => {
     return [1, 2, 3, 4, 5].map((fl: number) => {
       const nodesOnFloor = workspaceNodes.filter(
@@ -285,21 +392,30 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
       ).length;
       const free = total - busy;
       const pct = Math.round((busy / total) * 100);
+      const label =
+        webLanguage === 'en'
+          ? fl === 5
+            ? 'Floor 5 • Colosseum Hall (30 seats)'
+            : `Floor ${fl} • 6 Standard Meeting Rooms`
+          : webLanguage === 'ja'
+          ? fl === 5
+            ? '5階 • コロッセオ大ホール (30席)'
+            : `${fl}階 • 標準会議室 6室`
+          : fl === 5
+          ? 'Tầng 5 • Hội trường La Mã (30 ghế)'
+          : `Tầng ${fl} • 6 Phòng họp chuẩn`;
+
       return {
         floorLevel: fl,
-        label:
-          fl === 5
-            ? 'Tầng 5 • Hội trường La Mã (30 ghế)'
-            : `Tầng ${fl} • 6 Phòng họp chuẩn`,
+        label,
         total,
         busy,
         free,
         pct,
       };
     });
-  }, [workspaceNodes]);
+  }, [workspaceNodes, webLanguage]);
 
-  // Phát giọng đọc AI (TTS) tự động đổi ngôn ngữ (vi-VN / en-US / ja-JP) và tốc độ đọc đã lưu
   const handleToggleSpeakSummary = () => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     if (isSpeakingTts) {
@@ -369,7 +485,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 4 THẺ KPI TỔNG QUAN CÓ CHÚ THÍCH ĐẦY ĐỦ */}
+      {/* 4 THẺ KPI TỔNG QUAN */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div
           onClick={() => onNavigateSection('FLOORPLAN')}
@@ -390,12 +506,11 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               {metrics.availableRooms}/{metrics.totalRooms}
             </span>
             <span className="text-xs font-bold text-teal-600">
-              phòng đang trống
+              {t.kpi1FreeSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            Đang bận: <strong>{metrics.occupiedRooms}</strong> phòng • Giữ chỗ:{' '}
-            <strong>{metrics.holdingRooms}</strong> phòng
+            {t.kpi1Sub(metrics.occupiedRooms, metrics.holdingRooms)}
           </p>
         </div>
 
@@ -418,12 +533,14 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               {metrics.activeBookingsCount}
             </span>
             <span className="text-xs font-bold text-slate-400">
-              phiên hôm nay
+              {t.kpi2SubSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            Đã quét QR: <strong>{metrics.checkedInCount}</strong> vé • Chờ
-            duyệt: <strong>{metrics.pendingApprovals.length}</strong> đơn
+            {t.kpi2Sub(
+              metrics.checkedInCount,
+              metrics.pendingApprovals.length
+            )}
           </p>
         </div>
 
@@ -446,12 +563,11 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               {metrics.healthyEquipments}/{metrics.totalEquipments}
             </span>
             <span className="text-xs font-bold text-teal-600">
-              hoạt động tốt
+              {t.kpi3WorkingSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
-            Bảo trì / Hỏng: <strong>{metrics.brokenEquipments}</strong> thiết bị
-            cần kiểm tra
+            {t.kpi3Sub(metrics.brokenEquipments)}
           </p>
         </div>
 
@@ -474,16 +590,14 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               {metrics.avgTrust}/100
             </span>
             <span className="text-xs font-bold text-teal-600">
-              điểm chuẩn mực
+              {t.kpi4StandardSuffix}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Thưởng Check-in QR đúng hạn (+2đ) • Phạt No-Show (-10đ)
-          </p>
+          <p className="text-[11px] text-slate-400 mt-1">{t.kpi4Sub}</p>
         </div>
       </div>
 
-      {/* KHU VỰC PHÊ DUYỆT NHANH CHO ADMIN & MANAGER */}
+      {/* KHU VỰC PHÊ DUYỆT NHANH CHO ADMIN & MANAGER (HIỂN THỊ CẢ LÝ DO XIN PHÉP) */}
       {canApproveRequests && metrics.pendingApprovals.length > 0 && (
         <div
           className={`p-5 rounded-3xl border ${
@@ -495,8 +609,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-extrabold uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
               <Clock className="w-4 h-4" />
-              Yêu cầu Đặt phòng / Thuê Hội trường Đang chờ Phê duyệt (
-              {metrics.pendingApprovals.length})
+              {t.pendingApprovalHeader(metrics.pendingApprovals.length)}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -509,14 +622,19 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                     : 'bg-white border-amber-200/80'
                 }`}
               >
-                <div className="text-xs min-w-0">
+                <div className="text-xs min-w-0 space-y-1">
                   <p className="font-extrabold truncate">
                     [{req.nodeId}] {req.purposeNote}
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    Người xin: {req.userEmail} • {req.startTimeIso}–
+                    {t.requesterLabel} {req.userEmail} • {req.startTimeIso}–
                     {req.endTimeIso}
                   </p>
+                  {req.approvalRequestReason && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-300 font-semibold">
+                      {t.reasonLabel} “{req.approvalRequestReason}”
+                    </p>
+                  )}
                 </div>
                 {onHandleApprovalDecision && (
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -528,7 +646,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                       className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold flex items-center gap-1"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Chấp nhận</span>
+                      <span>{t.approveBtn}</span>
                     </button>
                     <button
                       type="button"
@@ -538,7 +656,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                       className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1"
                     >
                       <XCircle className="w-3.5 h-3.5" />
-                      <span>Từ chối</span>
+                      <span>{t.rejectBtn}</span>
                     </button>
                   </div>
                 )}
@@ -548,7 +666,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       )}
 
-      {/* BỘ 2 BIỂU ĐỒ CHUYÊN SÂU: CÓ ĐẦY ĐỦ TRỤC TUNG Y (0%-100%), NHÃN SỐ PHÒNG & CHÚ GIẢI RÕ RÀNG */}
+      {/* BỘ 2 BIỂU ĐỒ CHUYÊN SÂU */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div
           className={`lg:col-span-7 p-6 rounded-3xl border flex flex-col justify-between space-y-5 ${
@@ -564,7 +682,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 <h2 className="text-sm font-black">{t.chart1Title}</h2>
               </div>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                Đơn vị: % Lấp đầy & Số phòng / 25 Phòng
+                {t.chart1Badge}
               </span>
             </div>
             <p className="text-xs text-slate-400">{t.chart1Sub}</p>
@@ -572,15 +690,15 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
             <div className="flex flex-wrap items-center gap-4 pt-1 text-[11px] font-bold">
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded bg-teal-500" />
-                Thấp (&lt;50% • Dễ đặt phòng)
+                {t.legendLow}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded bg-indigo-600" />
-                Tối ưu (50%–79% • Hoạt động chuẩn)
+                {t.legendOptimal}
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded bg-amber-500" />
-                Cao điểm (≥80% • Khuyến nghị đặt trước)
+                {t.legendHigh}
               </span>
             </div>
           </div>
@@ -588,11 +706,11 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           <div className="relative pt-4 pb-2">
             <div className="flex items-end gap-3 h-56">
               <div className="h-full flex flex-col justify-between text-[10px] font-bold text-slate-400 pr-2 border-r border-slate-200 dark:border-slate-800 select-none">
-                <span>100% (25p)</span>
-                <span>75% (19p)</span>
-                <span>50% (13p)</span>
-                <span>25% (6p)</span>
-                <span>0% (0p)</span>
+                <span>100% (25)</span>
+                <span>75% (19)</span>
+                <span>50% (13)</span>
+                <span>25% (6)</span>
+                <span>0% (0)</span>
               </div>
 
               <div className="flex-1 h-full grid grid-cols-6 gap-2.5 items-end relative">
@@ -600,10 +718,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                   <div
                     key={linePct}
                     style={{ bottom: `${linePct}%` }}
-                    className="
-                      absolute left-0 right-0 border-t border-dashed
-                      border-slate-200/70 dark:border-slate-800/80 pointer-events-none
-                    "
+                    className="absolute left-0 right-0 border-t border-dashed border-slate-200/70 dark:border-slate-800/80 pointer-events-none"
                   />
                 ))}
 
@@ -625,7 +740,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                           {bar.occupancyPct}%
                         </span>
                         <span className="block text-[9px] font-bold text-slate-400">
-                          ({bar.bookedRooms}/{bar.totalRooms} phòng)
+                          ({bar.bookedRooms}/{bar.totalRooms} {t.roomsUnit})
                         </span>
                       </div>
 
@@ -658,14 +773,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                 : 'bg-slate-50 border-slate-200/80 text-slate-600'
             }`}
           >
-            <span>
-              <strong>Nhận định dữ liệu biểu đồ:</strong> Khung giờ cao điểm
-              nhất là{' '}
-              <strong className="text-amber-500">
-                Ca 3 (13:00–15:00) đạt 84% (21/25 phòng)
-              </strong>
-              ; khung giờ trống nhiều nhất là Ca 5 & Ca 6.
-            </span>
+            <span>{t.chart1FooterInsight}</span>
           </div>
         </div>
 
@@ -713,7 +821,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
                   {metrics.totalRooms}
                 </span>
                 <span className="text-[9px] uppercase font-bold text-slate-400">
-                  Tổng phòng
+                  {t.totalRoomsLabel}
                 </span>
               </div>
             </div>
@@ -722,10 +830,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 font-bold">
                   <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />
-                  Còn trống sẵn sàng:
+                  {t.donutFreeLabel}
                 </span>
                 <strong>
-                  {metrics.availableRooms} phòng (
+                  {metrics.availableRooms} {t.roomsUnit} (
                   {Math.round(
                     (metrics.availableRooms / metrics.totalRooms) * 100
                   )}
@@ -735,10 +843,10 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 font-bold">
                   <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                  Đang họp / Đã đặt:
+                  {t.donutBusyLabel}
                 </span>
                 <strong>
-                  {metrics.occupiedRooms} phòng (
+                  {metrics.occupiedRooms} {t.roomsUnit} (
                   {Math.round(
                     (metrics.occupiedRooms / metrics.totalRooms) * 100
                   )}
@@ -748,24 +856,23 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 font-bold">
                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  Đang giữ / Chờ duyệt:
+                  {t.donutHoldLabel}
                 </span>
-                <strong>{metrics.holdingRooms} phòng</strong>
+                <strong>
+                  {metrics.holdingRooms} {t.roomsUnit}
+                </strong>
               </div>
             </div>
           </div>
 
           <div className="space-y-2.5 pt-2 border-t border-slate-200/70 dark:border-slate-800">
-            <p className="text-xs font-extrabold">
-              Phân bổ Công suất Chi tiết theo Tầng (Tầng 1 – Tầng 5):
-            </p>
+            <p className="text-xs font-extrabold">{t.floorBreakdownHeader}</p>
             {floorBreakdownList.map((fl) => (
               <div key={fl.floorLevel} className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold">{fl.label}</span>
                   <span className="text-slate-400 font-semibold">
-                    Đang dùng <strong>{fl.busy}</strong>/{fl.total} ({fl.pct}%)
-                    • Trống <strong className="text-teal-500">{fl.free}</strong>
+                    {t.floorBusyFreeStat(fl.busy, fl.total, fl.pct, fl.free)}
                   </span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
@@ -780,7 +887,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
         </div>
       </div>
 
-      {/* TRỢ LÝ CHAT PHÂN TÍCH DỮ LIỆU & ĐỌC BÁO CÁO BẰNG GIỌNG NÓI ĐA NGÔN NGỮ (VI / EN / JA) */}
+      {/* TRỢ LÝ CHAT PHÂN TÍCH DỮ LIỆU & ĐỌC BÁO CÁO BẰNG GIỌNG NÓI ĐA NGÔN NGỮ */}
       <div
         className={`p-6 rounded-3xl border space-y-4 ${
           isDark
@@ -822,7 +929,6 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
           </button>
         </div>
 
-        {/* Bản tóm tắt AI tự động đổi ngôn ngữ theo Cài đặt */}
         <div
           className={`p-3.5 rounded-2xl border text-xs font-semibold flex items-start gap-2.5 ${
             isDark
@@ -849,7 +955,7 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               >
                 <div className="flex items-center justify-between text-[10px] opacity-75 mb-1 font-bold">
                   <span>
-                    {msg.sender === 'USER' ? 'Bạn' : 'Trợ lý Hệ thống'}
+                    {msg.sender === 'USER' ? t.youLabel : t.assistantLabel}
                   </span>
                   <span>{msg.time}</span>
                 </div>

@@ -3,11 +3,13 @@ import { Bell, Check, ExternalLink, ArrowUpRight, CheckCircle2, XCircle } from '
 import {
   NotificationRecordItem,
   UserRoleType,
+  WebLanguageCodeType,
 } from '../../../../Shared/Types/GlobalSystemTypes';
 
 interface NotificationHeaderBellProps {
   notifications: NotificationRecordItem[];
   userRole: UserRoleType;
+  webLanguage?: WebLanguageCodeType;
   isDark: boolean;
   onSelectAndNavigateNotification: (item: NotificationRecordItem) => void;
   onHandleApprovalDecision?: (bookingId: string, decision: 'APPROVED' | 'REJECTED') => void;
@@ -15,9 +17,63 @@ interface NotificationHeaderBellProps {
   onNavigateNotificationPage: () => void;
 }
 
+const BELL_I18N: Record<
+  WebLanguageCodeType,
+  {
+    bellBtn: string;
+    headerTitle: string;
+    headerSub: string;
+    markAllRead: string;
+    approveBtn: string;
+    rejectBtn: string;
+    handledByPrefix: string;
+    approvedTag: string;
+    rejectedTag: string;
+    viewAllBtn: string;
+  }
+> = {
+  vi: {
+    bellBtn: 'Thông báo',
+    headerTitle: 'Thông báo & Yêu cầu phê duyệt',
+    headerSub: 'Bấm vào thông báo để đi tới vị trí phát sinh',
+    markAllRead: 'Đọc tất cả',
+    approveBtn: 'Chấp nhận',
+    rejectBtn: 'Từ chối',
+    handledByPrefix: '✓ Yêu cầu đã được xử lý bởi',
+    approvedTag: 'Đã chấp nhận',
+    rejectedTag: 'Đã từ chối',
+    viewAllBtn: 'Xem chi tiết hơn tại Trang Thông báo',
+  },
+  en: {
+    bellBtn: 'Notifications',
+    headerTitle: 'Notifications & Approval Requests',
+    headerSub: 'Click any item to jump to its workspace room',
+    markAllRead: 'Mark all read',
+    approveBtn: 'Approve',
+    rejectBtn: 'Reject',
+    handledByPrefix: '✓ Processed by',
+    approvedTag: 'Approved',
+    rejectedTag: 'Rejected',
+    viewAllBtn: 'Open Notification Center',
+  },
+  ja: {
+    bellBtn: '通知',
+    headerTitle: '通知＆予約承認リクエスト',
+    headerSub: '通知をクリックして該当会議室へ移動',
+    markAllRead: 'すべて既読',
+    approveBtn: '承認する',
+    rejectBtn: '却下する',
+    handledByPrefix: '✓ 処理済み：',
+    approvedTag: '承認済',
+    rejectedTag: '却下済',
+    viewAllBtn: '通知センターで詳細を見る',
+  },
+};
+
 export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
   notifications,
   userRole,
+  webLanguage = 'vi',
   isDark,
   onSelectAndNavigateNotification,
   onHandleApprovalDecision,
@@ -26,6 +82,7 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const t = BELL_I18N[webLanguage] || BELL_I18N.vi;
 
   const canApprove = userRole === 'MANAGER' || userRole === 'SYS_ADMIN';
   const cleanNotifications = notifications.filter(
@@ -55,7 +112,7 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
         }`}
       >
         <Bell className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-        <span>Thông báo</span>
+        <span>{t.bellBtn}</span>
         {unreadCount > 0 && (
           <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-indigo-600 text-white">
             {unreadCount}
@@ -77,10 +134,8 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
             }`}
           >
             <div>
-              <p className="text-xs font-extrabold">Thông báo & Yêu cầu phê duyệt</p>
-              <p className="text-[11px] text-slate-400">
-                Bấm vào thông báo để đi tới vị trí phát sinh
-              </p>
+              <p className="text-xs font-extrabold">{t.headerTitle}</p>
+              <p className="text-[11px] text-slate-400">{t.headerSub}</p>
             </div>
             {unreadCount > 0 && (
               <button
@@ -89,7 +144,7 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
                 className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 <Check className="w-3 h-3" />
-                Đọc tất cả
+                {t.markAllRead}
               </button>
             )}
           </div>
@@ -133,7 +188,6 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
                     </p>
                   </div>
 
-                  {/* Nút Chấp nhận / Từ chối dành cho MANAGER và SYS_ADMIN */}
                   {isApprovalReq && canApprove && onHandleApprovalDecision && (
                     <div className="mt-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800">
                       {isPendingApproval ? (
@@ -145,7 +199,7 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
                             }
                             className="flex-1 py-1.5 px-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold flex items-center justify-center gap-1"
                           >
-                            <CheckCircle2 className="w-3 h-3" /> Chấp nhận
+                            <CheckCircle2 className="w-3 h-3" /> {t.approveBtn}
                           </button>
                           <button
                             type="button"
@@ -154,13 +208,16 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
                             }
                             className="flex-1 py-1.5 px-2.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 text-[11px] font-bold flex items-center justify-center gap-1"
                           >
-                            <XCircle className="w-3 h-3" /> Từ chối
+                            <XCircle className="w-3 h-3" /> {t.rejectBtn}
                           </button>
                         </div>
                       ) : (
                         <p className="text-[11px] font-bold text-slate-400">
-                          ✓ Yêu cầu đã được xử lý bởi @{item.approvalHandledBy || 'Quản lý/Admin'} (
-                          {item.approvalHandledStatus === 'APPROVED' ? 'Đã chấp nhận' : 'Đã từ chối'})
+                          {t.handledByPrefix} @{item.approvalHandledBy || 'Admin'} (
+                          {item.approvalHandledStatus === 'APPROVED'
+                            ? t.approvedTag
+                            : t.rejectedTag}
+                          )
                         </p>
                       )}
                     </div>
@@ -183,7 +240,7 @@ export const NotificationHeaderBell: React.FC<NotificationHeaderBellProps> = ({
               }}
               className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              <span>Xem chi tiết hơn tại Trang Thông báo</span>
+              <span>{t.viewAllBtn}</span>
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
