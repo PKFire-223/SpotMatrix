@@ -11,7 +11,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "start": "tsx Shared/Runtime/ServerEntry.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.105.0",

@@ -3,15 +3,19 @@ import { getMongoConnectionState } from '../../../../Shared/Database/MongoConnec
 import {
   AuditConcurrencyLogItem,
   AuditEventCategoryType,
+  EquipmentFaultReportItem,
   EquipmentStatusType,
   SharedEquipmentItem,
   SystemPolicyConfigItem,
+  TrustScoreHistoryRecordItem,
   UserTrustProfileItem,
 } from '../../../../Shared/Types/GlobalSystemTypes';
 import {
   AuditConcurrencyLogModel,
+  EquipmentFaultReportModel,
   SharedEquipmentModel,
   SystemPolicyConfigModel,
+  TrustScoreHistoryModel,
   UserTrustProfileModel,
 } from '../Models/DatasetRecordModel';
 
@@ -153,7 +157,7 @@ export function buildAllTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
           equipmentCode: `EQ-M${floor}${spec.suffix}-DEV-02`,
           equipmentName: `${spec.secondaryName} (${roomCode})`,
           categoryName: spec.secondaryCat,
-          status: isBroken ? 'BROKEN' : 'AVAILABLE',
+          status: isBroken ? 'REPORTED_BROKEN' : 'AVAILABLE',
           assignedNodeId: roomCode,
           position2D: { posX: spec.posX, posY: spec.posY },
           currentBookingId: null,
@@ -484,4 +488,90 @@ export function calculateZoneOccupancyRate(
 ): number {
   if (totalCount <= 0) return 0;
   return Math.round((occupiedCount / totalCount) * 100);
+}
+
+const memoryFaultReports: EquipmentFaultReportItem[] = [];
+const memoryTrustHistory: TrustScoreHistoryRecordItem[] = [];
+
+export async function listEquipmentFaultReports(): Promise<EquipmentFaultReportItem[]> {
+  if (getMongoConnectionState()) {
+    const docs = await EquipmentFaultReportModel.find().sort({ createdAt: -1 }).lean();
+    if (docs.length > 0) return docs as unknown as EquipmentFaultReportItem[];
+  }
+  return memoryFaultReports;
+}
+
+export async function createEquipmentFaultReport(
+  payload: EquipmentFaultReportItem
+): Promise<EquipmentFaultReportItem> {
+  memoryFaultReports.unshift(payload);
+  if (getMongoConnectionState()) {
+    await EquipmentFaultReportModel.findOneAndUpdate(
+      { reportId: payload.reportId },
+      payload,
+      { upsert: true, new: true }
+    );
+    await SharedEquipmentModel.findOneAndUpdate(
+      { equipmentId: payload.equipmentId },
+      {
+        lastReportedReason: payload.faultReason,
+        lastReportedBy: payload.reporterEmail,
+      }
+    );
+  }
+  return payload;
+}
+
+export async function updateEquipmentFaultReportDecision(
+  reportId: string,
+  reportStatus: EquipmentFaultReportItem['reportStatus'],
+  equipmentStatus: EquipmentStatusType,
+  handledByEmail: string
+): Promise<EquipmentFaultReportItem | null> {
+  const idx = memoryFaultReports.findIndex((r) => r.reportId === reportId);
+  if (idx >= 0) {
+    memoryFaultReports[idx] = {
+      ...memoryFaultReports[idx],
+      reportStatus,
+      handledByEmail,
+      updatedAtIso: new Date().toISOString(),
+    };
+  }
+  if (getMongoConnectionState()) {
+    const updated = await EquipmentFaultReportModel.findOneAndUpdate(
+      { reportId },
+      { reportStatus, handledByEmail, updatedAtIso: new Date().toISOString() },
+      { new: true }
+    ).lean();
+    if (updated) {
+      await SharedEquipmentModel.findOneAndUpdate(
+        { equipmentId: (updated as unknown as EquipmentFaultReportItem).equipmentId },
+        { status: equipmentStatus }
+      );
+      return updated as unknown as EquipmentFaultReportItem;
+    }
+  }
+  return idx >= 0 ? memoryFaultReports[idx] : null;
+}
+
+export async function listTrustScoreHistoryRecords(): Promise<TrustScoreHistoryRecordItem[]> {
+  if (getMongoConnectionState()) {
+    const docs = await TrustScoreHistoryModel.find().sort({ createdAt: -1 }).limit(100).lean();
+    if (docs.length > 0) return docs as unknown as TrustScoreHistoryRecordItem[];
+  }
+  return memoryTrustHistory;
+}
+
+export async function appendTrustScoreHistoryRecord(
+  record: TrustScoreHistoryRecordItem
+): Promise<TrustScoreHistoryRecordItem> {
+  memoryTrustHistory.unshift(record);
+  if (getMongoConnectionState()) {
+    await TrustScoreHistoryModel.findOneAndUpdate(
+      { recordId: record.recordId },
+      record,
+      { upsert: true, new: true }
+    );
+  }
+  return record;
 }

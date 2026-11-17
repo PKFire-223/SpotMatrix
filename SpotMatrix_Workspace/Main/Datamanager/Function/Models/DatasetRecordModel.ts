@@ -1,8 +1,10 @@
 import mongoose, { Schema } from 'mongoose';
 import {
   AuditConcurrencyLogItem,
+  EquipmentFaultReportItem,
   SharedEquipmentItem,
   SystemPolicyConfigItem,
+  TrustScoreHistoryRecordItem,
   UserTrustProfileItem,
 } from '../../../../Shared/Types/GlobalSystemTypes';
 
@@ -44,7 +46,13 @@ const sharedEquipmentSchema = new Schema<SharedEquipmentItem>(
     },
     status: {
       type: String,
-      enum: ['AVAILABLE', 'IN_USE', 'BROKEN'],
+      enum: [
+        'AVAILABLE',
+        'IN_USE',
+        'REPORTED_BROKEN',
+        'MAINTENANCE',
+        'BROKEN',
+      ],
       default: 'AVAILABLE',
     },
     assignedNodeId: { type: String, default: null },
@@ -56,8 +64,69 @@ const sharedEquipmentSchema = new Schema<SharedEquipmentItem>(
     weeklyUsageHours: { type: Number, default: 20 },
     monthlyUsageHours: { type: Number, default: 80 },
     healthPercent: { type: Number, default: 95 },
+    lastReportedReason: { type: String, default: null },
+    lastReportedBy: { type: String, default: null },
+    lastMaintenanceNote: { type: String, default: null },
   },
   { timestamps: true }
+);
+
+const equipmentFaultReportSchema = new Schema<EquipmentFaultReportItem>(
+  {
+    reportId: { type: String, required: true, unique: true },
+    equipmentId: { type: String, required: true },
+    equipmentCode: { type: String, required: true },
+    equipmentName: { type: String, required: true },
+    roomCode: { type: String, required: true },
+    reporterEmail: { type: String, required: true },
+    reporterName: { type: String, required: true },
+    reporterRole: {
+      type: String,
+      enum: ['EMPLOYEE', 'MANAGER', 'SYS_ADMIN'],
+      default: 'EMPLOYEE',
+    },
+    faultReason: { type: String, required: true },
+    reportStatus: {
+      type: String,
+      enum: [
+        'PENDING_ADMIN',
+        'CONFIRMED_BROKEN',
+        'IN_MAINTENANCE',
+        'RESOLVED_READY',
+        'REJECTED',
+      ],
+      default: 'PENDING_ADMIN',
+    },
+    handledByEmail: { type: String, default: null },
+    handledNote: { type: String, default: null },
+    aiDiagnosisNote: { type: String, default: null },
+    createdAtIso: { type: String, default: () => new Date().toISOString() },
+    updatedAtIso: { type: String, default: () => new Date().toISOString() },
+  },
+  { timestamps: true, collection: 'spotmatrix_equipment_fault_reports' }
+);
+
+const trustScoreHistorySchema = new Schema<TrustScoreHistoryRecordItem>(
+  {
+    recordId: { type: String, required: true, unique: true },
+    userEmail: { type: String, required: true, index: true },
+    fullName: { type: String, required: true },
+    deltaPoints: { type: Number, required: true },
+    balanceAfter: { type: Number, required: true },
+    eventType: {
+      type: String,
+      enum: [
+        'MONTHLY_BONUS_20',
+        'QR_CHECKIN_REWARD',
+        'NO_SHOW_PENALTY',
+        'INITIAL_GRANT',
+      ],
+      default: 'QR_CHECKIN_REWARD',
+    },
+    reasonText: { type: String, required: true },
+    createdAtIso: { type: String, default: () => new Date().toISOString() },
+  },
+  { timestamps: true, collection: 'spotmatrix_trust_score_history' }
 );
 
 const systemPolicyConfigSchema = new Schema<SystemPolicyConfigItem>(
@@ -93,6 +162,7 @@ const auditConcurrencyLogSchema = new Schema<AuditConcurrencyLogItem>(
         'QR_CHECKIN_SUCCESS',
         'FLOORPLAN_COORD_UPDATED',
         'POLICY_CONFIG_UPDATED',
+        'USER_LOGIN_SESSION',
       ],
       required: true,
     },
@@ -105,6 +175,8 @@ const auditConcurrencyLogSchema = new Schema<AuditConcurrencyLogItem>(
       required: true,
     },
     detailMessage: { type: String, required: true },
+    ipAddress: { type: String, default: '113.161.72.104' },
+    locationLabel: { type: String, default: 'TP. Hồ Chí Minh, VN' },
     createdAtIso: { type: String, default: () => new Date().toISOString() },
   },
   { timestamps: true }
@@ -120,6 +192,20 @@ export const UserTrustProfileModel =
 export const SharedEquipmentModel =
   mongoose.models.SharedEquipment ||
   mongoose.model<SharedEquipmentItem>('SharedEquipment', sharedEquipmentSchema);
+
+export const EquipmentFaultReportModel =
+  mongoose.models.EquipmentFaultReport ||
+  mongoose.model<EquipmentFaultReportItem>(
+    'EquipmentFaultReport',
+    equipmentFaultReportSchema
+  );
+
+export const TrustScoreHistoryModel =
+  mongoose.models.TrustScoreHistory ||
+  mongoose.model<TrustScoreHistoryRecordItem>(
+    'TrustScoreHistory',
+    trustScoreHistorySchema
+  );
 
 export const SystemPolicyConfigModel =
   mongoose.models.SystemPolicyConfig ||

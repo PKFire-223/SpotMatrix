@@ -21,6 +21,7 @@ import {
 import {
   BookingPayloadItem,
   UserRoleType,
+  WebLanguageCodeType,
 } from '../../../Shared/Types/GlobalSystemTypes';
 
 export interface UserProfileCustomization {
@@ -42,6 +43,7 @@ interface ProfilePagesProps {
   profileData: UserProfileCustomization;
   userBookings: BookingPayloadItem[];
   isDark: boolean;
+  webLanguage?: WebLanguageCodeType;
   isSyncingMongo?: boolean;
   onSaveProfileCustomization: (updated: UserProfileCustomization) => void;
 }
@@ -395,6 +397,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
   profileData,
   userBookings,
   isDark,
+  webLanguage = 'vi',
   isSyncingMongo = false,
   onSaveProfileCustomization,
 }) => {
@@ -489,7 +492,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
     e.preventDefault();
     onSaveProfileCustomization(formState);
     setSaveBanner(
-      'Đã lưu hồ sơ cá nhân, ảnh Avatar và hình nền vào cơ sở dữ liệu MongoDB thành công!'
+      webLanguage === 'en' ? 'Saved personal profile, Avatar, and Banner to MongoDB successfully!' : webLanguage === 'ja' ? 'プロフィール、アバター、背景バナーをMongoDBに保存しました！' : 'Đã lưu hồ sơ cá nhân, ảnh Avatar và hình nền vào cơ sở dữ liệu MongoDB thành công!'
     );
   };
 
@@ -534,7 +537,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               className="px-3.5 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold backdrop-blur-md border border-white/20 flex items-center gap-2 shadow-lg transition"
             >
               <ImageIcon className="w-3.5 h-3.5 text-teal-400" />
-              Tải ảnh nền từ máy tính
+              {webLanguage === 'en' ? 'Upload Cover Image' : webLanguage === 'ja' ? 'PCから背景画像をアップロード' : 'Tải ảnh nền từ máy tính'}
             </button>
 
             {formState.backgroundUrl && (
@@ -546,7 +549,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   onSaveProfileCustomization(updated);
                 }}
                 className="p-2 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-bold backdrop-blur-md transition"
-                title="Xóa ảnh nền về mặc định"
+                title={webLanguage === "en" ? "Reset cover image" : webLanguage === "ja" ? "背景画像をリセット" : "Xóa ảnh nền về mặc định"}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -568,7 +571,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               className="px-4 py-2 rounded-xl bg-slate-900/85 hover:bg-indigo-600 text-white text-xs font-extrabold backdrop-blur-md border border-amber-400/40 flex items-center gap-2 shadow-xl transition"
             >
               <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
-              <span>✨ Tạo Mẫu nền bằng AI (Nhập mô tả & Xem trước)</span>
+              <span>{webLanguage === 'en' ? '✨ AI Banner Studio (Prompt & Preview)' : webLanguage === 'ja' ? '✨ AI背景バナースタジオ（プロンプト生成）' : '✨ Tạo Mẫu nền bằng AI (Nhập mô tả & Xem trước)'}</span>
             </button>
           </div>
         </div>
@@ -603,7 +606,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   className="absolute inset-0 bg-slate-950/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-bold gap-1"
                 >
                   <Camera className="w-5 h-5 text-teal-300" />
-                  <span>Đổi Avatar</span>
+                  <span>{webLanguage === 'en' ? 'Change Avatar' : webLanguage === 'ja' ? 'アバター変更' : 'Đổi Avatar'}</span>
                 </button>
               </div>
 
@@ -622,12 +625,12 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center gap-1">
                     <CloudUpload className="w-3 h-3" />
                     {isSyncingMongo
-                      ? 'Đang lưu MongoDB...'
-                      : 'Đã đồng bộ MongoDB'}
+                      ? (webLanguage === 'en' ? 'Syncing MongoDB...' : webLanguage === 'ja' ? 'MongoDB同期中...' : 'Đang lưu MongoDB...')
+                      : (webLanguage === 'en' ? 'MongoDB Synced' : webLanguage === 'ja' ? 'MongoDB同期済' : 'Đã đồng bộ MongoDB')}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  @{formState.username} • Mã định danh: {formState.accountCode}{' '}
+                  @{formState.username} • {webLanguage === 'en' ? 'ID:' : webLanguage === 'ja' ? 'ID:' : 'Mã định danh:'} {formState.accountCode}{' '}
                   • {formState.departmentName}
                 </p>
               </div>
@@ -644,7 +647,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                 }`}
               >
                 <Camera className="w-3.5 h-3.5" />
-                Tải ảnh Avatar lên
+                {webLanguage === 'en' ? 'Upload Avatar' : webLanguage === 'ja' ? 'アバターをアップロード' : 'Tải ảnh Avatar lên'}
               </button>
               {formState.avatarUrl && (
                 <button
@@ -656,7 +659,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   }}
                   className="px-3 py-2 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-900/50 text-rose-500 hover:bg-rose-500/10 transition"
                 >
-                  Xóa Avatar
+                  {webLanguage === 'en' ? 'Remove Avatar' : webLanguage === 'ja' ? 'アバター削除' : 'Xóa Avatar'}
                 </button>
               )}
             </div>
@@ -675,7 +678,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
             onClick={() => setSaveBanner(null)}
             className="text-[11px] underline"
           >
-            Đóng
+            {webLanguage === 'en' ? 'Close' : webLanguage === 'ja' ? '閉じる' : 'Đóng'}
           </button>
         </div>
       )}
@@ -697,17 +700,17 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               }`}
             >
               <User className="w-4 h-4 text-indigo-600" />
-              Thông tin Dữ liệu Hồ sơ Cá nhân (Lưu trữ MongoDB)
+              {webLanguage === 'en' ? 'Personal Profile Information (MongoDB Storage)' : webLanguage === 'ja' ? '個人プロフィール情報（MongoDB保存）' : 'Thông tin Dữ liệu Hồ sơ Cá nhân (Lưu trữ MongoDB)'}
             </h2>
             <span className="text-[11px] text-slate-400">
-              Tự động đồng bộ khi đăng nhập ở máy khác
+              {webLanguage === 'en' ? 'Auto-synced across all devices' : webLanguage === 'ja' ? '別端末ログイン時も自動同期' : 'Tự động đồng bộ khi đăng nhập ở máy khác'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Họ và tên
+                {webLanguage === 'en' ? 'Full Name' : webLanguage === 'ja' ? '氏名' : 'Họ và tên'}
               </label>
               <input
                 type="text"
@@ -725,7 +728,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Email công việc
+                {webLanguage === 'en' ? 'Work Email' : webLanguage === 'ja' ? '業務用メールアドレス' : 'Email công việc'}
               </label>
               <div className="relative">
                 <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3" />
@@ -746,7 +749,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Phòng ban / Bộ phận
+                {webLanguage === 'en' ? 'Department' : webLanguage === 'ja' ? '所属部署' : 'Phòng ban / Bộ phận'}
               </label>
               <div className="relative">
                 <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-3" />
@@ -770,7 +773,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Chức danh chuyên môn
+                {webLanguage === 'en' ? 'Job Title' : webLanguage === 'ja' ? '役職・職種' : 'Chức danh chuyên môn'}
               </label>
               <input
                 type="text"
@@ -789,7 +792,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Số điện thoại liên hệ
+                {webLanguage === 'en' ? 'Phone Number' : webLanguage === 'ja' ? '電話番号' : 'Số điện thoại liên hệ'}
               </label>
               <input
                 type="text"
@@ -808,7 +811,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div>
               <label className="block text-xs font-bold mb-1.5 text-slate-500">
-                Điểm tín nhiệm hiện tại
+                {webLanguage === 'en' ? 'Current Trust Score' : webLanguage === 'ja' ? '現在の信頼スコア' : 'Điểm tín nhiệm hiện tại'}
               </label>
               <div
                 className={`px-3.5 py-2.5 rounded-xl border text-xs font-extrabold flex items-center justify-between ${
@@ -819,16 +822,16 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               >
                 <span className="flex items-center gap-1.5">
                   <Award className="w-4 h-4" />
-                  {formState.trustScore} / 100 điểm
+                  {formState.trustScore} / 100 pts
                 </span>
-                <span className="text-[10px] uppercase">Hạng Uy Tín Cao</span>
+                <span className="text-[10px] uppercase">{webLanguage === 'en' ? 'High Trust Tier' : webLanguage === 'ja' ? '高信頼ランク' : 'Hạng Uy Tín Cao'}</span>
               </div>
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold mb-1.5 text-slate-500">
-              Giới thiệu ngắn & Ghi chú lịch họp ưu tiên
+              {webLanguage === 'en' ? 'Short Bio & Meeting Preferences' : webLanguage === 'ja' ? '自己紹介・会議優先メモ' : 'Giới thiệu ngắn & Ghi chú lịch họp ưu tiên'}
             </label>
             <textarea
               rows={3}
@@ -850,7 +853,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 flex items-center gap-2 transition"
             >
               <Save className="w-4 h-4" />
-              Lưu Hồ sơ & Ảnh lên MongoDB
+              {webLanguage === 'en' ? 'Save Profile & Images to MongoDB' : webLanguage === 'ja' ? 'プロフィールと画像をMongoDBに保存' : 'Lưu Hồ sơ & Ảnh lên MongoDB'}
             </button>
           </div>
         </form>
@@ -870,13 +873,13 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
               }`}
             >
               <Calendar className="w-4 h-4 text-teal-600" />
-              Lịch sử Đặt phòng của Tài khoản ({myBookings.length})
+              {webLanguage === 'en' ? `Account Booking History (${myBookings.length})` : webLanguage === 'ja' ? `アカウント予約履歴 (${myBookings.length})` : `Lịch sử Đặt phòng của Tài khoản (${myBookings.length})`}
             </h2>
 
             <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
               {myBookings.length === 0 ? (
                 <p className="text-xs text-slate-400 py-8 text-center">
-                  Bạn chưa có lịch đặt phòng nào.
+                  {webLanguage === 'en' ? 'No bookings yet.' : webLanguage === 'ja' ? '予約履歴はまだありません。' : 'Bạn chưa có lịch đặt phòng nào.'}
                 </p>
               ) : (
                 myBookings.map((item) => (
@@ -902,10 +905,10 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                         }`}
                       >
                         {item.bookingStatus === 'CHECKED_IN'
-                          ? 'ĐÃ CHECK-IN'
+                          ? (webLanguage === 'en' ? 'CHECKED IN' : webLanguage === 'ja' ? 'チェックイン済' : 'ĐÃ CHECK-IN')
                           : item.approvalStatus === 'PENDING_APPROVAL'
-                          ? 'CHỜ PHÊ DUYỆT'
-                          : 'ĐÃ DUYỆT'}
+                          ? (webLanguage === 'en' ? 'PENDING' : webLanguage === 'ja' ? '承認待ち' : 'CHỜ PHÊ DUYỆT')
+                          : (webLanguage === 'en' ? 'APPROVED' : webLanguage === 'ja' ? '承認済' : 'ĐÃ DUYỆT')}
                       </span>
                     </div>
                     <p
@@ -935,9 +938,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
           >
             <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
             <span>
-              Ảnh Avatar và Hình nền AI được lưu trực tiếp theo tài khoản{' '}
-              <strong>@{formState.username}</strong> trong MongoDB Atlas, chuyển
-              sang trang khác hoặc mở lại vẫn giữ nguyên.
+              {webLanguage === 'en' ? `Avatar and AI Banner are stored persistently for @${formState.username} in MongoDB Atlas.` : webLanguage === 'ja' ? `アバターとAI背景バナーは @${formState.username} のMongoDB Atlasアカウントに永続保存されます。` : `Ảnh Avatar và Hình nền AI được lưu trực tiếp theo tài khoản @${formState.username} trong MongoDB Atlas, chuyển sang trang khác hoặc mở lại vẫn giữ nguyên.`}
             </span>
           </div>
         </div>
@@ -962,10 +963,10 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                 </span>
                 <div>
                   <h3 className="text-base font-black">
-                    SpotMatrix AI Banner Studio — Tạo Mẫu Nền Theo Mô Tả
+                    {webLanguage === 'en' ? 'SpotMatrix AI Banner Studio — Custom Scene Generator' : webLanguage === 'ja' ? 'SpotMatrix AIバナースタジオ — プロンプト背景生成' : 'SpotMatrix AI Banner Studio — Tạo Mẫu Nền Theo Mô Tả'}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Mô hình đã được huấn luyện ngữ cảnh Kiến trúc 3D, Thiên nhiên, Đấu trường La Mã, Vũ trụ & Cyberpunk
+                    {webLanguage === 'en' ? 'Trained on 3D Architecture, Nature, Colosseum, Cosmos & Cyberpunk aesthetics' : webLanguage === 'ja' ? '3D建築、自然、コロッセオ、宇宙、サイバーパンクのシーン生成に対応' : 'Mô hình đã được huấn luyện ngữ cảnh Kiến trúc 3D, Thiên nhiên, Đấu trường La Mã, Vũ trụ & Cyberpunk'}
                   </p>
                 </div>
               </div>
@@ -980,7 +981,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
 
             <div className="space-y-2.5">
               <label className="text-xs font-extrabold block">
-                1. Nhập nội dung mẫu nền bạn muốn AI thiết kế:
+                {webLanguage === 'en' ? '1. Describe the banner scene you want AI to render:' : webLanguage === 'ja' ? '1. AIに生成させたい背景テーマを入力：' : '1. Nhập nội dung mẫu nền bạn muốn AI thiết kế:'}
               </label>
               <div className="flex gap-2">
                 <input
@@ -1002,7 +1003,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>
-                    {isGeneratingAiBanner ? 'AI đang vẽ...' : 'Nhờ AI Tạo Mẫu'}
+                    {isGeneratingAiBanner ? (webLanguage === 'en' ? 'Rendering...' : webLanguage === 'ja' ? '生成中...' : 'AI đang vẽ...') : (webLanguage === 'en' ? 'Generate with AI' : webLanguage === 'ja' ? 'AIで背景を生成' : 'Nhờ AI Tạo Mẫu')}
                   </span>
                 </button>
               </div>
@@ -1028,7 +1029,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-indigo-300'
                     }`}
                   >
-                    + {sug.slice(0, 42)}...
+                    {sug.slice(0, 42)}...
                   </button>
                 ))}
               </div>
@@ -1037,11 +1038,11 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-extrabold">
-                  2. Xem trước mẫu nền AI vừa tạo (Preview):
+                  {webLanguage === 'en' ? '2. AI Generated Banner Preview:' : webLanguage === 'ja' ? '2. 生成されたAI背景プレビュー：' : '2. Xem trước mẫu nền AI vừa tạo (Preview):'}
                 </span>
                 {aiStyleDetected && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-300">
-                    Phong cách nhận diện: {aiStyleDetected}
+                    {webLanguage === 'en' ? 'Detected Style:' : webLanguage === 'ja' ? 'スタイル:' : 'Phong cách nhận diện:'} {aiStyleDetected}
                   </span>
                 )}
               </div>
@@ -1055,13 +1056,13 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   />
                 ) : (
                   <span className="text-xs text-slate-400">
-                    Bấm “Nhờ AI Tạo Mẫu” để xem trước hình nền...
+                    {webLanguage === 'en' ? 'Click Generate with AI to preview...' : webLanguage === 'ja' ? '「AIで背景を生成」をクリックしてプレビュー...' : 'Bấm “Nhờ AI Tạo Mẫu” để xem trước hình nền...'}
                   </span>
                 )}
                 {isGeneratingAiBanner && (
                   <div className="absolute inset-0 bg-slate-950/65 backdrop-blur-sm flex items-center justify-center text-white text-xs font-extrabold gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-teal-400" />
-                    <span>AI đang kết xuất môi trường ánh sáng...</span>
+                    <span>{webLanguage === 'en' ? 'AI is rendering lighting environment...' : webLanguage === 'ja' ? 'AIがライティング環境をレンダリング中...' : 'AI đang kết xuất môi trường ánh sáng...'}</span>
                   </div>
                 )}
               </div>
@@ -1073,7 +1074,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                 onClick={() => setIsAiBannerModalOpen(false)}
                 className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
-                Hủy bỏ
+                {webLanguage === 'en' ? 'Cancel' : webLanguage === 'ja' ? 'キャンセル' : 'Hủy bỏ'}
               </button>
 
               <div className="flex items-center gap-2">
@@ -1089,7 +1090,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   }`}
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Tạo lại biến thể khác</span>
+                  <span>{webLanguage === 'en' ? 'Regenerate Variation' : webLanguage === 'ja' ? '別バリエーションを生成' : 'Tạo lại biến thể khác'}</span>
                 </button>
 
                 <button
@@ -1099,7 +1100,7 @@ export const ProfilePages: React.FC<ProfilePagesProps> = ({
                   className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-teal-600/20 transition"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Xác nhận & Dán Mẫu nền (Lưu DB)</span>
+                  <span>{webLanguage === 'en' ? 'Apply & Save Banner to DB' : webLanguage === 'ja' ? '背景を適用してDBに保存' : 'Xác nhận & Dán Mẫu nền (Lưu DB)'}</span>
                 </button>
               </div>
             </div>

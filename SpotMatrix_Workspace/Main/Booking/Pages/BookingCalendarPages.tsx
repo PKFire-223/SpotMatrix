@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   CalendarCheck,
   Clock,
@@ -60,10 +60,13 @@ export interface BookingCalendarPagesProps {
   departmentsList?: OrganizationDepartmentItem[];
   selectedNode: WorkspaceNodeItem | null;
   preselectedSlot?: {
+    dateIso?: string;
     start: string;
     end: string;
     seatCode?: string;
     hallMode?: 'HALL_EVENT_RENTAL' | 'HALL_SEAT_BOOKING';
+    purposeNote?: string;
+    approvalRequestReason?: string;
   } | null;
   userEmail: string;
   userRole?: UserRoleType;
@@ -273,7 +276,7 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     historyBannerTitle: 'Lịch sử Đặt phòng Chi tiết (Đã quét QR • Đã hủy • Đã trễ hạn)',
     historyBannerSub:
       'Các đơn Đã quét QR và Trễ hạn sẽ tự ẩn khỏi khung trên sau 3 ngày. Bấm vào đây để xem toàn bộ lịch sử.',
-    historyBannerBtn: 'Mở Trang Lịch Sử Đặt Phòng →',
+    historyBannerBtn: 'Mở Trang Lịch Sử Đặt Phòng',
     lockFooterText: (c) => `Đang bảo vệ ${c} phiên bằng Optimistic Lock`,
     scrollMoreBtn: 'Xem tiếp',
   },
@@ -350,7 +353,7 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     historyBannerTitle: 'Detailed Booking History (Checked-in • Cancelled • Expired)',
     historyBannerSub:
       'Checked-in and Expired passes hide from the active box after 3 days. Click below to inspect all historical records.',
-    historyBannerBtn: 'Open Booking History Page →',
+    historyBannerBtn: 'Open Booking History Page',
     lockFooterText: (c) => `Protecting ${c} sessions via Optimistic Lock`,
     scrollMoreBtn: 'More',
   },
@@ -427,7 +430,7 @@ const BOOKING_I18N: Record<WebLanguageCodeType, BookingPageTranslationPack> = {
     historyBannerTitle: '予約履歴ページ (QR読取済 • キャンセル済 • 期限切れ)',
     historyBannerSub:
       'QR読取済および期限切れのチケットは3日後に上の枠から非表示になります。全履歴の詳細は以下から確認できます。',
-    historyBannerBtn: '予約履歴ページを開く →',
+    historyBannerBtn: '予約履歴ページを開く',
     lockFooterText: (c) => `${c} 件の予約を楽観的ロックで保護中`,
     scrollMoreBtn: '続きを見る',
   },
@@ -485,8 +488,34 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
     'Họp triển khai dự án & Review kiến trúc 3D'
   );
   const [approvalRequestReason, setApprovalRequestReason] = useState<string>(
-    'Cần phòng có màn hình 4K để họp nhóm đánh giá tiến độ Sprint tuần này cùng các thành viên bộ phận.'
+    preselectedSlot?.approvalRequestReason ||
+      'Cần phòng có màn hình 4K để họp nhóm đánh giá tiến độ Sprint tuần này cùng các thành viên bộ phận.'
   );
+
+  useEffect(() => {
+    if (selectedNode?.nodeCode) {
+      setSelectedRoomCode(selectedNode.nodeCode);
+    }
+  }, [selectedNode?.nodeCode]);
+
+  useEffect(() => {
+    if (!preselectedSlot) return;
+    if (preselectedSlot.dateIso) setBookingDateIso(preselectedSlot.dateIso);
+    if (preselectedSlot.start) setStartTimeIso(preselectedSlot.start);
+    if (preselectedSlot.end) setEndTimeIso(preselectedSlot.end);
+    if (preselectedSlot.seatCode && preselectedSlot.seatCode !== 'H-01') {
+      setSelectedHallSeat(preselectedSlot.seatCode);
+    }
+    if (preselectedSlot.hallMode) {
+      setHallBookingMode(preselectedSlot.hallMode);
+    }
+    if (preselectedSlot.purposeNote) {
+      setPurposeNote(preselectedSlot.purposeNote);
+    }
+    if (preselectedSlot.approvalRequestReason) {
+      setApprovalRequestReason(preselectedSlot.approvalRequestReason);
+    }
+  }, [preselectedSlot]);
 
   const allDepartmentNames = useMemo(() => {
     if (departmentsList.length > 0) {
@@ -766,7 +795,7 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
           <button
             type="button"
             onClick={() => setViewMode('HISTORY_PAGE')}
-            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-500 hover:to-teal-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-md transition"
+            className="px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-sm transition"
           >
             <History className="w-4 h-4" />
             <span>{t.openHistoryBtn(bookingsList.length)}</span>
@@ -1221,17 +1250,9 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                     <div
                       key={bk.bookingId}
                       className={`p-4 rounded-2xl border space-y-2.5 transition ${
-                        isExpiredNoShow
-                          ? isDark
-                            ? 'bg-rose-950/25 border-rose-500/50'
-                            : 'bg-rose-50/90 border-rose-300'
-                          : isCheckedIn
-                          ? isDark
-                            ? 'bg-teal-950/20 border-teal-500/40'
-                            : 'bg-teal-50/60 border-teal-200'
-                          : isDark
-                          ? 'bg-slate-950/75 border-slate-800 hover:border-indigo-500/40'
-                          : 'bg-slate-50/90 border-slate-200/90 hover:border-indigo-300'
+                        isDark
+                          ? 'bg-slate-950/75 border-slate-800 hover:border-slate-700'
+                          : 'bg-slate-50/75 border-slate-200/90 hover:border-slate-300'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1333,14 +1354,14 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                             </span>
                           </div>
 
-                          {/* Dãy nút Mở Tab Riêng hiện QR Nhận Phòng & QR Hủy Phòng */}
+                          {/* Dãy nút Mở Tab Riêng hiện QR Nhận Phòng & QR Hủy Phòng (Phong cách tối giản, đồng nhất màu sắc) */}
                           <div className="flex flex-wrap items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() =>
                                 handleOpenStandaloneQrKioskTab(bk, 'CHECKIN')
                               }
-                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-teal-600 hover:bg-teal-500 text-white flex items-center gap-1 shadow-sm transition"
+                              className="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 shadow-sm transition"
                             >
                               <QrCode className="w-3.5 h-3.5" />
                               <span>{t.scanQrCheckinTabBtn}</span>
@@ -1352,31 +1373,43 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                               onClick={() =>
                                 handleOpenStandaloneQrKioskTab(bk, 'CANCEL')
                               }
-                              className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-rose-600/15 hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white border border-rose-500/30 flex items-center gap-1 transition"
+                              className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border flex items-center gap-1.5 transition ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                              }`}
                             >
-                              <QrCode className="w-3.5 h-3.5" />
+                              <QrCode className="w-3.5 h-3.5 text-slate-500" />
                               <span>{t.scanQrCancelTabBtn}</span>
-                              <ExternalLink className="w-3 h-3 opacity-80" />
+                              <ExternalLink className="w-3 h-3 opacity-70" />
                             </button>
                           </div>
 
-                          {/* Ô Test Nhanh: Giả sử vừa quét QR Nhận phòng / Hủy phòng / Quá hạn thu hồi */}
+                          {/* Ô Test Nhanh (Tông màu trung tính tối giản, không gây rối mắt) */}
                           <div className="flex flex-wrap items-center gap-1.5 pt-1">
                             <button
                               type="button"
                               onClick={() => handleTestInstantCheckin(bk)}
-                              className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-500/15 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-300 hover:text-white transition flex items-center gap-1"
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition flex items-center gap-1 ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400'
+                              }`}
                             >
-                              <CheckCircle2 className="w-3 h-3" />
+                              <CheckCircle2 className="w-3 h-3 text-indigo-500" />
                               <span>{t.testQuickCheckinBtn}</span>
                             </button>
 
                             <button
                               type="button"
                               onClick={() => handleTestInstantQrCancel(bk)}
-                              className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-amber-500/15 hover:bg-amber-600 text-amber-700 dark:text-amber-300 hover:text-white transition flex items-center gap-1"
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition flex items-center gap-1 ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
+                              }`}
                             >
-                              <XCircle className="w-3 h-3" />
+                              <XCircle className="w-3 h-3 text-slate-400" />
                               <span>{t.testQuickCancelQrBtn}</span>
                             </button>
 
@@ -1390,7 +1423,11 @@ export const BookingCalendarPages: React.FC<BookingCalendarPagesProps> = ({
                                     bk.nodeId
                                   )
                                 }
-                                className="px-2 py-1 rounded-lg text-[10px] font-extrabold bg-rose-500/15 hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white transition flex items-center gap-1"
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition flex items-center gap-1 ${
+                                  isDark
+                                    ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-rose-400'
+                                    : 'bg-white border-slate-200 text-slate-500 hover:text-rose-600'
+                                }`}
                               >
                                 <TimerOff className="w-3 h-3" />
                                 <span>{t.simulateOverdueBtn}</span>

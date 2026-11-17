@@ -9,7 +9,12 @@ import {
   listUserTrustProfiles,
   recordAuditConcurrencyLog,
   updateActivePolicyConfig,
+  appendTrustScoreHistoryRecord,
+  createEquipmentFaultReport,
+  listEquipmentFaultReports,
+  listTrustScoreHistoryRecords,
   updateEquipmentAttachmentStatus,
+  updateEquipmentFaultReportDecision,
 } from '../Services/DatamanagerService';
 import { createValidationException } from '../../../../Error/Function/Models/AppExceptionModel';
 import { EquipmentStatusType } from '../../../../Shared/Types/GlobalSystemTypes';
@@ -201,6 +206,91 @@ export async function handleSimulateConcurrencyLock(
       winnerEvent: winLog,
       rejectedEvent: rejectLog,
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleCreateAuditLog(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const saved = await recordAuditConcurrencyLog(req.body);
+    res.status(201).json({ success: true, data: saved });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetFaultReports(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await listEquipmentFaultReports();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handlePostFaultReport(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const saved = await createEquipmentFaultReport(req.body);
+    res.status(201).json({ success: true, data: saved });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handlePatchFaultReport(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { reportId } = req.params;
+    const { reportStatus, equipmentStatus, handledByEmail } = req.body;
+    const updated = await updateEquipmentFaultReportDecision(
+      reportId,
+      reportStatus,
+      equipmentStatus,
+      handledByEmail || 'Systemadmin123'
+    );
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handleGetTrustHistory(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await listTrustScoreHistoryRecords();
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function handlePostTrustHistory(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const saved = await appendTrustScoreHistoryRecord(req.body);
+    res.status(201).json({ success: true, data: saved });
   } catch (err) {
     next(err);
   }
