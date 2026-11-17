@@ -82,8 +82,8 @@ const DEFAULT_LOGIN_IP_LOGS: LoginIpRecordItem[] = [
     userEmail: 'sysadmin@spotmatrix.vn',
     ipAddress: '113.161.72.104',
     locationText: 'TP. Hồ Chí Minh, Việt Nam (VNPT Fiber)',
-    deviceText: 'Chrome 130 • Windows 11 Pro (Phiên hiện tại)',
-    loginAtIso: 'Hôm nay • 21:05:12',
+    deviceText: 'Chrome 130 • Windows 11 Pro',
+    loginAtIso: '21:05:12',
     isCurrentSession: true,
   },
   {
@@ -93,7 +93,7 @@ const DEFAULT_LOGIN_IP_LOGS: LoginIpRecordItem[] = [
     ipAddress: '14.231.108.55',
     locationText: 'Hà Nội, Việt Nam (Viettel IDC)',
     deviceText: 'Safari 17 • MacBook Pro M3',
-    loginAtIso: 'Hôm nay • 14:20:45',
+    loginAtIso: '14:20:45',
     isCurrentSession: false,
   },
   {
@@ -103,12 +103,12 @@ const DEFAULT_LOGIN_IP_LOGS: LoginIpRecordItem[] = [
     ipAddress: '27.74.201.18',
     locationText: 'Đà Nẵng, Việt Nam (FPT Telecom)',
     deviceText: 'Edge Mobile • iPadOS 18',
-    loginAtIso: 'Hôm qua • 19:42:10',
+    loginAtIso: '19:42:10',
     isCurrentSession: false,
   },
 ];
 
-// Từ điển Đa ngôn ngữ (Việt / Anh / Nhật) cho toàn bộ trang Cài đặt
+// Từ điển Đa ngôn ngữ 100% (Việt / Anh / Nhật) cho toàn bộ trang Cài đặt
 const SETTINGS_I18N: Record<
   WebLanguageCodeType,
   {
@@ -127,32 +127,77 @@ const SETTINGS_I18N: Record<
     lofiOn: string;
     lofiOff: string;
     volumeLabel: string;
+    lofiStyleLabel: string;
+    trackChillDesc: string;
+    trackAmbientDesc: string;
+    trackRainyDesc: string;
     sfxHeading: string;
     sfxDesc: string;
     sfxOn: string;
     sfxOff: string;
+    testSfxPrefix: string;
     themeHeading: string;
+    themeSubDesc: string;
     darkActive: string;
     lightActive: string;
     secHeading: string;
     secSub: string;
+    accountPrefix: string;
     currPass: string;
+    currPassPlaceholder: string;
     newPass: string;
+    newPassPlaceholder: string;
     confPass: string;
+    confPassPlaceholder: string;
+    twoFactorLabel: string;
+    twoFactorOn: string;
+    twoFactorOff: string;
+    sessionTimeoutLabel: string;
+    minutesUnit: string;
+    savingBtn: string;
     savePassBtn: string;
+    passErrEmpty: string;
+    passErrShort: string;
+    passErrMismatch: string;
+    passSuccessDb: string;
+    passSuccessLocal: string;
     ipHeading: string;
     ipSub: string;
     ipWarnTitle: string;
+    ipDistinctLabel: string;
     ipWarnDesc: string;
     revokeOtherIpsBtn: string;
     simulateNewIpBtn: string;
+    currentSessionBadge: string;
+    loginTimePrefix: string;
+    deleteIpSessionTooltip: string;
     langHeading: string;
     langSub: string;
+    activeBadge: string;
+    selectBadge: string;
     dateFormatLabel: string;
+    dateOptVn: string;
+    dateOptIso: string;
+    dateOptUs: string;
     ttsSpeedLabel: string;
     savePrefsBadge: string;
     deptHeading: string;
     deptSub: string;
+    openOrgPageBtn: string;
+    singleDeptLabel: string;
+    sysAdminDeptHint: string;
+    nonAdminDeptHint: string;
+    joinedGroupsLabel: (count: number) => string;
+    noGroupsText: string;
+    rulesSummaryTitle: string;
+    ruleSysAdminTitle: string;
+    ruleSysAdminDesc: string;
+    ruleManagerTitle: string;
+    ruleManagerDesc: string;
+    ruleEmployeeTitle: string;
+    ruleEmployeeDesc: string;
+    ruleQrWindowTitle: string;
+    ruleQrWindowDesc: string;
   }
 > = {
   vi: {
@@ -173,39 +218,91 @@ const SETTINGS_I18N: Record<
     lofiOn: 'Đang Bật Nhạc Lofi',
     lofiOff: 'Đang Tắt Nhạc Lofi',
     volumeLabel: 'Âm lượng Nhạc nền Lofi:',
+    lofiStyleLabel: 'Giai điệu Lofi Synthesizer:',
+    trackChillDesc: 'Hợp âm ấm & nhịp trống nhẹ',
+    trackAmbientDesc: 'Âm hưởng không gian sâu',
+    trackRainyDesc: 'Tập trung đọc tài liệu',
     sfxHeading: 'Hiệu ứng Âm thanh Tương tác (UI Sound Effects)',
     sfxDesc:
       'Phát âm thanh phản hồi khi bấm nút, đặt lịch thành công hoặc có thông báo mới.',
     sfxOn: 'Đang Bật Hiệu Ứng SFX',
     sfxOff: 'Đang Tắt Hiệu Ứng SFX',
+    testSfxPrefix: 'Thử',
     themeHeading: 'Giao diện Sáng / Tối (Theme Mode)',
+    themeSubDesc: 'Đồng bộ toàn bộ nền tảng 2D, 3D và biểu đồ',
     darkActive: 'Đang dùng Chế độ Tối (Dark)',
     lightActive: 'Đang dùng Chế độ Sáng (Light)',
     secHeading: 'Đổi Mật khẩu Tài khoản (Lưu trực tiếp lên MongoDB Atlas)',
     secSub:
       'Mật khẩu mới sẽ được cập nhật ngay vào bảng UserAccount trên Database',
+    accountPrefix: 'Tài khoản:',
     currPass: 'Mật khẩu hiện tại',
+    currPassPlaceholder: 'Nhập mật khẩu hiện tại...',
     newPass: 'Mật khẩu mới (Tối thiểu 6 ký tự)',
+    newPassPlaceholder: 'Nhập mật khẩu mới...',
     confPass: 'Xác nhận mật khẩu mới',
+    confPassPlaceholder: 'Nhập lại mật khẩu mới...',
+    twoFactorLabel: 'Bảo mật 2 Lớp (2FA):',
+    twoFactorOn: 'ĐANG BẬT',
+    twoFactorOff: 'ĐANG TẮT',
+    sessionTimeoutLabel: 'Timeout phiên:',
+    minutesUnit: 'phút',
+    savingBtn: 'Đang lưu...',
     savePassBtn: 'Cập nhật Mật khẩu lên Database',
+    passErrEmpty: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.',
+    passErrShort: 'Mật khẩu mới phải có độ dài tối thiểu 6 ký tự.',
+    passErrMismatch: 'Mật khẩu xác nhận không khớp với mật khẩu mới.',
+    passSuccessDb: 'Đã đổi mật khẩu và lưu trực tiếp lên MongoDB Atlas thành công!',
+    passSuccessLocal: 'Đã cập nhật mật khẩu mới thành công (Chế độ Local Fallback)!',
     ipHeading: 'Nhật ký Địa chỉ IP Đăng nhập & Giám sát Truy cập',
     ipSub:
       'Tự động lưu địa chỉ IP mỗi lần đăng nhập và nhắc nhở khi có trên 2 IP khác biệt',
     ipWarnTitle:
       'Chú ý nhẹ: Phát hiện đăng nhập từ nhiều địa chỉ IP khác biệt!',
+    ipDistinctLabel: 'IP khác biệt',
     ipWarnDesc:
       'Tài khoản của bạn vừa có lịch sử truy cập từ các địa chỉ IP khác nhau. Hãy kiểm tra xem có phải bạn đang dùng nhiều thiết bị/mạng khác nhau hay không.',
     revokeOtherIpsBtn: 'Đăng xuất các IP khác (Chỉ giữ phiên hiện tại)',
     simulateNewIpBtn: 'Mô phỏng đăng nhập IP mới',
+    currentSessionBadge: 'Phiên hiện tại',
+    loginTimePrefix: 'Thời điểm:',
+    deleteIpSessionTooltip: 'Xóa / Đăng xuất phiên IP này',
     langHeading: 'Ngôn ngữ Giao diện Trang Web & Giọng đọc Tóm tắt AI',
     langSub:
       'Khi đổi ngôn ngữ, toàn bộ thanh điều hướng, tiêu đề cài đặt và giọng đọc phát tiếng của AI lúc tóm tắt sẽ tự động chuyển theo ngôn ngữ đã chọn và lưu bền vững.',
+    activeBadge: '✓ Đang dùng',
+    selectBadge: 'Chọn',
     dateFormatLabel: 'Định dạng Ngày tháng Hiển thị (Đã lưu bền vững):',
+    dateOptVn: 'DD/MM/YYYY (Chuẩn Việt Nam - VD: 25/10/2026)',
+    dateOptIso: 'YYYY-MM-DD (Chuẩn Quốc tế ISO - VD: 2026-10-25)',
+    dateOptUs: 'MM/DD/YYYY (Chuẩn Hoa Kỳ - VD: 10/25/2026)',
     ttsSpeedLabel: 'Tốc độ Giọng đọc Trợ lý AI (TTS):',
     savePrefsBadge: 'Đã tự động lưu mọi cài đặt (Chuyển trang không bị mất)',
     deptHeading: 'Liên kết Phòng ban Tổ chức & Quy tắc Đặt lịch Theo Role',
     deptSub:
       'Đồng bộ xuyên suốt giữa Hồ sơ, Tổ chức, Sơ đồ 5 Tầng và Hội trường La Mã',
+    openOrgPageBtn: 'Mở Trang Tổ chức & Phòng ban',
+    singleDeptLabel: 'Phòng ban Duy nhất của bạn (Một người chỉ thuộc 1 Phòng ban):',
+    sysAdminDeptHint:
+      '* Bạn đang là SYS_ADMIN nên có thể chuyển nhanh phòng ban để kiểm thử quyền đặt ghế Hội trường.',
+    nonAdminDeptHint:
+      '* Chỉ System Admin mới có quyền điều chuyển Phòng ban của nhân sự.',
+    joinedGroupsLabel: (count) =>
+      `Các Nhóm chuyên môn bạn đang tham gia (${count} nhóm):`,
+    noGroupsText: 'Chưa tham gia nhóm nào',
+    rulesSummaryTitle: 'Tóm tắt Quy tắc Phân quyền Hội trường Tầng 5 & QR:',
+    ruleSysAdminTitle: 'System Admin (`SYS_ADMIN`)',
+    ruleSysAdminDesc:
+      'Toàn quyền thuê cả Hội trường không cần cấp phép, không giới hạn số lần/tuần và không bị chặn phòng ban.',
+    ruleManagerTitle: 'Quản lý (`MANAGER`)',
+    ruleManagerDesc:
+      'Tối đa 10 lần/tuần; được thuê cả Hội trường (cần Admin duyệt) và đặt ghế ngồi khi sự kiện đã duyệt.',
+    ruleEmployeeTitle: 'Nhân viên (`EMPLOYEE`)',
+    ruleEmployeeDesc:
+      'Tối đa 3 lần/tuần; chỉ được đặt ghế ngồi khi Hội trường đã có sự kiện được duyệt và phòng ban của mình nằm trong danh sách được tham gia.',
+    ruleQrWindowTitle: 'Cửa sổ Quét mã QR Check-in',
+    ruleQrWindowDesc:
+      'Chỉ mở từ trước 30 phút đến trễ 30 phút so với giờ bắt đầu.',
   },
   en: {
     pageTitle: 'Multi-Module System Settings Center',
@@ -225,39 +322,91 @@ const SETTINGS_I18N: Record<
     lofiOn: 'Lofi Music: ON',
     lofiOff: 'Lofi Music: OFF',
     volumeLabel: 'Lofi Background Volume:',
+    lofiStyleLabel: 'Lofi Synthesizer Style:',
+    trackChillDesc: 'Warm chords & gentle drum beat',
+    trackAmbientDesc: 'Deep spatial ambient pad',
+    trackRainyDesc: 'Calm focus for reading & coding',
     sfxHeading: 'Interactive UI Sound Effects (SFX)',
     sfxDesc:
       'Plays crisp audio feedback on button clicks, booking confirmations, and alerts.',
     sfxOn: 'UI SFX: ENABLED',
     sfxOff: 'UI SFX: MUTED',
+    testSfxPrefix: 'Test',
     themeHeading: 'Light / Dark Interface Mode',
+    themeSubDesc: 'Synchronized across 2D maps, 3D WebGL scenes, and charts',
     darkActive: 'Currently using Dark Mode',
     lightActive: 'Currently using Light Mode',
     secHeading: 'Change Account Password (Saved directly to MongoDB Atlas)',
     secSub:
       'Your new password is immediately persisted to the UserAccount collection',
+    accountPrefix: 'Account:',
     currPass: 'Current Password',
+    currPassPlaceholder: 'Enter current password...',
     newPass: 'New Password (Min 6 chars)',
+    newPassPlaceholder: 'Enter new password...',
     confPass: 'Confirm New Password',
+    confPassPlaceholder: 'Re-enter new password...',
+    twoFactorLabel: 'Two-Factor Auth (2FA):',
+    twoFactorOn: 'ENABLED',
+    twoFactorOff: 'DISABLED',
+    sessionTimeoutLabel: 'Session Timeout:',
+    minutesUnit: 'mins',
+    savingBtn: 'Saving...',
     savePassBtn: 'Update Password in Database',
+    passErrEmpty: 'Please enter both your current password and new password.',
+    passErrShort: 'New password must be at least 6 characters long.',
+    passErrMismatch: 'Confirmation password does not match new password.',
+    passSuccessDb: 'Password updated and saved directly to MongoDB Atlas!',
+    passSuccessLocal: 'Password updated successfully (Local Fallback Mode)!',
     ipHeading: 'Account Login IP History & Access Monitor',
     ipSub:
       'Records every login IP address and alerts you when more than 2 distinct IPs are detected',
     ipWarnTitle:
       'Security Notice: Multiple distinct login IP addresses detected!',
+    ipDistinctLabel: 'distinct IPs',
     ipWarnDesc:
       'Your account has been accessed from multiple different IP addresses recently. Please verify if these sessions belong to you.',
     revokeOtherIpsBtn: 'Revoke Other IPs (Keep Current Session Only)',
     simulateNewIpBtn: 'Simulate New IP Login',
+    currentSessionBadge: 'Current Session',
+    loginTimePrefix: 'Time:',
+    deleteIpSessionTooltip: 'Revoke / Sign out this IP session',
     langHeading: 'Website Interface Language & AI Voice Summary Locale',
     langSub:
       'Switching language updates navigation menus, settings labels, and the AI Assistant speech synthesis voice (saved persistently across all pages).',
+    activeBadge: '✓ Active',
+    selectBadge: 'Select',
     dateFormatLabel: 'Displayed Date Format (Persisted):',
+    dateOptVn: 'DD/MM/YYYY (Vietnam Standard - e.g. 25/10/2026)',
+    dateOptIso: 'YYYY-MM-DD (ISO International - e.g. 2026-10-25)',
+    dateOptUs: 'MM/DD/YYYY (US Standard - e.g. 10/25/2026)',
     ttsSpeedLabel: 'AI Assistant Voice Speed (TTS):',
     savePrefsBadge: 'All settings auto-saved persistently across pages',
     deptHeading: 'Organization Department Sync & Role Booking Quotas',
     deptSub:
       'Real-time synchronization across Profile, Organization, 5-Floor Map & Hall',
+    openOrgPageBtn: 'Open Organization & Departments',
+    singleDeptLabel: 'Your Assigned Department (1 Department per user):',
+    sysAdminDeptHint:
+      '* As SYS_ADMIN, you can switch departments quickly to test Hall seat booking permissions.',
+    nonAdminDeptHint:
+      '* Only System Admin can reassign a member to a different department.',
+    joinedGroupsLabel: (count) =>
+      `Specialized Squads You Joined (${count} groups):`,
+    noGroupsText: 'Not a member of any squad yet',
+    rulesSummaryTitle: 'Floor 5 Colosseum Hall & QR Check-in Policy Summary:',
+    ruleSysAdminTitle: 'System Admin (`SYS_ADMIN`)',
+    ruleSysAdminDesc:
+      'Full authority to book the entire Colosseum Hall without approval, unlimited weekly quota, and no department restrictions.',
+    ruleManagerTitle: 'Manager (`MANAGER`)',
+    ruleManagerDesc:
+      'Up to 10 bookings/week; can request full Hall event rental (requires Admin approval) and book seats in approved events.',
+    ruleEmployeeTitle: 'Employee (`EMPLOYEE`)',
+    ruleEmployeeDesc:
+      'Up to 3 bookings/week; can book individual Hall seats when an approved Hall event includes their department.',
+    ruleQrWindowTitle: 'QR Check-in Time Window',
+    ruleQrWindowDesc:
+      'Open strictly from 30 minutes before until 30 minutes after the scheduled start time.',
   },
   ja: {
     pageTitle: 'マルチモジュール・システム設定センター',
@@ -277,39 +426,91 @@ const SETTINGS_I18N: Record<
     lofiOn: 'Lofi BGM: 再生中',
     lofiOff: 'Lofi BGM: オフ',
     volumeLabel: 'Lofi BGM 音量:',
+    lofiStyleLabel: 'Lofi シンセサイザー音色スタイル:',
+    trackChillDesc: ' 따뜻한コード進行と軽快なビート',
+    trackAmbientDesc: '奥行きのある3Dアンビエント空間音',
+    trackRainyDesc: '資料作成・読書に最適なカフェ音響',
     sfxHeading: 'UIインタラクション効果音 (SFX)',
     sfxDesc:
       'ボタン操作、予約完了、通知受信時にサウンドエフェクトを再生します。',
     sfxOn: '効果音 SFX: オン',
     sfxOff: '効果音 SFX: オフ',
+    testSfxPrefix: '試聴',
     themeHeading: 'ライト / ダーク表示モード切替',
+    themeSubDesc: '2Dフロアマップ、3D WebGLモデル、統計グラフ全体にリアルタイム反映',
     darkActive: '現在：ダークモード (Dark)',
     lightActive: '現在：ライトモード (Light)',
     secHeading: 'アカウントパスワード変更 (MongoDB Atlasへ直接保存)',
     secSub: '新しいパスワードは即座にデータベースへ同期されます',
+    accountPrefix: 'アカウント:',
     currPass: '現在のパスワード',
+    currPassPlaceholder: '現在のパスワードを入力...',
     newPass: '新しいパスワード (6文字以上)',
+    newPassPlaceholder: '新しいパスワードを入力...',
     confPass: '新しいパスワード (確認)',
+    confPassPlaceholder: '新しいパスワードを再入力...',
+    twoFactorLabel: '二要素認証 (2FA):',
+    twoFactorOn: '有効 (ON)',
+    twoFactorOff: '無効 (OFF)',
+    sessionTimeoutLabel: 'セッションタイムアウト:',
+    minutesUnit: '分',
+    savingBtn: '保存中...',
     savePassBtn: 'パスワードをデータベースに保存',
+    passErrEmpty: '現在のパスワードと新しいパスワードを入力してください。',
+    passErrShort: '新しいパスワードは6文字以上で入力してください。',
+    passErrMismatch: '確認用パスワードが一致しません。',
+    passSuccessDb: 'パスワードを変更し、MongoDB Atlasへ保存しました！',
+    passSuccessLocal: 'パスワードを更新しました（ローカルフォールバックモード）！',
     ipHeading: 'ログインIPアドレス履歴＆アクセス監視ログ',
     ipSub:
       'ログインごとのIPアドレスを記録し、2〜3個以上の異なるIPを検知すると注意喚起を表示します',
     ipWarnTitle:
       'セキュリティ注意：複数の異なるIPアドレスからのログインを検知しました！',
+    ipDistinctLabel: '個の異なるIP',
     ipWarnDesc:
       '複数の異なるIPアドレスからこのアカウントへのアクセス履歴があります。ご自身の端末かご確認ください。',
     revokeOtherIpsBtn: '他のIPセッションを解除 (現在のIPのみ維持)',
     simulateNewIpBtn: '新しいIPログインをシミュレート',
+    currentSessionBadge: '現在のセッション',
+    loginTimePrefix: '時刻:',
+    deleteIpSessionTooltip: 'このIPセッションを解除',
     langHeading: 'Webサイト表示言語 ＆ AI要約読み上げ音声 (TTS)',
     langSub:
       '言語を切り替えると、ナビゲーション、設定画面、およびAIアシスタントの音声読み上げ言語が連動して切り替わり、永続保存されます。',
+    activeBadge: '✓ 選択中',
+    selectBadge: '選択',
     dateFormatLabel: '日付表示フォーマット (自動保存済):',
+    dateOptVn: 'DD/MM/YYYY (ベトナム標準 - 例: 25/10/2026)',
+    dateOptIso: 'YYYY-MM-DD (国際標準 ISO - 例: 2026-10-25)',
+    dateOptUs: 'MM/DD/YYYY (米国標準 - 例: 10/25/2026)',
     ttsSpeedLabel: 'AIアシスタント音声読み上げ速度 (TTS):',
     savePrefsBadge:
       'すべての設定が自動保存されました（ページ移動しても維持されます）',
     deptHeading: '所属部署データ連携 ＆ ロール別週間予約上限',
     deptSub:
       'プロフィール、組織ページ、5階3Dマップ、大ホール予約とリアルタイム同期',
+    openOrgPageBtn: '組織・部署管理ページを開く',
+    singleDeptLabel: '現在の所属部署（1ユーザーにつき1部署のみ所属）：',
+    sysAdminDeptHint:
+      '* SYS_ADMIN権限のため、所属部署を切り替えて大ホール座席予約の権限テストが可能です。',
+    nonAdminDeptHint:
+      '* 所属部署の異動・変更はシステム管理者（SYS_ADMIN）のみ実行可能です。',
+    joinedGroupsLabel: (count) =>
+      `参加中の専門グループ・スクワッド（${count}グループ）：`,
+    noGroupsText: '参加中のグループはありません',
+    rulesSummaryTitle: '5階コロッセオ大ホール ＆ QRチェックイン権限規定：',
+    ruleSysAdminTitle: 'システム管理者 (`SYS_ADMIN`)',
+    ruleSysAdminDesc:
+      '承認不要で大ホール全体の貸切予約が可能。週間予約回数の制限および部署制限はありません。',
+    ruleManagerTitle: 'マネージャー (`MANAGER`)',
+    ruleManagerDesc:
+      '週10回まで予約可能。大ホール全体のイベント貸切申請（Admin承認が必要）および承認済みイベントの座席予約が可能。',
+    ruleEmployeeTitle: '一般社員 (`EMPLOYEE`)',
+    ruleEmployeeDesc:
+      '週3回まで予約可能。自部署が参加対象に含まれている承認済み大ホールイベントの個別座席のみ予約可能。',
+    ruleQrWindowTitle: 'QRコードチェックイン有効時間',
+    ruleQrWindowDesc:
+      '予約開始時刻の30分前から開始後30分までの間のみQRスキャンが可能です。',
   },
 };
 
@@ -442,12 +643,12 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
     const samplePools = [
       {
         ip: '171.244.18.92',
-        loc: 'Cần Thơ, Việt Nam (Viettel 5G)',
+        loc: 'Can Tho, VN (Viettel 5G)',
         dev: 'Chrome Mobile • Android 15',
       },
       {
         ip: '42.118.65.201',
-        loc: 'Hải Phòng, Việt Nam (FPT Fiber)',
+        loc: 'Hai Phong, VN (FPT Fiber)',
         dev: 'Firefox 132 • Ubuntu Linux',
       },
       {
@@ -464,7 +665,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
       ipAddress: pick.ip,
       locationText: pick.loc,
       deviceText: pick.dev,
-      loginAtIso: `Vừa xong • ${new Date().toLocaleTimeString('vi-VN')}`,
+      loginAtIso: new Date().toLocaleTimeString('vi-VN'),
       isCurrentSession: false,
     };
     setLoginIpLogs((prev) => [newEntry, ...prev]);
@@ -483,7 +684,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
     if (!currentPassword || !newPassword) {
       setPasswordStatus({
         type: 'ERROR',
-        text: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới.',
+        text: t.passErrEmpty,
       });
       return;
     }
@@ -491,7 +692,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
     if (newPassword.length < 6) {
       setPasswordStatus({
         type: 'ERROR',
-        text: 'Mật khẩu mới phải có độ dài tối thiểu 6 ký tự.',
+        text: t.passErrShort,
       });
       return;
     }
@@ -499,7 +700,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
     if (newPassword !== confirmPassword) {
       setPasswordStatus({
         type: 'ERROR',
-        text: 'Mật khẩu xác nhận không khớp với mật khẩu mới.',
+        text: t.passErrMismatch,
       });
       return;
     }
@@ -519,17 +720,13 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
       if (!res.ok || !json.success) {
         setPasswordStatus({
           type: 'ERROR',
-          text:
-            json.message ||
-            'Mật khẩu hiện tại không chính xác hoặc không thể cập nhật.',
+          text: json.message || t.passErrEmpty,
         });
         onPlayPreviewSfx('ERROR');
       } else {
         setPasswordStatus({
           type: 'SUCCESS',
-          text:
-            json.message ||
-            'Đã đổi mật khẩu và lưu trực tiếp lên MongoDB Atlas thành công!',
+          text: t.passSuccessDb,
         });
         setCurrentPassword('');
         setNewPassword('');
@@ -539,7 +736,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
     } catch {
       setPasswordStatus({
         type: 'SUCCESS',
-        text: `Đã cập nhật mật khẩu mới cho tài khoản @${username} (Chế độ Local Fallback)!`,
+        text: `${t.passSuccessLocal} (@${username})`,
       });
       setCurrentPassword('');
       setNewPassword('');
@@ -559,18 +756,20 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
   return (
     <div className="space-y-6">
       <div
-        className={`p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
+        className={`p-4 sm:p-6 rounded-3xl border flex flex-wrap items-center justify-between gap-4 ${
           isDark
             ? 'bg-slate-900/90 border-slate-800'
-            : 'bg-white border-indigo-100/80 shadow-sm'
+            : 'bg-white border-slate-200/90 shadow-sm'
         }`}
       >
         <div>
-          <h1 className="text-lg font-black tracking-tight">{t.pageTitle}</h1>
+          <h1 className="text-base sm:text-lg font-black tracking-tight">
+            {t.pageTitle}
+          </h1>
           <p className="text-xs text-slate-400 mt-1">{t.pageSub}</p>
         </div>
 
-        <span className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-teal-500/15 text-teal-600 dark:text-teal-300 flex items-center gap-1.5">
+        <span className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 flex items-center gap-1.5">
           <CheckCircle2 className="w-3.5 h-3.5" />
           {t.savePrefsBadge}
         </span>
@@ -616,7 +815,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
               }}
               className={`p-4 rounded-2xl border text-left transition flex items-center gap-3.5 ${
                 isActive
-                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
                   : isDark
                   ? 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-indigo-500/40'
                   : 'bg-white border-slate-200/90 text-slate-700 hover:border-indigo-300 shadow-sm'
@@ -650,15 +849,15 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
       {activeSection === 'SOUND_THEME' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div
-            className={`p-6 rounded-3xl border space-y-5 ${
+            className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${
               isDark
                 ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
+                : 'bg-white border-slate-200/90 shadow-sm'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
-                <Music className="w-5 h-5 text-teal-500" />
+                <Music className="w-5 h-5 text-indigo-500" />
                 <h2 className="text-sm font-black">{t.lofiHeading}</h2>
               </div>
               <button
@@ -666,7 +865,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 onClick={() => onToggleLofi(!lofiEnabled)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition ${
                   lofiEnabled
-                    ? 'bg-teal-600 text-white shadow-sm'
+                    ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
                 }`}
               >
@@ -679,7 +878,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-bold">
                 <span>{t.volumeLabel}</span>
-                <span className="text-teal-500">
+                <span className="text-indigo-500">
                   {Math.round(lofiVolume * 100)}%
                 </span>
               </div>
@@ -690,30 +889,30 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 step={0.05}
                 value={lofiVolume}
                 onChange={(e) => onChangeLofiVolume(Number(e.target.value))}
-                className="w-full accent-teal-600"
+                className="w-full accent-indigo-600"
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-bold block">
-                Giai điệu Lofi Synthesizer:
+                {t.lofiStyleLabel}
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 {[
                   {
                     id: 'CHILL_RHODES' as LofiTrackStyleType,
                     label: 'Chill Rhodes Piano',
-                    desc: 'Hợp âm ấm & nhịp trống nhẹ',
+                    desc: t.trackChillDesc,
                   },
                   {
                     id: 'AMBIENT_SPACE' as LofiTrackStyleType,
                     label: 'Ambient Space 3D',
-                    desc: 'Âm hưởng không gian sâu',
+                    desc: t.trackAmbientDesc,
                   },
                   {
                     id: 'RAINY_CAFE' as LofiTrackStyleType,
                     label: 'Rainy Study Cafe',
-                    desc: 'Tập trung đọc tài liệu',
+                    desc: t.trackRainyDesc,
                   },
                 ].map((tr) => (
                   <button
@@ -722,7 +921,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     onClick={() => onChangeLofiTrackStyle(tr.id)}
                     className={`p-3 rounded-xl border text-left transition ${
                       lofiTrackStyle === tr.id
-                        ? 'bg-teal-600 text-white border-teal-600'
+                        ? 'bg-indigo-600 text-white border-indigo-600'
                         : isDark
                         ? 'bg-slate-950 border-slate-800 text-slate-300'
                         : 'bg-slate-50 border-slate-200 text-slate-700'
@@ -732,7 +931,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     <p
                       className={`text-[10px] mt-0.5 ${
                         lofiTrackStyle === tr.id
-                          ? 'text-teal-100'
+                          ? 'text-indigo-100'
                           : 'text-slate-400'
                       }`}
                     >
@@ -745,14 +944,14 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
           </div>
 
           <div
-            className={`p-6 rounded-3xl border space-y-5 flex flex-col justify-between ${
+            className={`p-5 sm:p-6 rounded-3xl border space-y-5 flex flex-col justify-between ${
               isDark
                 ? 'bg-slate-900/90 border-slate-800'
-                : 'bg-white border-indigo-100/80 shadow-sm'
+                : 'bg-white border-slate-200/90 shadow-sm'
             }`}
           >
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <Volume2 className="w-5 h-5 text-indigo-500" />
                   <h2 className="text-sm font-black">{t.sfxHeading}</h2>
@@ -785,19 +984,17 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                           : 'bg-slate-50 border-slate-200 hover:border-indigo-400'
                       }`}
                     >
-                      🔊 Thử {type}
+                      🔊 {t.testSfxPrefix} {type}
                     </button>
                   )
                 )}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between">
+            <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-extrabold">{t.themeHeading}</p>
-                <p className="text-[11px] text-slate-400">
-                  Đồng bộ toàn bộ nền tảng 2D, 3D và biểu đồ
-                </p>
+                <p className="text-[11px] text-slate-400">{t.themeSubDesc}</p>
               </div>
               <button
                 type="button"
@@ -821,7 +1018,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
         </div>
       )}
 
-      {/* MỤC 2: BẢO MẬT, ĐỔI MẬT KHẨU & NHẬT KÝ ĐỊA CHỈ IP ĐĂNG NHẬP (CẢNH BÁO KHI > 2 IP KHÁC BIỆT) */}
+      {/* MỤC 2: BẢO MẬT, ĐỔI MẬT KHẨU & NHẬT KÝ ĐỊA CHỈ IP ĐĂNG NHẬP */}
       {activeSection === 'SECURITY_PASSWORD' && (
         <div className="space-y-6">
           {hasMultipleDistinctIpsWarning && (
@@ -830,8 +1027,8 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-1">
                   <p className="font-extrabold text-amber-700 dark:text-amber-300">
-                    {t.ipWarnTitle} ({distinctIpAddresses.length} IP khác biệt:{' '}
-                    {distinctIpAddresses.join(' • ')})
+                    {t.ipWarnTitle} ({distinctIpAddresses.length}{' '}
+                    {t.ipDistinctLabel}: {distinctIpAddresses.join(' • ')})
                   </p>
                   <p className="text-[11px] opacity-90">{t.ipWarnDesc}</p>
                 </div>
@@ -850,10 +1047,10 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <form
               onSubmit={handlePasswordChangeSubmit}
-              className={`lg:col-span-6 p-6 rounded-3xl border space-y-4 ${
+              className={`lg:col-span-6 p-5 sm:p-6 rounded-3xl border space-y-4 ${
                 isDark
                   ? 'bg-slate-900/90 border-slate-800'
-                  : 'bg-white border-indigo-100/80 shadow-sm'
+                  : 'bg-white border-slate-200/90 shadow-sm'
               }`}
             >
               <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
@@ -861,7 +1058,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 <div>
                   <h2 className="text-sm font-black">{t.secHeading}</h2>
                   <p className="text-[11px] text-slate-400">
-                    Tài khoản: <strong>@{username}</strong> • {t.secSub}
+                    {t.accountPrefix} <strong>@{username}</strong> • {t.secSub}
                   </p>
                 </div>
               </div>
@@ -871,7 +1068,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                   className={`p-3.5 rounded-2xl border text-xs font-bold flex items-center gap-2 ${
                     passwordStatus.type === 'ERROR'
                       ? 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300'
-                      : 'bg-teal-500/10 border-teal-500/30 text-teal-700 dark:text-teal-300'
+                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
                   }`}
                 >
                   {passwordStatus.type === 'ERROR' ? (
@@ -891,7 +1088,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu hiện tại..."
+                  placeholder={t.currPassPlaceholder}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                     isDark
                       ? 'bg-slate-950 border-slate-800 text-white'
@@ -909,7 +1106,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Nhập mật khẩu mới..."
+                    placeholder={t.newPassPlaceholder}
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                       isDark
                         ? 'bg-slate-950 border-slate-800 text-white'
@@ -925,7 +1122,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Nhập lại mật khẩu mới..."
+                    placeholder={t.confPassPlaceholder}
                     className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-semibold ${
                       isDark
                         ? 'bg-slate-950 border-slate-800 text-white'
@@ -943,7 +1140,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                       : 'bg-slate-50 border-slate-200/70'
                   }`}
                 >
-                  <span className="text-xs font-bold">Bảo mật 2 Lớp (2FA):</span>
+                  <span className="text-xs font-bold">{t.twoFactorLabel}</span>
                   <button
                     type="button"
                     onClick={() =>
@@ -953,11 +1150,13 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     }
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold ${
                       persistedPrefs.twoFactorEnabled
-                        ? 'bg-teal-600 text-white'
+                        ? 'bg-indigo-600 text-white'
                         : 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                     }`}
                   >
-                    {persistedPrefs.twoFactorEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                    {persistedPrefs.twoFactorEnabled
+                      ? t.twoFactorOn
+                      : t.twoFactorOff}
                   </button>
                 </div>
 
@@ -968,7 +1167,9 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                       : 'bg-slate-50 border-slate-200/70'
                   }`}
                 >
-                  <span className="text-xs font-bold">Timeout phiên:</span>
+                  <span className="text-xs font-bold">
+                    {t.sessionTimeoutLabel}
+                  </span>
                   <select
                     value={persistedPrefs.sessionTimeoutMins}
                     onChange={(e) =>
@@ -982,9 +1183,9 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                         : 'bg-white border-slate-300'
                     }`}
                   >
-                    <option value={15}>15 phút</option>
-                    <option value={30}>30 phút</option>
-                    <option value={60}>60 phút</option>
+                    <option value={15}>15 {t.minutesUnit}</option>
+                    <option value={30}>30 {t.minutesUnit}</option>
+                    <option value={60}>60 {t.minutesUnit}</option>
                   </select>
                 </div>
               </div>
@@ -995,23 +1196,21 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md transition"
               >
                 <Save className="w-4 h-4" />
-                <span>
-                  {isUpdatingPassword ? 'Đang lưu...' : t.savePassBtn}
-                </span>
+                <span>{isUpdatingPassword ? t.savingBtn : t.savePassBtn}</span>
               </button>
             </form>
 
             {/* CỘT PHẢI: NHẬT KÝ ĐỊA CHỈ IP ĐĂNG NHẬP CỦA TÀI KHOẢN */}
             <div
-              className={`lg:col-span-6 p-6 rounded-3xl border space-y-4 ${
+              className={`lg:col-span-6 p-5 sm:p-6 rounded-3xl border space-y-4 ${
                 isDark
                   ? 'bg-slate-900/90 border-slate-800'
-                  : 'bg-white border-indigo-100/80 shadow-sm'
+                  : 'bg-white border-slate-200/90 shadow-sm'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-3">
                 <div className="flex items-center gap-2">
-                  <Wifi className="w-5 h-5 text-teal-500" />
+                  <Wifi className="w-5 h-5 text-indigo-500" />
                   <div>
                     <h2 className="text-sm font-black">{t.ipHeading}</h2>
                     <p className="text-[11px] text-slate-400">{t.ipSub}</p>
@@ -1035,8 +1234,8 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
                       ipItem.isCurrentSession
                         ? isDark
-                          ? 'bg-teal-950/25 border-teal-500/40'
-                          : 'bg-teal-50/70 border-teal-200'
+                          ? 'bg-indigo-950/30 border-indigo-500/40'
+                          : 'bg-indigo-50/70 border-indigo-200'
                         : isDark
                         ? 'bg-slate-950/70 border-slate-800'
                         : 'bg-slate-50 border-slate-200/80'
@@ -1051,13 +1250,14 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                           {ipItem.locationText}
                         </span>
                         {ipItem.isCurrentSession && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-teal-600 text-white">
-                            Phiên hiện tại
+                          <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-600 text-white">
+                            {t.currentSessionBadge}
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-400">
-                        {ipItem.deviceText} • Thời điểm: {ipItem.loginAtIso}
+                        {ipItem.deviceText} • {t.loginTimePrefix}{' '}
+                        {ipItem.loginAtIso}
                       </p>
                     </div>
 
@@ -1070,7 +1270,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                           )
                         }
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"
-                        title="Xóa / Đăng xuất phiên IP này"
+                        title={t.deleteIpSessionTooltip}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1083,13 +1283,13 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
         </div>
       )}
 
-      {/* MỤC 3: ĐỔI NGÔN NGỮ TRANG WEB & TỐC ĐỘ GIỌNG ĐỌC TÓM TẮT AI (LƯU BỀN VỮNG) */}
+      {/* MỤC 3: ĐỔI NGÔN NGỮ TRANG WEB & TỐC ĐỘ GIỌNG ĐỌC TÓM TẮT AI */}
       {activeSection === 'LANGUAGE_LOCALE' && (
         <div
-          className={`p-6 rounded-3xl border space-y-5 ${
+          className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${
             isDark
               ? 'bg-slate-900/90 border-slate-800'
-              : 'bg-white border-indigo-100/80 shadow-sm'
+              : 'bg-white border-slate-200/90 shadow-sm'
           }`}
         >
           <div className="flex items-center gap-2.5 border-b border-slate-200/70 dark:border-slate-800 pb-3">
@@ -1105,8 +1305,13 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
               {
                 code: 'vi' as WebLanguageCodeType,
                 title: 'Tiếng Việt (Vietnamese)',
-                region: 'Việt Nam • GMT+07:00 • Giọng đọc AI: vi-VN',
-                desc: 'Ngôn ngữ mặc định đầy đủ thuật ngữ kiến trúc 3D & quản trị phòng họp',
+                region: 'Vietnam • GMT+07:00 • AI TTS: vi-VN',
+                desc:
+                  webLanguage === 'en'
+                    ? 'Full Vietnamese interface & architectural 3D/2D terminology'
+                    : webLanguage === 'ja'
+                    ? 'ベトナム語インターフェース＆3D空間・会議室管理用語'
+                    : 'Ngôn ngữ mặc định đầy đủ thuật ngữ kiến trúc 3D & quản trị phòng họp',
               },
               {
                 code: 'en' as WebLanguageCodeType,
@@ -1139,7 +1344,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                   }}
                   className={`p-4 rounded-2xl border text-left transition ${
                     selected
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg'
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
                       : isDark
                       ? 'bg-slate-950 border-slate-800 hover:border-indigo-500/40'
                       : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
@@ -1154,7 +1359,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                           : 'bg-indigo-500/15 text-indigo-500'
                       }`}
                     >
-                      {selected ? '✓ Active' : 'Select'}
+                      {selected ? t.activeBadge : t.selectBadge}
                     </span>
                   </div>
                   <p
@@ -1197,15 +1402,9 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                     : 'bg-slate-50 border-slate-200 text-slate-900'
                 }`}
               >
-                <option value="DD/MM/YYYY">
-                  DD/MM/YYYY (Chuẩn Việt Nam - VD: 25/10/2026)
-                </option>
-                <option value="YYYY-MM-DD">
-                  YYYY-MM-DD (Chuẩn Quốc tế ISO - VD: 2026-10-25)
-                </option>
-                <option value="MM/DD/YYYY">
-                  MM/DD/YYYY (Chuẩn Hoa Kỳ - VD: 10/25/2026)
-                </option>
+                <option value="DD/MM/YYYY">{t.dateOptVn}</option>
+                <option value="YYYY-MM-DD">{t.dateOptIso}</option>
+                <option value="MM/DD/YYYY">{t.dateOptUs}</option>
               </select>
             </div>
 
@@ -1235,10 +1434,10 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
       {/* MỤC 4: LIÊN KẾT PHÒNG BAN DỮ LIỆU TOÀN HỆ THỐNG & QUY TẮC HỘI TRƯỜNG */}
       {activeSection === 'DEPARTMENT_POLICY' && (
         <div
-          className={`p-6 rounded-3xl border space-y-5 ${
+          className={`p-5 sm:p-6 rounded-3xl border space-y-5 ${
             isDark
               ? 'bg-slate-900/90 border-slate-800'
-              : 'bg-white border-indigo-100/80 shadow-sm'
+              : 'bg-white border-slate-200/90 shadow-sm'
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 dark:border-slate-800 pb-3">
@@ -1256,7 +1455,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
                 onClick={onNavigateOrganization}
                 className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm"
               >
-                <span>Mở Trang Tổ chức & Phòng ban</span>
+                <span>{t.openOrgPageBtn}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
@@ -1271,7 +1470,7 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
               }`}
             >
               <label className="text-xs font-extrabold block">
-                Phòng ban Duy nhất của bạn (Một người chỉ thuộc 1 Phòng ban):
+                {t.singleDeptLabel}
               </label>
               <select
                 disabled={userRole !== 'SYS_ADMIN'}
@@ -1303,24 +1502,24 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
               </select>
               <p className="text-[11px] text-slate-400">
                 {userRole === 'SYS_ADMIN'
-                  ? '* Bạn đang là SYS_ADMIN nên có thể chuyển nhanh phòng ban để kiểm thử quyền đặt ghế Hội trường.'
-                  : '* Chỉ System Admin mới có quyền điều chuyển Phòng ban của nhân sự.'}
+                  ? t.sysAdminDeptHint
+                  : t.nonAdminDeptHint}
               </p>
 
               <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800">
                 <span className="text-xs font-bold block mb-1.5">
-                  Các Nhóm chuyên môn bạn đang tham gia ({myGroups.length} nhóm):
+                  {t.joinedGroupsLabel(myGroups.length)}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {myGroups.length === 0 ? (
                     <span className="text-xs text-slate-400 italic">
-                      Chưa tham gia nhóm nào
+                      {t.noGroupsText}
                     </span>
                   ) : (
                     myGroups.map((g) => (
                       <span
                         key={g.groupId}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-500/15 text-teal-600 dark:text-teal-300"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300"
                       >
                         {g.groupName}
                       </span>
@@ -1339,28 +1538,20 @@ export const SettingsPages: React.FC<SettingsPagesProps> = ({
             >
               <div className="flex items-center gap-2 font-extrabold text-indigo-500">
                 <Sparkles className="w-4 h-4" />
-                <span>Tóm tắt Quy tắc Phân quyền Hội trường Tầng 5 & QR:</span>
+                <span>{t.rulesSummaryTitle}</span>
               </div>
               <ul className="space-y-1.5 text-[11px] text-slate-500 dark:text-slate-400 list-disc pl-4">
                 <li>
-                  <strong>System Admin (`SYS_ADMIN`)</strong>: Toàn quyền thuê cả
-                  Hội trường không cần cấp phép, không giới hạn số lần/tuần và
-                  không bị chặn phòng ban.
+                  <strong>{t.ruleSysAdminTitle}</strong>: {t.ruleSysAdminDesc}
                 </li>
                 <li>
-                  <strong>Quản lý (`MANAGER`)</strong>: Tối đa 10 lần/tuần; được
-                  thuê cả Hội trường (cần Admin duyệt) và đặt ghế ngồi khi sự kiện
-                  đã duyệt.
+                  <strong>{t.ruleManagerTitle}</strong>: {t.ruleManagerDesc}
                 </li>
                 <li>
-                  <strong>Nhân viên (`EMPLOYEE`)</strong>: Tối đa 3 lần/tuần; chỉ
-                  được đặt ghế ngồi khi Hội trường đã có sự kiện được duyệt và
-                  phòng ban của mình nằm trong danh sách được tham gia.
+                  <strong>{t.ruleEmployeeTitle}</strong>: {t.ruleEmployeeDesc}
                 </li>
                 <li>
-                  <strong>Cửa sổ Quét mã QR Check-in</strong>: Chỉ mở từ{' '}
-                  <strong>trước 30 phút đến trễ 30 phút</strong> so với giờ bắt
-                  đầu.
+                  <strong>{t.ruleQrWindowTitle}</strong>: {t.ruleQrWindowDesc}
                 </li>
               </ul>
             </div>

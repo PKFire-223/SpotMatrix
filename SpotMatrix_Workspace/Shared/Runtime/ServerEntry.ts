@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { loadSystemEnvConfig } from '../Config/EnvConfig';
 import { connectMongoDatabase } from '../Database/MongoConnection';
 import { floorplanRouter } from '../../Main/Floorplan/Function/Routes/FloorplanRoutes';
@@ -12,16 +15,24 @@ import { authRouter } from '../../Main/Auth/Function/Routes/AuthRoutes';
 import { healthCheckRouter } from '../../Error/Function/Routes/HealthCheckRoutes';
 import { handleGlobalException } from '../../Error/Function/Middlewares/GlobalErrorMiddleware';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 async function bootstrapBackendServer(): Promise<void> {
   const envConfig = loadSystemEnvConfig();
   await connectMongoDatabase();
 
   const appServer = express();
 
-  appServer.use(helmet());
+  appServer.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
   appServer.use(
     cors({
-      origin: envConfig.allowedOrigins,
+      origin: true,
       credentials: true,
     })
   );
@@ -36,11 +47,26 @@ async function bootstrapBackendServer(): Promise<void> {
   appServer.use('/api/v1/auth', authRouter);
   appServer.use('/api/v1/system', healthCheckRouter);
 
+  // Phục vụ trực tiếp bản build Frontend (thư mục dist) khi Deploy lên Render / Railway / VPS
+  const distDir = path.resolve(__dirname, '../../dist');
+  const indexHtmlPath = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexHtmlPath)) {
+    appServer.use(express.static(distDir));
+    appServer.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        next();
+        return;
+      }
+      res.sendFile(indexHtmlPath);
+    });
+  }
+
   appServer.use(handleGlobalException);
 
-  appServer.listen(envConfig.serverPort, () => {
+  const activePort = Number(process.env.PORT) || envConfig.serverPort;
+  appServer.listen(activePort, '0.0.0.0', () => {
     console.log(
-      `[SpotMatrix Backend] Server dang chay tai http://localhost:${envConfig.serverPort}/api/v1/system/health`
+      `[SpotMatrix Backend] Server dang chay tai http://localhost:${activePort}/api/v1/system/health`
     );
   });
 }

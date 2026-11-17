@@ -20,6 +20,7 @@ const bookingRecordSchema = new Schema<BookingPayloadItem>(
     startTimeIso: { type: String, required: true },
     endTimeIso: { type: String, required: true },
     purposeNote: { type: String, default: 'Làm việc cá nhân / Họp nhóm' },
+    approvalRequestReason: { type: String, default: '' },
     recurringOption: {
       type: String,
       enum: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'],
@@ -33,7 +34,14 @@ const bookingRecordSchema = new Schema<BookingPayloadItem>(
     autoReleasedReason: { type: String, default: null },
     bookingStatus: {
       type: String,
-      enum: ['HOLDING', 'CONFIRMED', 'CHECKED_IN', 'CANCELLED'],
+      enum: [
+        'HOLDING',
+        'CONFIRMED',
+        'CHECKED_IN',
+        'EXPIRED_NO_SHOW',
+        'AUTO_RELEASED',
+        'CANCELLED',
+      ],
       default: 'CONFIRMED',
     },
     approvalStatus: {
@@ -44,6 +52,15 @@ const bookingRecordSchema = new Schema<BookingPayloadItem>(
     approvedByUsername: { type: String, default: null },
     approvedAtIso: { type: String, default: null },
     checkedInAtIso: { type: String, default: null },
+    checkedInTimestampMs: { type: Number, default: null },
+    expiredAtIso: { type: String, default: null },
+    expiredAtTimestampMs: { type: Number, default: null },
+    cancelledAtIso: { type: String, default: null },
+    cancelledAtTimestampMs: { type: Number, default: null },
+    cancelledViaQr: { type: Boolean, default: false },
+    rejectedAtIso: { type: String, default: null },
+    rejectedAtTimestampMs: { type: Number, default: null },
+    qrToken: { type: String, default: '' },
     bookingMode: {
       type: String,
       enum: ['STANDARD_ROOM', 'HALL_EVENT_RENTAL', 'HALL_SEAT_BOOKING'],

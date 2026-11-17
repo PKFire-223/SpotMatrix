@@ -552,7 +552,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
     };
     setPolicyConfig(updated);
     setPolicySavedBanner(
-      'Đã lưu Cấu hình Chính sách Động & Hạn mức trực tiếp vào MongoDB Atlas thành công!'
+      webLanguage === 'en' ? 'Saved Dynamic Policy Configuration directly to MongoDB Atlas!' : webLanguage === 'ja' ? '動的ポリシー設定をMongoDB Atlasへ保存しました！' : 'Đã lưu Cấu hình Chính sách Động & Hạn mức trực tiếp vào MongoDB Atlas thành công!'
     );
 
     try {
@@ -746,15 +746,15 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
 
                     <div className="text-xs space-y-1">
                       <p className="text-slate-500 dark:text-slate-400">
-                        Người báo lỗi: <strong>{rep.reporterName}</strong> (
+                        {webLanguage === 'en' ? 'Reported by:' : webLanguage === 'ja' ? '報告者:' : 'Người báo lỗi:'} <strong>{rep.reporterName}</strong> (
                         {rep.reporterEmail} • {rep.reporterRole})
                       </p>
                       <p className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold">
-                        Lý do lỗi: “{rep.faultReason}”
+                        {webLanguage === 'en' ? 'Fault Reason:' : webLanguage === 'ja' ? '故障理由:' : 'Lý do lỗi:'} “{rep.faultReason}”
                       </p>
                       {rep.aiDiagnosisNote && (
                         <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
-                          🤖 AI Chẩn đoán: {rep.aiDiagnosisNote}
+                          🤖 {webLanguage === 'en' ? 'AI Diagnosis:' : webLanguage === 'ja' ? 'AI診断:' : 'AI Chẩn đoán:'} {rep.aiDiagnosisNote}
                         </p>
                       )}
                     </div>
@@ -1017,7 +1017,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                         </p>
                         {eq.lastReportedReason && (
                           <p className="text-[11px] text-rose-500 pt-1 truncate">
-                            Báo lỗi: “{eq.lastReportedReason}”
+                            {webLanguage === 'en' ? 'Reported Fault:' : webLanguage === 'ja' ? '故障報告:' : 'Báo lỗi:'} “{eq.lastReportedReason}”
                           </p>
                         )}
                       </div>
@@ -1273,8 +1273,8 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                         {rec.reasonText}
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        {rec.createdAtIso} • Số dư sau giao dịch:{' '}
-                        <strong>{rec.balanceAfter}/100đ</strong>
+                        {rec.createdAtIso} • {webLanguage === 'en' ? 'Balance after:' : webLanguage === 'ja' ? '反映後スコア:' : 'Số dư sau giao dịch:'}{' '}
+                        <strong>{rec.balanceAfter}/100</strong>
                       </p>
                     </div>
                     <span
@@ -1284,7 +1284,7 @@ export const DataOverviewPages: React.FC<DataOverviewPagesProps> = ({
                           : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
                       }`}
                     >
-                      {isPositive ? `+${rec.deltaPoints}đ` : `${rec.deltaPoints}đ`}
+                      {isPositive ? `+${rec.deltaPoints}` : `${rec.deltaPoints}`} pts
                     </span>
                   </div>
                 );

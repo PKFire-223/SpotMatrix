@@ -1628,7 +1628,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
               }
               setIsFaultModalOpen(false);
               setFaultSuccessBanner(
-                `Đã gửi báo cáo lỗi thiết bị tại phòng ${faultRoomCode} đến System Admin xét duyệt!`
+                webLanguage === 'en' ? `Submitted equipment fault report for room ${faultRoomCode} to System Admin!` : webLanguage === 'ja' ? `会議室 ${faultRoomCode} の設備故障報告をシステム管理者へ送信しました！` : `Đã gửi báo cáo lỗi thiết bị tại phòng ${faultRoomCode} đến System Admin xét duyệt!`
               );
             }}
             className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl space-y-4 ${
@@ -1668,7 +1668,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div>
               <label className="text-xs font-bold block mb-1.5">
-                1. Chọn Phòng họp phát hiện thiết bị lỗi
+                {webLanguage === 'en' ? '1. Select Meeting Room with Faulty Device' : webLanguage === 'ja' ? '1. 不具合が発生した会議室を選択' : '1. Chọn Phòng họp phát hiện thiết bị lỗi'}
               </label>
               <select
                 value={faultRoomCode}
@@ -1701,7 +1701,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div>
               <label className="text-xs font-bold block mb-1.5">
-                2. Chọn Thiết bị trong phòng {faultRoomCode} ({equipmentsInSelectedFaultRoom.length} thiết bị)
+                {webLanguage === 'en' ? `2. Select Device in Room ${faultRoomCode} (${equipmentsInSelectedFaultRoom.length} devices)` : webLanguage === 'ja' ? `2. ${faultRoomCode} 内の対象機器を選択 (${equipmentsInSelectedFaultRoom.length}台)` : `2. Chọn Thiết bị trong phòng ${faultRoomCode} (${equipmentsInSelectedFaultRoom.length} thiết bị)`}
               </label>
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                 {equipmentsInSelectedFaultRoom.map((eq) => {
@@ -1729,7 +1729,7 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                             selected ? 'text-indigo-100' : 'text-slate-400'
                           }`}
                         >
-                          Mã: {eq.equipmentCode} • Trạng thái hiện tại: {eq.status}
+                          {webLanguage === 'en' ? `Code: ${eq.equipmentCode} • Status: ${eq.status}` : webLanguage === 'ja' ? `コード: ${eq.equipmentCode} • 現在状態: ${eq.status}` : `Mã: ${eq.equipmentCode} • Trạng thái hiện tại: ${eq.status}`}
                         </p>
                       </div>
                       <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -1741,14 +1741,14 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
 
             <div>
               <label className="text-xs font-bold block mb-1.5">
-                3. Lý do lỗi / Tình trạng hư hỏng phát hiện
+                {webLanguage === 'en' ? '3. Fault Description / Observed Issue' : webLanguage === 'ja' ? '3. 故障理由・不具合の詳細内容' : '3. Lý do lỗi / Tình trạng hư hỏng phát hiện'}
               </label>
               <textarea
                 rows={3}
                 required
                 value={faultReasonInput}
                 onChange={(e) => setFaultReasonInput(e.target.value)}
-                placeholder="Nhập chi tiết lỗi phát hiện (VD: Màn hình không nhận tín hiệu HDMI, Máy chiếu bị mờ bóng, Micro mất tiếng...)"
+                placeholder={webLanguage === "en" ? "Describe the equipment issue (e.g., No HDMI signal on 4K display, dim projector lamp, muted mic...)" : webLanguage === "ja" ? "不具合の詳細を入力してください（例：モニターのHDMI信号なし、プロジェクター映像不良など）..." : "Nhập chi tiết lỗi phát hiện (VD: Màn hình không nhận tín hiệu HDMI, Máy chiếu bị mờ bóng, Micro mất tiếng...)"}
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium ${
                   isDark
                     ? 'bg-slate-950 border-slate-800 text-white'
@@ -1767,13 +1767,13 @@ export const OrganizationPages: React.FC<OrganizationPagesProps> = ({
                     : 'bg-slate-100 border-slate-200 text-slate-700'
                 }`}
               >
-                Hủy
+                {webLanguage === 'en' ? 'Cancel' : webLanguage === 'ja' ? 'キャンセル' : 'Hủy'}
               </button>
               <button
                 type="submit"
                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-sm"
               >
-                Gửi Báo Lỗi đến Admin
+                {webLanguage === 'en' ? 'Submit Fault Report to Admin' : webLanguage === 'ja' ? '管理者へ故障報告を送信' : 'Gửi Báo Lỗi đến Admin'}
               </button>
             </div>
           </form>

@@ -25,6 +25,8 @@ import {
   Music,
   VolumeX,
   Globe,
+  Menu,
+  X,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
 import {
@@ -152,7 +154,7 @@ function buildStandardFiveFloorRooms(): WorkspaceNodeItem[] {
   return rooms;
 }
 
-// 2. Khởi tạo đủ 30 thiết bị định danh riêng cho toàn bộ 25/25 phòng (Không phòng nào bị thiếu thiết bị)
+// 2. Khởi tạo đủ 30 thiết bị định danh riêng cho toàn bộ 25/25 phòng
 function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
   const list: SharedEquipmentItem[] = [];
   const roomSpecs: Array<{
@@ -246,8 +248,8 @@ function buildStandardTwentyFiveRoomEquipments(): SharedEquipmentItem[] {
           monthlyUsageHours: 58,
           lastReportedReason: isBroken
             ? 'Cổng HDMI số 2 bị lỏng tín hiệu khi kết nối máy tính cá nhân'
-            : undefined,
-          lastReportedByEmail: isBroken ? 'employee.dev@spotmatrix.vn' : undefined,
+            : null,
+          lastReportedBy: isBroken ? 'employee.dev@spotmatrix.vn' : null,
         });
         seq += 1;
       }
@@ -297,102 +299,136 @@ const INITIAL_EQUIPMENT_FAULT_REPORTS: EquipmentFaultReportItem[] = [
     reporterEmail: 'employee.dev@spotmatrix.vn',
     reporterName: 'Nguyễn Minh Quân (Nhân viên)',
     reporterRole: 'EMPLOYEE',
-    faultReason: 'Cổng HDMI số 2 bị lỏng tín hiệu khi kết nối máy tính cá nhân trong ca họp sáng.',
+    faultReason:
+      'Cổng HDMI số 2 bị lỏng tín hiệu khi kết nối máy tính cá nhân trong ca họp sáng.',
     reportStatus: 'PENDING_ADMIN',
+    aiDiagnosisNote:
+      'Đề xuất kỹ thuật viên kiểm tra khe tiếp xúc cổng HDMI số 2 hoặc thay mới cáp chuyển Type-C.',
     createdAtIso: '09:15 • Hôm nay',
+    updatedAtIso: new Date().toISOString(),
   },
 ];
 
 const INITIAL_TRUST_PROFILES: UserTrustProfileItem[] = [
-  { userEmail: 'sysadmin@spotmatrix.vn', fullName: 'System Administrator', role: 'SYS_ADMIN', departmentName: 'System Governance', trustScore: 100, onTimeCheckInCount: 32, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
-  { userEmail: 'manager.lead@spotmatrix.vn', fullName: 'Lê Thu Hà (Quản lý)', role: 'MANAGER', departmentName: 'Product & Engineering', trustScore: 100, onTimeCheckInCount: 28, noShowPenaltyCount: 0, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
-  { userEmail: 'employee.dev@spotmatrix.vn', fullName: 'Nguyễn Minh Quân (Nhân viên)', role: 'EMPLOYEE', departmentName: 'Product & Engineering', trustScore: 96, onTimeCheckInCount: 18, noShowPenaltyCount: 1, isRestrictedMode: false, updatedAtIso: new Date().toISOString() },
+  {
+    userEmail: 'sysadmin@spotmatrix.vn',
+    fullName: 'System Administrator',
+    role: 'SYS_ADMIN',
+    departmentName: 'System Governance',
+    trustScore: 100,
+    onTimeCheckInCount: 32,
+    noShowPenaltyCount: 0,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
+  {
+    userEmail: 'manager.lead@spotmatrix.vn',
+    fullName: 'Lê Thu Hà (Quản lý)',
+    role: 'MANAGER',
+    departmentName: 'Product & Engineering',
+    trustScore: 100,
+    onTimeCheckInCount: 28,
+    noShowPenaltyCount: 0,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
+  {
+    userEmail: 'employee.dev@spotmatrix.vn',
+    fullName: 'Nguyễn Minh Quân (Nhân viên)',
+    role: 'EMPLOYEE',
+    departmentName: 'Product & Engineering',
+    trustScore: 96,
+    onTimeCheckInCount: 18,
+    noShowPenaltyCount: 1,
+    isRestrictedMode: false,
+    updatedAtIso: new Date().toISOString(),
+  },
 ];
 
 const INITIAL_TRUST_SCORE_HISTORY: TrustScoreHistoryRecordItem[] = [
   {
-    historyId: 'TSH-2026-001',
+    recordId: 'TSH-2026-001',
     userEmail: 'employee.dev@spotmatrix.vn',
     fullName: 'Nguyễn Minh Quân (Nhân viên)',
     deltaPoints: 20,
-    resultingScore: 100,
-    reasonType: 'MONTHLY_RECURRING_BONUS',
-    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Chính sách thưởng duy trì kỷ luật phòng họp)',
+    balanceAfter: 100,
+    eventType: 'MONTHLY_BONUS_20',
+    reasonText:
+      'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Chính sách thưởng duy trì kỷ luật phòng họp)',
     createdAtIso: '01/11/2026 • 00:00',
   },
   {
-    historyId: 'TSH-2026-002',
+    recordId: 'TSH-2026-002',
     userEmail: 'employee.dev@spotmatrix.vn',
     fullName: 'Nguyễn Minh Quân (Nhân viên)',
     deltaPoints: -10,
-    resultingScore: 90,
-    reasonType: 'OVERDUE_NO_SHOW_PENALTY',
-    reasonText: 'Trừ -10 điểm do quá hạn 30 phút không quét QR xác nhận dùng phòng M2-04 (Tự động thu hồi phòng)',
-    relatedBookingId: 'BK-2026-HIST-02',
+    balanceAfter: 90,
+    eventType: 'NO_SHOW_PENALTY',
+    reasonText:
+      'Trừ -10 điểm do quá hạn 30 phút không quét QR xác nhận dùng phòng M2-04 (Tự động thu hồi phòng)',
     createdAtIso: '05/11/2026 • 10:31',
   },
   {
-    historyId: 'TSH-2026-003',
+    recordId: 'TSH-2026-003',
     userEmail: 'employee.dev@spotmatrix.vn',
     fullName: 'Nguyễn Minh Quân (Nhân viên)',
     deltaPoints: 2,
-    resultingScore: 92,
-    reasonType: 'ON_TIME_QR_CHECKIN',
+    balanceAfter: 92,
+    eventType: 'QR_CHECKIN_REWARD',
     reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M1-01',
-    relatedBookingId: 'BK-2026-HIST-03',
     createdAtIso: '09/11/2026 • 07:55',
   },
   {
-    historyId: 'TSH-2026-004',
+    recordId: 'TSH-2026-004',
     userEmail: 'employee.dev@spotmatrix.vn',
     fullName: 'Nguyễn Minh Quân (Nhân viên)',
     deltaPoints: 2,
-    resultingScore: 94,
-    reasonType: 'ON_TIME_QR_CHECKIN',
+    balanceAfter: 94,
+    eventType: 'QR_CHECKIN_REWARD',
     reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M3-02',
-    relatedBookingId: 'BK-2026-HIST-04',
     createdAtIso: '12/11/2026 • 13:52',
   },
   {
-    historyId: 'TSH-2026-005',
+    recordId: 'TSH-2026-005',
     userEmail: 'employee.dev@spotmatrix.vn',
     fullName: 'Nguyễn Minh Quân (Nhân viên)',
     deltaPoints: 2,
-    resultingScore: 96,
-    reasonType: 'ON_TIME_QR_CHECKIN',
+    balanceAfter: 96,
+    eventType: 'QR_CHECKIN_REWARD',
     reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng M1-01',
-    relatedBookingId: 'BK-2026-001',
     createdAtIso: '14/11/2026 • 08:02',
   },
   {
-    historyId: 'TSH-2026-006',
+    recordId: 'TSH-2026-006',
     userEmail: 'manager.lead@spotmatrix.vn',
     fullName: 'Lê Thu Hà (Quản lý)',
     deltaPoints: 20,
-    resultingScore: 100,
-    reasonType: 'MONTHLY_RECURRING_BONUS',
-    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
+    balanceAfter: 100,
+    eventType: 'MONTHLY_BONUS_20',
+    reasonText:
+      'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
     createdAtIso: '01/11/2026 • 00:00',
   },
   {
-    historyId: 'TSH-2026-007',
+    recordId: 'TSH-2026-007',
     userEmail: 'manager.lead@spotmatrix.vn',
     fullName: 'Lê Thu Hà (Quản lý)',
     deltaPoints: 2,
-    resultingScore: 100,
-    reasonType: 'ON_TIME_QR_CHECKIN',
-    reasonText: 'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại ghế H01-A3 (Hội trường Tầng 5)',
-    relatedBookingId: 'BK-2026-002',
+    balanceAfter: 100,
+    eventType: 'QR_CHECKIN_REWARD',
+    reasonText:
+      'Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại ghế H01-A3 (Hội trường Tầng 5)',
     createdAtIso: 'Hôm nay • 12:45',
   },
   {
-    historyId: 'TSH-2026-008',
+    recordId: 'TSH-2026-008',
     userEmail: 'sysadmin@spotmatrix.vn',
     fullName: 'System Administrator',
     deltaPoints: 20,
-    resultingScore: 100,
-    reasonType: 'MONTHLY_RECURRING_BONUS',
-    reasonText: 'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
+    balanceAfter: 100,
+    eventType: 'MONTHLY_BONUS_20',
+    reasonText:
+      'Cộng +20 điểm tín nhiệm định kỳ đầu tháng (Đạt trần tối đa 100 điểm)',
     createdAtIso: '01/11/2026 • 00:00',
   },
 ];
@@ -453,7 +489,8 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentId: 'DEPT-GOV-01',
     departmentCode: 'SYS-GOV',
     departmentName: 'System Governance',
-    description: 'Ban Quản trị Hệ thống, An ninh Mạng RBAC & Điều phối Tòa nhà 5 Tầng',
+    description:
+      'Ban Quản trị Hệ thống, An ninh Mạng RBAC & Điều phối Tòa nhà 5 Tầng',
     managerEmail: 'sysadmin@spotmatrix.vn',
     managerName: 'System Administrator',
     floorLocation: 'Tầng 1 & Tầng 5 (Hội trường)',
@@ -465,7 +502,8 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentId: 'DEPT-ENG-02',
     departmentCode: 'PROD-ENG',
     departmentName: 'Product & Engineering',
-    description: 'Khối Kỹ thuật Phần mềm, Kiến trúc Không gian 3D Three.js & Nền tảng Cloud',
+    description:
+      'Khối Kỹ thuật Phần mềm, Kiến trúc Không gian 3D Three.js & Nền tảng Cloud',
     managerEmail: 'manager.lead@spotmatrix.vn',
     managerName: 'Lê Thu Hà (Quản lý)',
     floorLocation: 'Tầng 2 & Tầng 3',
@@ -477,7 +515,8 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentId: 'DEPT-DES-03',
     departmentCode: 'UX-DESIGN',
     departmentName: 'Product Design & UX',
-    description: 'Khối Thiết kế Trải nghiệm Không gian Số, Bản vẽ Mặt bằng 2D/3D & Đồ họa',
+    description:
+      'Khối Thiết kế Trải nghiệm Không gian Số, Bản vẽ Mặt bằng 2D/3D & Đồ họa',
     managerEmail: 'tran.bao.ngoc@spotmatrix.vn',
     managerName: 'Trần Bảo Ngọc (UX Lead)',
     floorLocation: 'Tầng 3 — Khu Thiết kế & Sáng tạo',
@@ -489,7 +528,8 @@ const INITIAL_DEPARTMENTS: OrganizationDepartmentItem[] = [
     departmentId: 'DEPT-AI-04',
     departmentCode: 'AI-DATA',
     departmentName: 'AI & Data Science',
-    description: 'Khối Trí tuệ Nhân tạo, Phân tích Mật độ Sử dụng Phòng họp & Tối ưu Công suất',
+    description:
+      'Khối Trí tuệ Nhân tạo, Phân tích Mật độ Sử dụng Phòng họp & Tối ưu Công suất',
     managerEmail: 'pham.hoang.nam@spotmatrix.vn',
     managerName: 'Phạm Hoàng Nam (AI Researcher)',
     floorLocation: 'Tầng 4 — Khu AI & Khoa học Dữ liệu',
@@ -505,7 +545,8 @@ const INITIAL_GROUPS: OrganizationGroupItem[] = [
     groupCode: 'SQUAD-3D-TWIN',
     groupName: 'Nhóm Kiến trúc Sơ đồ 3D & Spatial Twin',
     departmentName: 'Product & Engineering',
-    description: 'Phát triển mô hình 3D Three.js 5 tầng và Đấu trường La Mã Tầng 5',
+    description:
+      'Phát triển mô hình 3D Three.js 5 tầng và Đấu trường La Mã Tầng 5',
     leaderEmail: 'manager.lead@spotmatrix.vn',
     leaderName: 'Lê Thu Hà (Quản lý)',
     projectTag: '3D Engine v5.0',
@@ -517,7 +558,8 @@ const INITIAL_GROUPS: OrganizationGroupItem[] = [
     groupCode: 'SQUAD-CORE-API',
     groupName: 'Nhóm Core Backend, Optimistic Lock & MongoDB',
     departmentName: 'Product & Engineering',
-    description: 'Vận hành cơ chế giữ chỗ 5 phút, chống trùng lịch đa chiều và Cronjob 15p',
+    description:
+      'Vận hành cơ chế giữ chỗ 5 phút, chống trùng lịch đa chiều và Cronjob 15p',
     leaderEmail: 'manager.lead@spotmatrix.vn',
     leaderName: 'Lê Thu Hà (Quản lý)',
     projectTag: 'Concurrency Lock',
@@ -529,7 +571,8 @@ const INITIAL_GROUPS: OrganizationGroupItem[] = [
     groupCode: 'SQUAD-SEC-RBAC',
     groupName: 'Hội đồng Bảo mật RBAC & Kiểm toán Hệ thống',
     departmentName: 'System Governance',
-    description: 'Giám sát nhật ký truy vết, phê duyệt thuê Hội trường và quản lý điểm tín nhiệm',
+    description:
+      'Giám sát nhật ký truy vết, phê duyệt thuê Hội trường và quản lý điểm tín nhiệm',
     leaderEmail: 'sysadmin@spotmatrix.vn',
     leaderName: 'System Administrator',
     projectTag: 'Zero-Trust Audit',
@@ -561,7 +604,11 @@ const LOFI_CHORD_PROGRESSIONS: Record<LofiTrackStyleType, number[][]> = {
 
 function getPreviousMonthIsoDate(dayOfMonth = 15): string {
   const now = new Date();
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, dayOfMonth);
+  const prevMonthDate = new Date(
+    now.getFullYear(),
+    now.getMonth() - 1,
+    dayOfMonth
+  );
   const y = prevMonthDate.getFullYear();
   const m = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
   const d = String(prevMonthDate.getDate()).padStart(2, '0');
@@ -572,6 +619,8 @@ const MainWorkspaceRoutes: React.FC = () => {
   const navigate = useNavigate();
   const avatarDropdownRef = useRef<HTMLDivElement | null>(null);
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
+    useState<boolean>(false);
   const [isSyncingMongo, setIsSyncingMongo] = useState<boolean>(false);
 
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
@@ -580,28 +629,31 @@ const MainWorkspaceRoutes: React.FC = () => {
   });
   const isDark = themeMode === 'dark';
 
-  const [audioSettings, setAudioSettings] = useState<SpotMatrixAudioSettings>(() => {
-    try {
-      const raw = localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return {
-          lofiEnabled: Boolean(parsed.lofiEnabled),
-          sfxEnabled: parsed.sfxEnabled !== false,
-          lofiVolume: typeof parsed.lofiVolume === 'number' ? parsed.lofiVolume : 0.35,
-          lofiTrackStyle: parsed.lofiTrackStyle || 'CHILL_RHODES',
-        };
+  const [audioSettings, setAudioSettings] = useState<SpotMatrixAudioSettings>(
+    () => {
+      try {
+        const raw = localStorage.getItem(AUDIO_SETTINGS_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            lofiEnabled: Boolean(parsed.lofiEnabled),
+            sfxEnabled: parsed.sfxEnabled !== false,
+            lofiVolume:
+              typeof parsed.lofiVolume === 'number' ? parsed.lofiVolume : 0.35,
+            lofiTrackStyle: parsed.lofiTrackStyle || 'CHILL_RHODES',
+          };
+        }
+      } catch {
+        // Bỏ qua
       }
-    } catch {
-      // Bỏ qua
+      return {
+        lofiEnabled: false,
+        sfxEnabled: true,
+        lofiVolume: 0.35,
+        lofiTrackStyle: 'CHILL_RHODES',
+      };
     }
-    return {
-      lofiEnabled: false,
-      sfxEnabled: true,
-      lofiVolume: 0.35,
-      lofiTrackStyle: 'CHILL_RHODES',
-    };
-  });
+  );
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const lofiIntervalRef = useRef<number | null>(null);
@@ -611,7 +663,8 @@ const MainWorkspaceRoutes: React.FC = () => {
     if (typeof window === 'undefined') return null;
     const AudioCtxClass =
       window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
     if (!AudioCtxClass) return null;
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioCtxClass();
@@ -623,7 +676,10 @@ const MainWorkspaceRoutes: React.FC = () => {
   }, []);
 
   const playUiSoundEffect = useCallback(
-    (type: 'CLICK' | 'SUCCESS' | 'ERROR' | 'NOTIFICATION', forcePlay = false) => {
+    (
+      type: 'CLICK' | 'SUCCESS' | 'ERROR' | 'NOTIFICATION',
+      forcePlay = false
+    ) => {
       if (!audioSettings.sfxEnabled && !forcePlay) return;
       const ctx = getOrInitAudioContext();
       if (!ctx) return;
@@ -651,7 +707,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(freq, now + idx * 0.065);
           gain.gain.setValueAtTime(0.11, now + idx * 0.065);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.065 + 0.22);
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            now + idx * 0.065 + 0.22
+          );
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(now + idx * 0.065);
@@ -667,7 +726,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(freq, now + idx * 0.11);
           gain.gain.setValueAtTime(0.09, now + idx * 0.11);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.11 + 0.16);
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            now + idx * 0.11 + 0.16
+          );
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(now + idx * 0.11);
@@ -683,7 +745,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(freq, now + idx * 0.08);
           gain.gain.setValueAtTime(0.1, now + idx * 0.08);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
+          gain.gain.exponentialRampToValueAtTime(
+            0.001,
+            now + idx * 0.08 + 0.3
+          );
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(now + idx * 0.08);
@@ -711,7 +776,8 @@ const MainWorkspaceRoutes: React.FC = () => {
       chordStepRef.current += 1;
 
       const now = ctx.currentTime;
-      const masterVol = Math.max(0.02, Math.min(1, audioSettings.lofiVolume)) * 0.12;
+      const masterVol =
+        Math.max(0.02, Math.min(1, audioSettings.lofiVolume)) * 0.12;
 
       const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
@@ -724,10 +790,19 @@ const MainWorkspaceRoutes: React.FC = () => {
       chord.forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = audioSettings.lofiTrackStyle === 'AMBIENT_SPACE' ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq + (idx % 2 === 0 ? 0.4 : -0.4), now);
+        osc.type =
+          audioSettings.lofiTrackStyle === 'AMBIENT_SPACE'
+            ? 'sine'
+            : 'triangle';
+        osc.frequency.setValueAtTime(
+          freq + (idx % 2 === 0 ? 0.4 : -0.4),
+          now
+        );
         gain.gain.setValueAtTime(0.001, now);
-        gain.gain.linearRampToValueAtTime(masterVol / chord.length, now + 0.35);
+        gain.gain.linearRampToValueAtTime(
+          masterVol / chord.length,
+          now + 0.35
+        );
         gain.gain.exponentialRampToValueAtTime(0.0008, now + 2.9);
         osc.connect(gain);
         gain.connect(filter);
@@ -741,9 +816,15 @@ const MainWorkspaceRoutes: React.FC = () => {
           const kickGain = ctx.createGain();
           kickOsc.type = 'sine';
           kickOsc.frequency.setValueAtTime(115, now + beatOffset);
-          kickOsc.frequency.exponentialRampToValueAtTime(42, now + beatOffset + 0.14);
+          kickOsc.frequency.exponentialRampToValueAtTime(
+            42,
+            now + beatOffset + 0.14
+          );
           kickGain.gain.setValueAtTime(masterVol * 0.85, now + beatOffset);
-          kickGain.gain.exponentialRampToValueAtTime(0.001, now + beatOffset + 0.18);
+          kickGain.gain.exponentialRampToValueAtTime(
+            0.001,
+            now + beatOffset + 0.18
+          );
           kickOsc.connect(kickGain);
           kickGain.connect(ctx.destination);
           kickOsc.start(now + beatOffset);
@@ -784,14 +865,15 @@ const MainWorkspaceRoutes: React.FC = () => {
     playUiSoundEffect('CLICK');
   };
 
-  const [userSession, setUserSession] = useState<AuthenticatedUserSession | null>(() => {
-    try {
-      const savedRaw = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      return savedRaw ? JSON.parse(savedRaw) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [userSession, setUserSession] =
+    useState<AuthenticatedUserSession | null>(() => {
+      try {
+        const savedRaw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        return savedRaw ? JSON.parse(savedRaw) : null;
+      } catch {
+        return null;
+      }
+    });
 
   const [profileCustomMap, setProfileCustomMap] = useState<
     Record<
@@ -831,7 +913,9 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const [webLanguage, setWebLanguage] = useState<WebLanguageCodeType>(() => {
     const saved = localStorage.getItem(WEB_LANGUAGE_STORAGE_KEY);
-    return (saved === 'en' || saved === 'ja' ? saved : 'vi') as WebLanguageCodeType;
+    return (
+      saved === 'en' || saved === 'ja' ? saved : 'vi'
+    ) as WebLanguageCodeType;
   });
 
   const [departmentsList, setDepartmentsList] =
@@ -858,7 +942,11 @@ const MainWorkspaceRoutes: React.FC = () => {
       approvalStatus: 'APPROVED',
       approvedByUsername: 'Systemadmin123',
       bookingMode: 'HALL_EVENT_RENTAL',
-      allowedDepartments: ['System Governance', 'Product & Engineering', 'Product Design & UX'],
+      allowedDepartments: [
+        'System Governance',
+        'Product & Engineering',
+        'Product Design & UX',
+      ],
     },
     {
       bookingId: 'BK-2026-001',
@@ -871,7 +959,8 @@ const MainWorkspaceRoutes: React.FC = () => {
       startTimeIso: '08:00',
       endTimeIso: '10:00',
       purposeNote: 'Họp Kiến trúc Hệ thống 3D (Tầng 1)',
-      approvalRequestReason: 'Xin phép họp rà soát sơ đồ 3D PBR cùng nhóm Frontend',
+      approvalRequestReason:
+        'Xin phép họp rà soát sơ đồ 3D PBR cùng nhóm Frontend',
       recurringOption: 'NONE',
       occurrenceDates: [new Date().toISOString().slice(0, 10)],
       lockVersion: 1,
@@ -966,7 +1055,9 @@ const MainWorkspaceRoutes: React.FC = () => {
   const [managedUsers, setManagedUsers] =
     useState<ManagedUserAccountItem[]>(INITIAL_MANAGED_USERS);
 
-  const [notificationsList, setNotificationsList] = useState<NotificationRecordItem[]>([]);
+  const [notificationsList, setNotificationsList] = useState<
+    NotificationRecordItem[]
+  >([]);
   const [activePopupNotification, setActivePopupNotification] =
     useState<NotificationRecordItem | null>(null);
 
@@ -977,92 +1068,178 @@ const MainWorkspaceRoutes: React.FC = () => {
     setManagedUsers((prev) =>
       prev.map((u) =>
         activeUsername && u.username.toLowerCase() === activeUsername
-          ? { ...u, isOnline: true, lastActiveText: 'Đang trực tuyến (Phiên hiện tại)' }
+          ? {
+              ...u,
+              isOnline: true,
+              lastActiveText: 'Đang trực tuyến (Phiên hiện tại)',
+            }
           : { ...u, isOnline: false, lastActiveText: 'Chưa đăng nhập' }
       )
     );
   }, [userSession?.userProfile.username]);
 
-  const fetchAccountProfileAndWorkspaceFromMongo = useCallback(async (username: string) => {
-    try {
-      const [profileRes, bookingsRes, trustRes, auditRes, orgRes] = await Promise.allSettled([
-        fetch(`/api/v1/auth/profile/${encodeURIComponent(username)}`),
-        fetch('/api/v1/bookings'),
-        fetch('/api/v1/datamanager/trust-scores'),
-        fetch('/api/v1/datamanager/audit-logs'),
-        fetch('/api/v1/organization'),
-      ]);
+  // Đồng bộ toàn bộ dữ liệu từ MongoDB Atlas khi đăng nhập hoặc mở trang
+  const fetchAccountProfileAndWorkspaceFromMongo = useCallback(
+    async (username: string) => {
+      try {
+        const [
+          profileRes,
+          bookingsRes,
+          trustRes,
+          auditRes,
+          orgRes,
+          equipRes,
+          faultRes,
+          historyRes,
+        ] = await Promise.allSettled([
+          fetch(`/api/v1/auth/profile/${encodeURIComponent(username)}`),
+          fetch('/api/v1/bookings'),
+          fetch('/api/v1/datamanager/trust-scores'),
+          fetch('/api/v1/datamanager/audit-logs'),
+          fetch('/api/v1/organization'),
+          fetch('/api/v1/datamanager/equipments'),
+          fetch('/api/v1/datamanager/fault-reports'),
+          fetch('/api/v1/datamanager/trust-history'),
+        ]);
 
-      if (orgRes.status === 'fulfilled' && orgRes.value.ok) {
-        const oJson = await orgRes.value.json();
-        if (oJson?.success && oJson.data) {
-          if (Array.isArray(oJson.data.departments) && oJson.data.departments.length > 0) {
-            setDepartmentsList(oJson.data.departments);
-          }
-          if (Array.isArray(oJson.data.groups) && oJson.data.groups.length > 0) {
-            setGroupsList(oJson.data.groups);
-          }
-        }
-      }
-
-      if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
-        const json = await profileRes.value.json();
-        if (json?.success && json.data) {
-          const p = json.data;
-          setProfileCustomMap((prev) => {
-            const nextMap = {
-              ...prev,
-              [username]: {
-                avatarUrl: p.avatarUrl ?? prev[username]?.avatarUrl ?? null,
-                backgroundUrl: p.backgroundUrl ?? prev[username]?.backgroundUrl ?? null,
-                phoneNumber: p.phoneNumber || prev[username]?.phoneNumber || '0908 123 456',
-                jobTitle: p.jobTitle || prev[username]?.jobTitle || 'Senior System Member',
-                bioText:
-                  p.bioText ||
-                  prev[username]?.bioText ||
-                  'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
-              },
-            };
-            try {
-              localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
-            } catch {
-              // Bỏ qua
+        if (orgRes.status === 'fulfilled' && orgRes.value.ok) {
+          const oJson = await orgRes.value.json();
+          if (oJson?.success && oJson.data) {
+            if (
+              Array.isArray(oJson.data.departments) &&
+              oJson.data.departments.length > 0
+            ) {
+              setDepartmentsList(oJson.data.departments);
             }
-            return nextMap;
-          });
+            if (
+              Array.isArray(oJson.data.groups) &&
+              oJson.data.groups.length > 0
+            ) {
+              setGroupsList(oJson.data.groups);
+            }
+          }
         }
-      }
 
-      if (bookingsRes.status === 'fulfilled' && bookingsRes.value.ok) {
-        const bJson = await bookingsRes.value.json();
-        if (bJson?.success && Array.isArray(bJson.data) && bJson.data.length > 0) {
-          setBookingsList(bJson.data);
+        if (profileRes.status === 'fulfilled' && profileRes.value.ok) {
+          const json = await profileRes.value.json();
+          if (json?.success && json.data) {
+            const p = json.data;
+            setProfileCustomMap((prev) => {
+              const nextMap = {
+                ...prev,
+                [username]: {
+                  avatarUrl: p.avatarUrl ?? prev[username]?.avatarUrl ?? null,
+                  backgroundUrl:
+                    p.backgroundUrl ?? prev[username]?.backgroundUrl ?? null,
+                  phoneNumber:
+                    p.phoneNumber ||
+                    prev[username]?.phoneNumber ||
+                    '0908 123 456',
+                  jobTitle:
+                    p.jobTitle ||
+                    prev[username]?.jobTitle ||
+                    'Senior System Member',
+                  bioText:
+                    p.bioText ||
+                    prev[username]?.bioText ||
+                    'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+                },
+              };
+              try {
+                localStorage.setItem(
+                  PROFILE_CUSTOM_STORAGE_KEY,
+                  JSON.stringify(nextMap)
+                );
+              } catch {
+                // Bỏ qua
+              }
+              return nextMap;
+            });
+          }
         }
-      }
 
-      if (trustRes.status === 'fulfilled' && trustRes.value.ok) {
-        const tJson = await trustRes.value.json();
-        if (tJson?.success && Array.isArray(tJson.data) && tJson.data.length > 0) {
-          setTrustProfiles(tJson.data);
+        if (bookingsRes.status === 'fulfilled' && bookingsRes.value.ok) {
+          const bJson = await bookingsRes.value.json();
+          if (
+            bJson?.success &&
+            Array.isArray(bJson.data) &&
+            bJson.data.length > 0
+          ) {
+            setBookingsList(bJson.data);
+          }
         }
-      }
 
-      if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
-        const aJson = await auditRes.value.json();
-        if (aJson?.success && Array.isArray(aJson.data) && aJson.data.length > 0) {
-          setAuditLogs(aJson.data);
+        if (trustRes.status === 'fulfilled' && trustRes.value.ok) {
+          const tJson = await trustRes.value.json();
+          if (
+            tJson?.success &&
+            Array.isArray(tJson.data) &&
+            tJson.data.length > 0
+          ) {
+            setTrustProfiles(tJson.data);
+          }
         }
+
+        if (auditRes.status === 'fulfilled' && auditRes.value.ok) {
+          const aJson = await auditRes.value.json();
+          if (
+            aJson?.success &&
+            Array.isArray(aJson.data) &&
+            aJson.data.length > 0
+          ) {
+            setAuditLogs(aJson.data);
+          }
+        }
+
+        if (equipRes.status === 'fulfilled' && equipRes.value.ok) {
+          const eqJson = await equipRes.value.json();
+          if (
+            eqJson?.success &&
+            Array.isArray(eqJson.data) &&
+            eqJson.data.length > 0
+          ) {
+            setEquipmentsList(eqJson.data);
+          }
+        }
+
+        if (faultRes.status === 'fulfilled' && faultRes.value.ok) {
+          const fJson = await faultRes.value.json();
+          if (
+            fJson?.success &&
+            Array.isArray(fJson.data) &&
+            fJson.data.length > 0
+          ) {
+            setEquipmentFaultReports(fJson.data);
+          }
+        }
+
+        if (historyRes.status === 'fulfilled' && historyRes.value.ok) {
+          const hJson = await historyRes.value.json();
+          if (
+            hJson?.success &&
+            Array.isArray(hJson.data) &&
+            hJson.data.length > 0
+          ) {
+            setTrustScoreHistory(hJson.data);
+          }
+        }
+      } catch {
+        // Giữ nguyên state dự phòng
       }
-    } catch {
-      // Giữ nguyên state dự phòng
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     if (userSession?.userProfile.username) {
-      fetchAccountProfileAndWorkspaceFromMongo(userSession.userProfile.username);
+      fetchAccountProfileAndWorkspaceFromMongo(
+        userSession.userProfile.username
+      );
     }
-  }, [userSession?.userProfile.username, fetchAccountProfileAndWorkspaceFromMongo]);
+  }, [
+    userSession?.userProfile.username,
+    fetchAccountProfileAndWorkspaceFromMongo,
+  ]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1098,6 +1275,12 @@ const MainWorkspaceRoutes: React.FC = () => {
         createdAtIso: new Date().toISOString(),
       };
       setAuditLogs((prev) => [newAudit, ...prev]);
+
+      fetch('/api/v1/datamanager/audit-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAudit),
+      }).catch(() => {});
     },
     []
   );
@@ -1118,7 +1301,8 @@ const MainWorkspaceRoutes: React.FC = () => {
 
       const localItem: NotificationRecordItem = {
         notificationId: `NTF-${Date.now()}-${Math.floor(Math.random() * 99)}`,
-        recipientEmail: customRecipientEmail || userSession?.userProfile.userEmail || 'all',
+        recipientEmail:
+          customRecipientEmail || userSession?.userProfile.userEmail || 'all',
         titleText,
         contentText,
         category,
@@ -1158,24 +1342,34 @@ const MainWorkspaceRoutes: React.FC = () => {
       `Đăng nhập thành công vào hệ thống SpotMatrix bởi @${sessionData.userProfile.username} (IP: 113.161.72.104).`
     );
 
-    const incomingProfile = sessionData.userProfile as AuthenticatedUserSession['userProfile'] & {
-      avatarUrl?: string | null;
-      backgroundUrl?: string | null;
-      phoneNumber?: string;
-      jobTitle?: string;
-      bioText?: string;
-    };
+    const incomingProfile =
+      sessionData.userProfile as AuthenticatedUserSession['userProfile'] & {
+        avatarUrl?: string | null;
+        backgroundUrl?: string | null;
+        phoneNumber?: string;
+        jobTitle?: string;
+        bioText?: string;
+      };
     if (incomingProfile.username) {
       setProfileCustomMap((prev) => ({
         ...prev,
         [incomingProfile.username]: {
-          avatarUrl: incomingProfile.avatarUrl ?? prev[incomingProfile.username]?.avatarUrl ?? null,
+          avatarUrl:
+            incomingProfile.avatarUrl ??
+            prev[incomingProfile.username]?.avatarUrl ??
+            null,
           backgroundUrl:
-            incomingProfile.backgroundUrl ?? prev[incomingProfile.username]?.backgroundUrl ?? null,
+            incomingProfile.backgroundUrl ??
+            prev[incomingProfile.username]?.backgroundUrl ??
+            null,
           phoneNumber:
-            incomingProfile.phoneNumber || prev[incomingProfile.username]?.phoneNumber || '0908 123 456',
+            incomingProfile.phoneNumber ||
+            prev[incomingProfile.username]?.phoneNumber ||
+            '0908 123 456',
           jobTitle:
-            incomingProfile.jobTitle || prev[incomingProfile.username]?.jobTitle || 'Senior System Member',
+            incomingProfile.jobTitle ||
+            prev[incomingProfile.username]?.jobTitle ||
+            'Senior System Member',
           bioText:
             incomingProfile.bioText ||
             prev[incomingProfile.username]?.bioText ||
@@ -1189,14 +1383,19 @@ const MainWorkspaceRoutes: React.FC = () => {
       const targetUser = sessionData.userProfile.username.toLowerCase();
       return prev.map((u) =>
         u.username.toLowerCase() === targetUser
-          ? { ...u, isOnline: true, lastActiveText: 'Đang trực tuyến (Phiên hiện tại)' }
+          ? {
+              ...u,
+              isOnline: true,
+              lastActiveText: 'Đang trực tuyến (Phiên hiện tại)',
+            }
           : { ...u, isOnline: false, lastActiveText: 'Chưa đăng nhập' }
       );
     });
   };
 
   const handleLogout = () => {
-    const loggingOutUsername = userSession?.userProfile.username?.toLowerCase();
+    const loggingOutUsername =
+      userSession?.userProfile.username?.toLowerCase();
     setManagedUsers((prev) =>
       prev.map((u) =>
         loggingOutUsername && u.username.toLowerCase() === loggingOutUsername
@@ -1205,6 +1404,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       )
     );
     setIsAvatarMenuOpen(false);
+    setIsMobileSidebarOpen(false);
     setUserSession(null);
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
     setActivePopupNotification(null);
@@ -1217,10 +1417,14 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
   };
 
-  const handleSelectAndNavigateNotification = (notifItem: NotificationRecordItem) => {
+  const handleSelectAndNavigateNotification = (
+    notifItem: NotificationRecordItem
+  ) => {
     setNotificationsList((prev) =>
       prev.map((n) =>
-        n.notificationId === notifItem.notificationId ? { ...n, isRead: true } : n
+        n.notificationId === notifItem.notificationId
+          ? { ...n, isRead: true }
+          : n
       )
     );
 
@@ -1232,7 +1436,8 @@ const MainWorkspaceRoutes: React.FC = () => {
     if (notifItem.relatedNodeId) {
       const foundNode = workspaceNodes.find(
         (n) =>
-          n.nodeId === notifItem.relatedNodeId || n.nodeCode === notifItem.relatedNodeId
+          n.nodeId === notifItem.relatedNodeId ||
+          n.nodeCode === notifItem.relatedNodeId
       );
       if (foundNode) {
         setSelectedNode(foundNode);
@@ -1271,11 +1476,15 @@ const MainWorkspaceRoutes: React.FC = () => {
 
     const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
     if (targetBk && decision === 'REJECTED') {
-      const matchedNode = workspaceNodes.find((n) => n.nodeCode === targetBk.nodeId);
+      const matchedNode = workspaceNodes.find(
+        (n) => n.nodeCode === targetBk.nodeId
+      );
       if (matchedNode) {
         setWorkspaceNodes((prev) =>
           prev.map((n) =>
-            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+            n.nodeId === matchedNode.nodeId
+              ? { ...n, status: 'AVAILABLE' }
+              : n
           )
         );
       }
@@ -1298,8 +1507,10 @@ const MainWorkspaceRoutes: React.FC = () => {
               approvedByUsername: actorUsername,
               approvedAtIso: approvedTimeStr,
               rejectedAtIso: decision === 'REJECTED' ? approvedTimeStr : null,
-              rejectedAtTimestampMs: decision === 'REJECTED' ? Date.now() : null,
-              bookingStatus: decision === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED',
+              rejectedAtTimestampMs:
+                decision === 'REJECTED' ? Date.now() : null,
+              bookingStatus:
+                decision === 'REJECTED' ? 'CANCELLED' : 'CONFIRMED',
             }
           : b
       )
@@ -1352,11 +1563,15 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
 
     if (targetBk) {
-      const matchedNode = workspaceNodes.find((n) => n.nodeCode === targetBk.nodeId);
+      const matchedNode = workspaceNodes.find(
+        (n) => n.nodeCode === targetBk.nodeId
+      );
       if (matchedNode) {
         setWorkspaceNodes((prev) =>
           prev.map((n) =>
-            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+            n.nodeId === matchedNode.nodeId
+              ? { ...n, status: 'AVAILABLE' }
+              : n
           )
         );
       }
@@ -1382,7 +1597,11 @@ const MainWorkspaceRoutes: React.FC = () => {
     }
   };
 
-  const handleUpdateNodeCoords = async (nodeId: string, posX: number, posY: number) => {
+  const handleUpdateNodeCoords = async (
+    nodeId: string,
+    posX: number,
+    posY: number
+  ) => {
     setWorkspaceNodes((prev) =>
       prev.map((item) =>
         item.nodeId === nodeId ? { ...item, position2D: { posX, posY } } : item
@@ -1390,9 +1609,14 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
   };
 
-  const handleUpdateNodeStatus = async (nodeId: string, nextStatus: SeatStatusType) => {
+  const handleUpdateNodeStatus = async (
+    nodeId: string,
+    nextStatus: SeatStatusType
+  ) => {
     setWorkspaceNodes((prev) =>
-      prev.map((item) => (item.nodeId === nodeId ? { ...item, status: nextStatus } : item))
+      prev.map((item) =>
+        item.nodeId === nodeId ? { ...item, status: nextStatus } : item
+      )
     );
     setSelectedNode((prev) =>
       prev && prev.nodeId === nodeId ? { ...prev, status: nextStatus } : prev
@@ -1410,7 +1634,9 @@ const MainWorkspaceRoutes: React.FC = () => {
     amenitiesList: string[];
   }) => {
     const newNode: WorkspaceNodeItem = {
-      nodeId: `NODE-${payload.nodeCode.replace('-', '')}-${Date.now().toString().slice(-3)}`,
+      nodeId: `NODE-${payload.nodeCode.replace('-', '')}-${Date.now()
+        .toString()
+        .slice(-3)}`,
       nodeCode: payload.nodeCode,
       nodeLabel: payload.nodeLabel,
       zoneType: payload.zoneType,
@@ -1437,8 +1663,11 @@ const MainWorkspaceRoutes: React.FC = () => {
   ) => {
     const codeToBook = customTargetCode || targetNode.nodeCode;
     const currentRole = userSession?.userProfile.role || 'EMPLOYEE';
-    const isHallWholeRoomRental = codeToBook === 'H-01' || timeWindow?.bookingMode === 'HALL_EVENT_RENTAL';
-    const isHallSeatBooking = /^H01-[A-C]\d+$/i.test(codeToBook) || timeWindow?.bookingMode === 'HALL_SEAT_BOOKING';
+    const isHallWholeRoomRental =
+      codeToBook === 'H-01' || timeWindow?.bookingMode === 'HALL_EVENT_RENTAL';
+    const isHallSeatBooking =
+      /^H01-[A-C]\d+$/i.test(codeToBook) ||
+      timeWindow?.bookingMode === 'HALL_SEAT_BOOKING';
 
     const needsApproval = isHallWholeRoomRental
       ? currentRole !== 'SYS_ADMIN'
@@ -1452,14 +1681,19 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
 
     const newBookingId = `BK-${Date.now().toString().slice(-4)}`;
-    const baseDate = timeWindow?.dateIso || new Date().toISOString().slice(0, 10);
+    const baseDate =
+      timeWindow?.dateIso || new Date().toISOString().slice(0, 10);
     const newBookingItem: BookingPayloadItem = {
       bookingId: newBookingId,
       nodeId: codeToBook,
-      userEmail: customEmail || userSession?.userProfile.userEmail || 'employee@spotmatrix.vn',
+      userEmail:
+        customEmail ||
+        userSession?.userProfile.userEmail ||
+        'employee@spotmatrix.vn',
       requesterUsername: userSession?.userProfile.username || 'Employeedev123',
       requesterRole: currentRole,
-      departmentName: userSession?.userProfile.departmentName || 'Product & Engineering',
+      departmentName:
+        userSession?.userProfile.departmentName || 'Product & Engineering',
       bookingDateIso: baseDate,
       startTimeIso: timeWindow?.start || '08:00',
       endTimeIso: timeWindow?.end || '10:00',
@@ -1492,11 +1726,7 @@ const MainWorkspaceRoutes: React.FC = () => {
       'OPTIMISTIC_LOCK_WIN',
       newBookingItem.userEmail,
       codeToBook,
-      `[Đặt lịch Thành công - Lock v${newBookingItem.lockVersion}] @${
-        newBookingItem.requesterUsername
-      } đặt ${codeToBook} (${newBookingItem.startTimeIso}-${
-        newBookingItem.endTimeIso
-      }).`,
+      `[Đặt lịch Thành công - Lock v${newBookingItem.lockVersion}] @${newBookingItem.requesterUsername} đặt ${codeToBook} (${newBookingItem.startTimeIso}-${newBookingItem.endTimeIso}).`,
       'SUCCESS',
       newBookingItem.lockVersion
     );
@@ -1513,7 +1743,7 @@ const MainWorkspaceRoutes: React.FC = () => {
         : '';
       pushRealtimeNotification(
         `[Cần Phê Duyệt] Yêu cầu đặt ${codeToBook}`,
-        `@${userSession?.userProfile.username} xin đặt ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).${reasonSuffix}`,
+        `@${userSession?.userProfile.username} xin đặt ${codeToBook} (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}, ngày ${baseDate}).${reasonSuffix}`,
         'BOOKING_APPROVAL_REQUEST',
         targetNode.nodeId,
         { approvalBookingId: newBookingId, approvalHandledStatus: 'PENDING' }
@@ -1521,7 +1751,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     } else {
       pushRealtimeNotification(
         `Đặt lịch thành công: ${codeToBook}`,
-        `Đã cấp mã QR Check-in cho "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}).`,
+        `Đã cấp mã QR Check-in cho "${newBookingItem.purposeNote}" (${newBookingItem.startTimeIso} - ${newBookingItem.endTimeIso}, ngày ${baseDate}).`,
         'BOOKING_EVENT',
         targetNode.nodeId
       );
@@ -1533,7 +1763,9 @@ const MainWorkspaceRoutes: React.FC = () => {
       const now = new Date();
       const frozenTime =
         exactScanTimeText ||
-        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString(
+          'vi-VN'
+        )}`;
 
       const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
       const targetEmail =
@@ -1559,22 +1791,27 @@ const MainWorkspaceRoutes: React.FC = () => {
             return tp;
           }
           const nextScore = Math.min(100, tp.trustScore + 2);
-          setTrustScoreHistory((hPrev) => [
-            {
-              historyId: `TSH-${Date.now()}-${Math.floor(Math.random() * 90 + 10)}`,
-              userEmail: tp.userEmail,
-              fullName: tp.fullName,
-              deltaPoints: 2,
-              resultingScore: nextScore,
-              reasonType: 'ON_TIME_QR_CHECKIN',
-              reasonText: `Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng ${
-                targetBk?.nodeId || bookingId
-              }`,
-              relatedBookingId: bookingId,
-              createdAtIso: frozenTime,
-            },
-            ...hPrev,
-          ]);
+          const historyItem: TrustScoreHistoryRecordItem = {
+            recordId: `TSH-${Date.now()}-${Math.floor(
+              Math.random() * 90 + 10
+            )}`,
+            userEmail: tp.userEmail,
+            fullName: tp.fullName,
+            deltaPoints: 2,
+            balanceAfter: nextScore,
+            eventType: 'QR_CHECKIN_REWARD',
+            reasonText: `Cộng +2 điểm khi quét mã QR Check-in đúng giờ tại phòng ${
+              targetBk?.nodeId || bookingId
+            }`,
+            createdAtIso: frozenTime,
+          };
+          setTrustScoreHistory((hPrev) => [historyItem, ...hPrev]);
+          fetch('/api/v1/datamanager/trust-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(historyItem),
+          }).catch(() => {});
+
           return {
             ...tp,
             trustScore: nextScore,
@@ -1604,7 +1841,13 @@ const MainWorkspaceRoutes: React.FC = () => {
         `Xác nhận quét mã QR đúng hạn cho vé ${bookingId} tại thời điểm cố định: [${frozenTime}] (+2 điểm tín nhiệm).`
       );
     },
-    [bookingsList, userSession, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+    [
+      bookingsList,
+      userSession,
+      playUiSoundEffect,
+      pushRealtimeNotification,
+      recordRealtimeAuditLog,
+    ]
   );
 
   // Tự động thu hồi phòng khi quá hạn quét QR: Chuyển sang Trạng thái 3 (EXPIRED_NO_SHOW), trừ 10đ, thông báo và giữ hiển thị 3 ngày
@@ -1633,7 +1876,9 @@ const MainWorkspaceRoutes: React.FC = () => {
       if (matchedNode) {
         setWorkspaceNodes((prev) =>
           prev.map((n) =>
-            n.nodeId === matchedNode.nodeId ? { ...n, status: 'AVAILABLE' } : n
+            n.nodeId === matchedNode.nodeId
+              ? { ...n, status: 'AVAILABLE' }
+              : n
           )
         );
       }
@@ -1646,20 +1891,25 @@ const MainWorkspaceRoutes: React.FC = () => {
             return tp;
           }
           const nextScore = Math.max(0, tp.trustScore - 10);
-          setTrustScoreHistory((hPrev) => [
-            {
-              historyId: `TSH-${Date.now()}-${Math.floor(Math.random() * 90 + 10)}`,
-              userEmail: tp.userEmail,
-              fullName: tp.fullName,
-              deltaPoints: -10,
-              resultingScore: nextScore,
-              reasonType: 'OVERDUE_NO_SHOW_PENALTY',
-              reasonText: `Trừ -10 điểm do quá hạn không quét QR xác nhận dùng phòng ${nodeCode} (Tự động thu hồi phòng)`,
-              relatedBookingId: bookingId,
-              createdAtIso: expiredTimeStr,
-            },
-            ...hPrev,
-          ]);
+          const historyItem: TrustScoreHistoryRecordItem = {
+            recordId: `TSH-${Date.now()}-${Math.floor(
+              Math.random() * 90 + 10
+            )}`,
+            userEmail: tp.userEmail,
+            fullName: tp.fullName,
+            deltaPoints: -10,
+            balanceAfter: nextScore,
+            eventType: 'NO_SHOW_PENALTY',
+            reasonText: `Trừ -10 điểm do quá hạn không quét QR xác nhận dùng phòng ${nodeCode} (Tự động thu hồi phòng)`,
+            createdAtIso: expiredTimeStr,
+          };
+          setTrustScoreHistory((hPrev) => [historyItem, ...hPrev]);
+          fetch('/api/v1/datamanager/trust-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(historyItem),
+          }).catch(() => {});
+
           return {
             ...tp,
             trustScore: nextScore,
@@ -1669,6 +1919,16 @@ const MainWorkspaceRoutes: React.FC = () => {
           };
         })
       );
+
+      fetch('/api/v1/datamanager/trust-scores/adjust', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userEmail: targetUserEmail,
+          eventType: 'NO_SHOW_EXPIRED',
+          targetNodeId: nodeCode,
+        }),
+      }).catch(() => {});
 
       pushRealtimeNotification(
         `[Trễ hạn Quét QR • Thu hồi phòng ${nodeCode}]`,
@@ -1687,28 +1947,45 @@ const MainWorkspaceRoutes: React.FC = () => {
         'AUTO_REVOKED'
       );
     },
-    [workspaceNodes, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+    [
+      workspaceNodes,
+      playUiSoundEffect,
+      pushRealtimeNotification,
+      recordRealtimeAuditLog,
+    ]
   );
 
   // Cộng +20 điểm tín nhiệm định kỳ hằng tháng cho toàn bộ nhân sự
   const handleTriggerMonthlyTrustBonus = useCallback(() => {
     const now = new Date();
-    const timeLabel = `${now.toLocaleDateString('vi-VN')} • ${now.toLocaleTimeString('vi-VN')}`;
+    const timeLabel = `${now.toLocaleDateString(
+      'vi-VN'
+    )} • ${now.toLocaleTimeString('vi-VN')}`;
 
     setTrustProfiles((prev) => {
       const bonusHistoryEntries: TrustScoreHistoryRecordItem[] = [];
       const updated = prev.map((tp) => {
         const nextScore = Math.min(100, tp.trustScore + 20);
-        bonusHistoryEntries.push({
-          historyId: `TSH-MONTH-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`,
+        const hItem: TrustScoreHistoryRecordItem = {
+          recordId: `TSH-MONTH-${Date.now()}-${Math.floor(
+            Math.random() * 900 + 100
+          )}`,
           userEmail: tp.userEmail,
           fullName: tp.fullName,
           deltaPoints: 20,
-          resultingScore: nextScore,
-          reasonType: 'MONTHLY_RECURRING_BONUS',
-          reasonText: 'Cộng +20 điểm tín nhiệm định kỳ hằng tháng (Tối đa 100 điểm)',
+          balanceAfter: nextScore,
+          eventType: 'MONTHLY_BONUS_20',
+          reasonText:
+            'Cộng +20 điểm tín nhiệm định kỳ hằng tháng (Tối đa 100 điểm)',
           createdAtIso: timeLabel,
-        });
+        };
+        bonusHistoryEntries.push(hItem);
+        fetch('/api/v1/datamanager/trust-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(hItem),
+        }).catch(() => {});
+
         return {
           ...tp,
           trustScore: nextScore,
@@ -1723,7 +2000,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     playUiSoundEffect('SUCCESS');
     pushRealtimeNotification(
       '[Cộng +20đ Định kỳ Tháng] Đã cập nhật Điểm Tín nhiệm',
-      'Hệ thống đã cộng +20 điểm tín nhiệm định kỳ hằng tháng cho toàn bộ nhân sự và ghi vào Sổ cái Lịch sử Tín nhiệm.',
+      'Hệ thống đã cộng +20 điểm tín nhiệm định kỳ hằng tháng cho toàn bộ nhân sự và lưu lên MongoDB.',
       'TRUST_SCORE_ALERT'
     );
   }, [playUiSoundEffect, pushRealtimeNotification]);
@@ -1739,19 +2016,28 @@ const MainWorkspaceRoutes: React.FC = () => {
     );
     playUiSoundEffect('CLICK');
 
-    fetch(`/api/v1/datamanager/equipments/${encodeURIComponent(equipmentId)}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
-    }).catch(() => {});
+    fetch(
+      `/api/v1/datamanager/equipments/${encodeURIComponent(
+        equipmentId
+      )}/status`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      }
+    ).catch(() => {});
   };
 
   // Nhân viên / Quản lý gửi Báo lỗi Thiết bị từ trang Tổ chức & Phòng ban lên Admin
   const handleSubmitEquipmentFaultReport = useCallback(
     (equipmentId: string, roomCode: string, faultReason: string) => {
-      const targetEq = equipmentsList.find((e) => e.equipmentId === equipmentId);
-      const reporterEmail = userSession?.userProfile.userEmail || 'employee.dev@spotmatrix.vn';
-      const reporterName = userSession?.userProfile.fullName || 'Nhân sự Nội bộ';
+      const targetEq = equipmentsList.find(
+        (e) => e.equipmentId === equipmentId
+      );
+      const reporterEmail =
+        userSession?.userProfile.userEmail || 'employee.dev@spotmatrix.vn';
+      const reporterName =
+        userSession?.userProfile.fullName || 'Nhân sự Nội bộ';
       const reporterRole = userSession?.userProfile.role || 'EMPLOYEE';
       const nowStr = `${new Date().toLocaleTimeString('vi-VN')} • Hôm nay`;
 
@@ -1766,7 +2052,10 @@ const MainWorkspaceRoutes: React.FC = () => {
         reporterRole,
         faultReason,
         reportStatus: 'PENDING_ADMIN',
+        aiDiagnosisNote:
+          'AURA-X đề xuất kiểm tra nguồn tín hiệu và chuyển sang trạng thái Đang bảo trì.',
         createdAtIso: nowStr,
+        updatedAtIso: new Date().toISOString(),
       };
 
       setEquipmentFaultReports((prev) => [newReport, ...prev]);
@@ -1776,20 +2065,25 @@ const MainWorkspaceRoutes: React.FC = () => {
             ? {
                 ...eq,
                 lastReportedReason: faultReason,
-                lastReportedByEmail: reporterEmail,
+                lastReportedBy: reporterEmail,
               }
             : eq
         )
       );
 
+      fetch('/api/v1/datamanager/fault-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newReport),
+      }).catch(() => {});
+
       playUiSoundEffect('NOTIFICATION');
 
-      // Thông báo cho cả người báo lỗi và SYS_ADMIN
       pushRealtimeNotification(
         `[Báo lỗi Thiết bị Phòng ${roomCode}] Chờ Admin xác nhận`,
         `${reporterName} đã báo lỗi thiết bị "${
           targetEq?.equipmentName || equipmentId
-        }" tại phòng ${roomCode}. Lý do: "${faultReason}". Hệ thống đã chuyển phiếu đến SYS_ADMIN.`,
+        }" tại phòng ${roomCode}. Lý do: "${faultReason}". Hệ thống đã lưu lên MongoDB và chuyển phiếu đến SYS_ADMIN.`,
         'EQUIPMENT_FAULT_ALERT',
         roomCode,
         undefined,
@@ -1805,7 +2099,13 @@ const MainWorkspaceRoutes: React.FC = () => {
         } tại ${roomCode}: "${faultReason}".`
       );
     },
-    [equipmentsList, userSession, playUiSoundEffect, pushRealtimeNotification, recordRealtimeAuditLog]
+    [
+      equipmentsList,
+      userSession,
+      playUiSoundEffect,
+      pushRealtimeNotification,
+      recordRealtimeAuditLog,
+    ]
   );
 
   // Admin duyệt Báo lỗi Thiết bị -> Chuyển sang REPORTED_BROKEN -> MAINTENANCE -> AVAILABLE hoặc REJECT
@@ -1814,11 +2114,13 @@ const MainWorkspaceRoutes: React.FC = () => {
       reportId: string,
       decision: 'CONFIRM_BROKEN' | 'START_MAINTENANCE' | 'MARK_FIXED' | 'REJECT'
     ) => {
-      const targetReport = equipmentFaultReports.find((r) => r.reportId === reportId);
+      const targetReport = equipmentFaultReports.find(
+        (r) => r.reportId === reportId
+      );
       if (!targetReport) return;
 
       const adminName = userSession?.userProfile.username || 'Systemadmin123';
-      const handledAtStr = `${new Date().toLocaleTimeString('vi-VN')} • Hôm nay`;
+      const handledAtStr = new Date().toISOString();
 
       const nextReportStatus: EquipmentFaultReportItem['reportStatus'] =
         decision === 'CONFIRM_BROKEN'
@@ -1826,7 +2128,7 @@ const MainWorkspaceRoutes: React.FC = () => {
           : decision === 'START_MAINTENANCE'
           ? 'IN_MAINTENANCE'
           : decision === 'MARK_FIXED'
-          ? 'RESOLVED_AVAILABLE'
+          ? 'RESOLVED_READY'
           : 'REJECTED';
 
       const nextEqStatus: EquipmentStatusType =
@@ -1842,8 +2144,8 @@ const MainWorkspaceRoutes: React.FC = () => {
             ? {
                 ...r,
                 reportStatus: nextReportStatus,
-                handledByAdmin: adminName,
-                handledAtIso: handledAtStr,
+                handledByEmail: adminName,
+                updatedAtIso: handledAtStr,
               }
             : r
         )
@@ -1856,6 +2158,19 @@ const MainWorkspaceRoutes: React.FC = () => {
             : eq
         )
       );
+
+      fetch(
+        `/api/v1/datamanager/fault-reports/${encodeURIComponent(reportId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reportStatus: nextReportStatus,
+            equipmentStatus: nextEqStatus,
+            handledByEmail: adminName,
+          }),
+        }
+      ).catch(() => {});
 
       playUiSoundEffect(decision === 'REJECT' ? 'CLICK' : 'SUCCESS');
 
@@ -1875,29 +2190,37 @@ const MainWorkspaceRoutes: React.FC = () => {
         targetReport.reporterEmail
       );
     },
-    [equipmentFaultReports, userSession, playUiSoundEffect, pushRealtimeNotification]
+    [
+      equipmentFaultReports,
+      userSession,
+      playUiSoundEffect,
+      pushRealtimeNotification,
+    ]
   );
 
   // AI Tự động Xử lý & Điều phối Bảo trì Thiết bị cho Admin
   const handleTriggerAiAutoProcessFaults = useCallback(() => {
-    const nowStr = `${new Date().toLocaleTimeString('vi-VN')} • AI Auto-Triage`;
+    const nowStr = new Date().toISOString();
 
     setEquipmentFaultReports((prev) =>
       prev.map((r) => {
-        if (r.reportStatus === 'PENDING_ADMIN' || r.reportStatus === 'CONFIRMED_BROKEN') {
+        if (
+          r.reportStatus === 'PENDING_ADMIN' ||
+          r.reportStatus === 'CONFIRMED_BROKEN'
+        ) {
           return {
             ...r,
             reportStatus: 'IN_MAINTENANCE',
-            handledByAdmin: 'AURA-X AI Auto-Triage',
-            handledAtIso: nowStr,
+            handledByEmail: 'AURA-X AI Auto-Triage',
+            updatedAtIso: nowStr,
           };
         }
         if (r.reportStatus === 'IN_MAINTENANCE') {
           return {
             ...r,
-            reportStatus: 'RESOLVED_AVAILABLE',
-            handledByAdmin: 'AURA-X AI Auto-Triage',
-            handledAtIso: nowStr,
+            reportStatus: 'RESOLVED_READY',
+            handledByEmail: 'AURA-X AI Auto-Triage',
+            updatedAtIso: nowStr,
           };
         }
         return r;
@@ -1929,7 +2252,9 @@ const MainWorkspaceRoutes: React.FC = () => {
       const now = new Date();
       const cancelTimeStr =
         customCancelTimeText ||
-        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString('vi-VN')}`;
+        `${now.toLocaleTimeString('vi-VN')} • Ngày ${now.toLocaleDateString(
+          'vi-VN'
+        )}`;
 
       const targetBk = bookingsList.find((b) => b.bookingId === bookingId);
 
@@ -2021,7 +2346,7 @@ const MainWorkspaceRoutes: React.FC = () => {
     };
   }, [handleCheckInBooking, handleCancelBooking]);
 
-  // Bộ quét tự động thu hồi phòng khi quá thời gian cho phép quét QR (Chuyển sang Trạng thái 3: EXPIRED_NO_SHOW)
+  // Bộ quét tự động thu hồi phòng khi quá thời gian cho phép quét QR (mỗi 30 giây, nhẹ nhàng không tốn dữ liệu mạng)
   useEffect(() => {
     const timer = window.setInterval(() => {
       const now = new Date();
@@ -2041,11 +2366,10 @@ const MainWorkspaceRoutes: React.FC = () => {
           }
         }
       });
-    }, 15000);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [bookingsList, handlePenalizeNoShowBooking]);
 
-  // Chức năng dành riêng cho SYS_ADMIN: Đổi Role người dùng giữa EMPLOYEE và MANAGER
   const handleChangeUserRole = (
     username: string,
     targetUserEmail: string,
@@ -2091,7 +2415,11 @@ const MainWorkspaceRoutes: React.FC = () => {
     setManagedUsers((prev) =>
       prev.map((u) =>
         u.username === username
-          ? { ...u, accountStatus: u.accountStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED' }
+          ? {
+              ...u,
+              accountStatus:
+                u.accountStatus === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED',
+            }
           : u
       )
     );
@@ -2109,10 +2437,13 @@ const MainWorkspaceRoutes: React.FC = () => {
     backgroundUrl: null,
     phoneNumber: '0908 123 456',
     jobTitle: 'Senior System Member',
-    bioText: 'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
+    bioText:
+      'Thành viên hệ thống quản lý không gian và đặt lịch phòng họp SpotMatrix 3D.',
   };
 
-  const handleSaveProfileCustomization = async (updated: UserProfileCustomization) => {
+  const handleSaveProfileCustomization = async (
+    updated: UserProfileCustomization
+  ) => {
     const nextMap = {
       ...profileCustomMap,
       [currentUsernameKey]: {
@@ -2126,13 +2457,19 @@ const MainWorkspaceRoutes: React.FC = () => {
     setProfileCustomMap(nextMap);
     playUiSoundEffect('SUCCESS');
     try {
-      localStorage.setItem(PROFILE_CUSTOM_STORAGE_KEY, JSON.stringify(nextMap));
+      localStorage.setItem(
+        PROFILE_CUSTOM_STORAGE_KEY,
+        JSON.stringify(nextMap)
+      );
     } catch {
       // Bỏ qua
     }
 
     if (updated.departmentName && updated.userEmail) {
-      handleAssignUserSingleDepartment(updated.userEmail, updated.departmentName);
+      handleAssignUserSingleDepartment(
+        updated.userEmail,
+        updated.departmentName
+      );
     }
 
     if (userSession) {
@@ -2195,11 +2532,16 @@ const MainWorkspaceRoutes: React.FC = () => {
 
   const handleDeleteDepartment = (departmentId: string) => {
     if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
-    setDepartmentsList((prev) => prev.filter((d) => d.departmentId !== departmentId));
+    setDepartmentsList((prev) =>
+      prev.filter((d) => d.departmentId !== departmentId)
+    );
     playUiSoundEffect('CLICK');
-    fetch(`/api/v1/organization/departments/${encodeURIComponent(departmentId)}`, {
-      method: 'DELETE',
-    }).catch(() => {});
+    fetch(
+      `/api/v1/organization/departments/${encodeURIComponent(departmentId)}`,
+      {
+        method: 'DELETE',
+      }
+    ).catch(() => {});
   };
 
   const handleAssignUserSingleDepartment = (
@@ -2252,7 +2594,10 @@ const MainWorkspaceRoutes: React.FC = () => {
         },
       };
       setUserSession(updatedSession);
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updatedSession));
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify(updatedSession)
+      );
     }
 
     playUiSoundEffect('SUCCESS');
@@ -2296,7 +2641,10 @@ const MainWorkspaceRoutes: React.FC = () => {
     }).catch(() => {});
   };
 
-  const handleToggleGroupMember = (groupId: string, targetUserEmail: string) => {
+  const handleToggleGroupMember = (
+    groupId: string,
+    targetUserEmail: string
+  ) => {
     if (userSession?.userProfile.role === 'EMPLOYEE') return;
     const cleanEmail = targetUserEmail.trim().toLowerCase();
     setGroupsList((prev) =>
@@ -2308,7 +2656,9 @@ const MainWorkspaceRoutes: React.FC = () => {
         return {
           ...g,
           memberEmails: exists
-            ? g.memberEmails.filter((em) => em.trim().toLowerCase() !== cleanEmail)
+            ? g.memberEmails.filter(
+                (em) => em.trim().toLowerCase() !== cleanEmail
+              )
             : [...g.memberEmails, targetUserEmail],
         };
       })
@@ -2326,20 +2676,23 @@ const MainWorkspaceRoutes: React.FC = () => {
     ).catch(() => {});
   };
 
-  // Hành động AI dành riêng cho SYS_ADMIN: Đổi tên Phòng ban đồng bộ toàn hệ thống
+  // Hành động AI dành riêng cho SYS_ADMIN: Đổi tên Phòng ban đồng bộ toàn hệ thống & MongoDB
   const handleAiRenameDepartment = useCallback(
     (departmentId: string, newDepartmentName: string) => {
       if (userSession?.userProfile.role !== 'SYS_ADMIN') return;
-      const targetDept = departmentsList.find((d) => d.departmentId === departmentId);
+      const targetDept = departmentsList.find(
+        (d) => d.departmentId === departmentId
+      );
       if (!targetDept) return;
       const oldName = targetDept.departmentName;
+      const updatedDept: OrganizationDepartmentItem = {
+        ...targetDept,
+        departmentName: newDepartmentName,
+        updatedAtIso: new Date().toISOString(),
+      };
 
       setDepartmentsList((prev) =>
-        prev.map((d) =>
-          d.departmentId === departmentId
-            ? { ...d, departmentName: newDepartmentName, updatedAtIso: new Date().toISOString() }
-            : d
-        )
+        prev.map((d) => (d.departmentId === departmentId ? updatedDept : d))
       );
 
       setGroupsList((prev) =>
@@ -2366,10 +2719,16 @@ const MainWorkspaceRoutes: React.FC = () => {
         )
       );
 
+      fetch('/api/v1/organization/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedDept),
+      }).catch(() => {});
+
       playUiSoundEffect('SUCCESS');
       pushRealtimeNotification(
         '[AURA-X AI] Đã đổi tên Phòng ban',
-        `Đã đổi tên phòng ban "${oldName}" thành "${newDepartmentName}" trên toàn bộ hệ thống.`,
+        `Đã đổi tên phòng ban "${oldName}" thành "${newDepartmentName}" và đồng bộ lên MongoDB.`,
         'SYSTEM_POLICY'
       );
     },
@@ -2383,17 +2742,30 @@ const MainWorkspaceRoutes: React.FC = () => {
       const codeSet = new Set(targetRoomCodes.map((c) => c.toUpperCase()));
 
       setEquipmentsList((prev) =>
-        prev.map((eq) =>
-          codeSet.has((eq.assignedNodeId || '').toUpperCase())
-            ? { ...eq, status: nextStatus }
-            : eq
-        )
+        prev.map((eq) => {
+          if (codeSet.has((eq.assignedNodeId || '').toUpperCase())) {
+            fetch(
+              `/api/v1/datamanager/equipments/${encodeURIComponent(
+                eq.equipmentId
+              )}/status`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: nextStatus }),
+              }
+            ).catch(() => {});
+            return { ...eq, status: nextStatus };
+          }
+          return eq;
+        })
       );
 
       playUiSoundEffect('SUCCESS');
       pushRealtimeNotification(
         `[AURA-X AI] Đã cập nhật Thiết bị (${targetRoomCodes.length} phòng)`,
-        `Đã chuyển trạng thái thiết bị thuộc [${targetRoomCodes.join(', ')}] sang [${nextStatus}].`,
+        `Đã chuyển trạng thái thiết bị thuộc [${targetRoomCodes.join(
+          ', '
+        )}] sang [${nextStatus}].`,
         'EQUIPMENT_FAULT_ALERT'
       );
     },
@@ -2404,29 +2776,93 @@ const MainWorkspaceRoutes: React.FC = () => {
   const sidebarItems = [
     {
       id: 'OVERVIEW' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Overview (Dashboard)' : webLanguage === 'ja' ? 'ダッシュボード概要' : 'Tổng quan (Dashboard)',
-      sub: webLanguage === 'en' ? 'Live Telemetry & AI Voice' : webLanguage === 'ja' ? 'リアルタイム統計・AI音声' : 'Số liệu thật & Trợ lý Chat',
+      label:
+        webLanguage === 'en'
+          ? 'Overview (Dashboard)'
+          : webLanguage === 'ja'
+          ? 'ダッシュボード概要'
+          : 'Tổng quan (Dashboard)',
+      shortLabel:
+        webLanguage === 'en'
+          ? 'Overview'
+          : webLanguage === 'ja'
+          ? '概要'
+          : 'Tổng quan',
+      sub:
+        webLanguage === 'en'
+          ? 'Live Telemetry & AI Voice'
+          : webLanguage === 'ja'
+          ? 'リアルタイム統計・AI音声'
+          : 'Số liệu thật & Trợ lý Chat',
       icon: LayoutDashboard,
       adminOnly: false,
     },
     {
       id: 'FLOORPLAN' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? '3D/2D Floorplan' : webLanguage === 'ja' ? '3D/2D フロアマップ' : 'Sơ đồ Phòng họp',
-      sub: webLanguage === 'en' ? '5 Floors 3D/2D & Hall' : webLanguage === 'ja' ? '5階3Dモデル・大ホール' : '5 Tầng 3D/2D & Hội trường',
+      label:
+        webLanguage === 'en'
+          ? '3D/2D Floorplan'
+          : webLanguage === 'ja'
+          ? '3D/2D フロアマップ'
+          : 'Sơ đồ Phòng họp',
+      shortLabel:
+        webLanguage === 'en'
+          ? '3D/2D Map'
+          : webLanguage === 'ja'
+          ? '3D/2D図'
+          : 'Sơ đồ 3D/2D',
+      sub:
+        webLanguage === 'en'
+          ? '5 Floors 3D/2D & Hall'
+          : webLanguage === 'ja'
+          ? '5階3Dモデル・大ホール'
+          : '5 Tầng 3D/2D & Hội trường',
       icon: Map,
       adminOnly: false,
     },
     {
       id: 'BOOKING' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Room & Hall Booking' : webLanguage === 'ja' ? '会議室・ホール予約' : 'Đặt lịch Phòng họp',
-      sub: webLanguage === 'en' ? '2-Mode Hall & QR ±30m' : webLanguage === 'ja' ? '2モード大ホール・QR ±30分' : 'Hội trường 2 chế độ & QR ±30p',
+      label:
+        webLanguage === 'en'
+          ? 'Room & Hall Booking'
+          : webLanguage === 'ja'
+          ? '会議室・ホール予約'
+          : 'Đặt lịch Phòng họp',
+      shortLabel:
+        webLanguage === 'en'
+          ? 'Booking'
+          : webLanguage === 'ja'
+          ? '会議室予約'
+          : 'Đặt phòng',
+      sub:
+        webLanguage === 'en'
+          ? '2-Mode Hall & QR ±30m'
+          : webLanguage === 'ja'
+          ? '2モード大ホール・QR ±30分'
+          : 'Hội trường 2 chế độ & QR ±30p',
       icon: CalendarCheck,
       adminOnly: false,
     },
     {
       id: 'ORGANIZATION' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Organization & Teams' : webLanguage === 'ja' ? '組織・部署・グループ' : 'Tổ chức & Phòng ban',
-      sub: webLanguage === 'en' ? '1 Dept & Fault Report' : webLanguage === 'ja' ? '部署・設備故障報告' : 'Phòng ban & Báo lỗi Thiết bị',
+      label:
+        webLanguage === 'en'
+          ? 'Organization & Teams'
+          : webLanguage === 'ja'
+          ? '組織・部署・グループ'
+          : 'Tổ chức & Phòng ban',
+      shortLabel:
+        webLanguage === 'en'
+          ? 'Organization'
+          : webLanguage === 'ja'
+          ? '組織・部署'
+          : 'Phòng ban',
+      sub:
+        webLanguage === 'en'
+          ? '1 Dept & Fault Report'
+          : webLanguage === 'ja'
+          ? '部署・設備故障報告'
+          : 'Phòng ban & Báo lỗi Thiết bị',
       icon: Building2,
       adminOnly: false,
     },
@@ -2444,6 +2880,18 @@ const MainWorkspaceRoutes: React.FC = () => {
           : webLanguage === 'ja'
           ? '個人信頼スコア履歴'
           : 'Điểm & Lịch sử Tín nhiệm',
+      shortLabel:
+        userSession?.userProfile.role === 'SYS_ADMIN'
+          ? webLanguage === 'en'
+            ? 'Equipment'
+            : webLanguage === 'ja'
+            ? '設備・信頼'
+            : 'Thiết bị & Điểm'
+          : webLanguage === 'en'
+          ? 'Trust Score'
+          : webLanguage === 'ja'
+          ? '信頼スコア'
+          : 'Điểm tín nhiệm',
       sub:
         userSession?.userProfile.role === 'SYS_ADMIN'
           ? webLanguage === 'en'
@@ -2461,8 +2909,24 @@ const MainWorkspaceRoutes: React.FC = () => {
     },
     {
       id: 'AUDIT' as ActiveSidebarPage,
-      label: webLanguage === 'en' ? 'Audit & IP Security' : webLanguage === 'ja' ? '監査ログ・IPセキュリティ' : 'Nhật ký & Quản trị User',
-      sub: webLanguage === 'en' ? 'SYS_ADMIN Exclusive' : webLanguage === 'ja' ? 'SYS_ADMIN 専用管理' : 'Chỉ dành cho SYS_ADMIN',
+      label:
+        webLanguage === 'en'
+          ? 'Audit & IP Security'
+          : webLanguage === 'ja'
+          ? '監査ログ・IPセキュリティ'
+          : 'Nhật ký & Quản trị User',
+      shortLabel:
+        webLanguage === 'en'
+          ? 'Audit & IP'
+          : webLanguage === 'ja'
+          ? '監査・IP'
+          : 'Quản trị User',
+      sub:
+        webLanguage === 'en'
+          ? 'SYS_ADMIN Exclusive'
+          : webLanguage === 'ja'
+          ? 'SYS_ADMIN 専用管理'
+          : 'Chỉ dành cho SYS_ADMIN',
       icon: ShieldAlert,
       adminOnly: true,
     },
@@ -2472,7 +2936,9 @@ const MainWorkspaceRoutes: React.FC = () => {
     <Routes>
       <Route
         path="/"
-        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
+        element={
+          <Navigate to={userSession ? '/dashboard' : '/welcome'} replace />
+        }
       />
 
       <Route
@@ -2529,16 +2995,46 @@ const MainWorkspaceRoutes: React.FC = () => {
           ) : (
             <div
               className={`min-h-screen flex flex-col lg:flex-row transition-colors duration-200 ${
-                isDark ? 'bg-[#0B1120] text-slate-100' : 'bg-[#F4F7FB] text-slate-800'
+                isDark
+                  ? 'bg-[#0B1120] text-slate-100'
+                  : 'bg-[#F4F7FB] text-slate-800'
               }`}
             >
+              {/* ===================================================================
+                  1. SIDEBAR CỐ ĐỊNH TRÊN MÁY TÍNH (DESKTOP >= 1024px) & DRAWER TRÊN ĐIỆN THOẠI / IPAD
+                 =================================================================== */}
+              {isMobileSidebarOpen && (
+                <div
+                  className="fixed inset-0 bg-black/50 backdrop-blur-xs z-40 lg:hidden"
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                />
+              )}
+
               <aside
-                className={`w-full lg:w-64 shrink-0 lg:fixed lg:inset-y-0 lg:left-0 lg:h-screen lg:overflow-y-auto z-40 border-b lg:border-b-0 lg:border-r flex flex-col justify-between p-4 sm:p-5 transition-colors ${
-                  isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/90'
+                className={`w-72 lg:w-64 shrink-0 fixed inset-y-0 left-0 h-screen overflow-y-auto z-50 lg:z-40 border-r flex flex-col justify-between p-4 sm:p-5 transition-transform duration-200 ${
+                  isMobileSidebarOpen
+                    ? 'translate-x-0'
+                    : '-translate-x-full lg:translate-x-0'
+                } ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800'
+                    : 'bg-white border-slate-200/90'
                 }`}
               >
                 <div className="space-y-6">
-                  <SpotMatrixLogo theme={isDark ? 'dark' : 'light'} variant="full" />
+                  <div className="flex items-center justify-between gap-2">
+                    <SpotMatrixLogo
+                      theme={isDark ? 'dark' : 'light'}
+                      variant="full"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileSidebarOpen(false)}
+                      className="lg:hidden p-1.5 rounded-xl text-slate-400 hover:bg-slate-800/40"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
 
                   <nav className="space-y-1.5">
                     <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">
@@ -2558,6 +3054,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                           type="button"
                           onClick={() => {
                             setActivePage(item.id);
+                            setIsMobileSidebarOpen(false);
                             playUiSoundEffect('CLICK');
                           }}
                           className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-all ${
@@ -2571,14 +3068,20 @@ const MainWorkspaceRoutes: React.FC = () => {
                           <div className="flex items-center gap-3 min-w-0">
                             <IconComponent
                               className={`w-4 h-4 shrink-0 ${
-                                isActive ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'
+                                isActive
+                                  ? 'text-white'
+                                  : 'text-indigo-600 dark:text-indigo-400'
                               }`}
                             />
                             <div className="truncate">
-                              <p className="text-xs font-bold leading-tight">{item.label}</p>
+                              <p className="text-xs font-bold leading-tight">
+                                {item.label}
+                              </p>
                               <p
                                 className={`text-[10px] truncate mt-0.5 ${
-                                  isActive ? 'text-indigo-100' : 'text-slate-400'
+                                  isActive
+                                    ? 'text-indigo-100'
+                                    : 'text-slate-400'
                                 }`}
                               >
                                 {item.sub}
@@ -2596,11 +3099,12 @@ const MainWorkspaceRoutes: React.FC = () => {
                   </nav>
                 </div>
 
-                <div className="hidden lg:block pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2">
                   <button
                     type="button"
                     onClick={() => {
                       playUiSoundEffect('CLICK');
+                      setIsMobileSidebarOpen(false);
                       navigate('/welcome');
                     }}
                     className="w-full py-2 px-3 rounded-xl bg-indigo-600/10 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/30 text-[11px] font-extrabold flex items-center justify-between transition"
@@ -2615,323 +3119,396 @@ const MainWorkspaceRoutes: React.FC = () => {
                     <Sparkles className="w-3.5 h-3.5" />
                   </button>
                   <div className="text-[11px] text-slate-400">
-                    SpotMatrix 5-Floor 3D v5.0 (Multi-Lang & AI Studio)
+                    SpotMatrix 5-Floor 3D v5.0 (MongoDB & AI Agent)
                   </div>
                 </div>
               </aside>
 
+              {/* ===================================================================
+                  2. KHUNG NỘI DUNG CHÍNH (RESPONSIVE CHO ĐIỆN THOẠI, IPAD & MÁY TÍNH)
+                 =================================================================== */}
               <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
                 <header
-                  className={`sticky top-0 z-30 backdrop-blur-md border-b px-4 sm:px-8 py-3 flex items-center justify-between gap-3 ${
+                  className={`sticky top-0 z-30 backdrop-blur-md border-b px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-col gap-2 ${
                     isDark
                       ? 'bg-slate-900/90 border-slate-800'
                       : 'bg-white/95 border-slate-200/90 shadow-sm'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <NotificationHeaderBell
-                      notifications={notificationsList}
-                      userRole={userSession.userProfile.role}
-                      webLanguage={webLanguage}
-                      isDark={isDark}
-                      onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
-                      onHandleApprovalDecision={handleApprovalDecision}
-                      onMarkAllRead={() =>
-                        setNotificationsList((prev) =>
-                          prev.map((item) => ({ ...item, isRead: true }))
-                        )
-                      }
-                      onNavigateNotificationPage={() => setActivePage('NOTIFICATION')}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const bestNode = workspaceNodes.find((n) => n.status === 'AVAILABLE');
-                        if (bestNode) {
-                          setSelectedNode(bestNode);
-                          setActivePage('FLOORPLAN');
-                          pushRealtimeNotification(
-                            `Gợi ý Phòng họp Tối ưu: ${bestNode.nodeCode}`,
-                            `"${bestNode.nodeLabel}" đang trống và phù hợp nhất.`,
-                            'BOOKING_EVENT',
-                            bestNode.nodeId
-                          );
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">
-                        {webLanguage === 'en'
-                          ? 'Smart Room Suggest'
-                          : webLanguage === 'ja'
-                          ? '最適な会議室を提案'
-                          : 'Gợi ý Phòng họp'}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextLofi = !audioSettings.lofiEnabled;
-                        persistAudioSettings({ ...audioSettings, lofiEnabled: nextLofi });
-                        playUiSoundEffect('CLICK');
-                      }}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition ${
-                        audioSettings.lofiEnabled
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                          : isDark
-                          ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                          : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      {audioSettings.lofiEnabled ? (
-                        <>
-                          <Music className="w-3.5 h-3.5 animate-bounce" />
-                          <span className="hidden md:inline">
-                            {webLanguage === 'en'
-                              ? 'Lofi Music: ON'
-                              : webLanguage === 'ja'
-                              ? 'Lofi BGM: オン'
-                              : 'Nhạc Lofi: Đang bật'}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <VolumeX className="w-3.5 h-3.5" />
-                          <span className="hidden md:inline">
-                            {webLanguage === 'en'
-                              ? 'Enable Lofi Music'
-                              : webLanguage === 'ja'
-                              ? 'Lofi BGM を再生'
-                              : 'Bật Nhạc Lofi'}
-                          </span>
-                        </>
-                      )}
-                    </button>
-
-                    <div
-                      className={`inline-flex items-center rounded-xl p-1 border ${
-                        isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                      }`}
-                    >
-                      <Globe className="w-3.5 h-3.5 ml-1.5 mr-1 text-indigo-500" />
-                      {(['vi', 'en', 'ja'] as WebLanguageCodeType[]).map((langCode) => (
-                        <button
-                          key={langCode}
-                          type="button"
-                          onClick={() => {
-                            setWebLanguage(langCode);
-                            try {
-                              localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, langCode);
-                            } catch {
-                              // ignore
-                            }
-                            playUiSoundEffect('CLICK');
-                          }}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase transition ${
-                            webLanguage === langCode
-                              ? 'bg-indigo-600 text-white'
-                              : isDark
-                              ? 'text-slate-400 hover:text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          {langCode}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="relative ml-auto" ref={avatarDropdownRef}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAvatarMenuOpen(!isAvatarMenuOpen);
-                        playUiSoundEffect('CLICK');
-                      }}
-                      className={`relative w-10 h-10 rounded-full border-2 flex items-center justify-center font-extrabold text-sm transition shadow-sm ${
-                        isDark
-                          ? 'bg-indigo-950 border-indigo-500/70 text-indigo-200'
-                          : 'bg-indigo-50 border-indigo-300 text-indigo-700'
-                      }`}
-                      title={`Đang trực tuyến: ${userSession.userProfile.fullName} (${userSession.userProfile.departmentName})`}
-                    >
-                      <span className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
-                        {currentCustomProfile.avatarUrl ? (
-                          <img
-                            src={currentCustomProfile.avatarUrl}
-                            alt="Avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          (userSession.userProfile.fullName || 'U').charAt(0).toUpperCase()
-                        )}
-                      </span>
-                      <span
-                        className="absolute -bottom-0.5 -right-0.5 z-20 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 shadow-md"
-                        title="Trạng thái: Đang Online"
-                      />
-                    </button>
-
-                    {isAvatarMenuOpen && (
-                      <div
-                        className={`absolute right-0 mt-2.5 w-72 rounded-2xl border shadow-2xl z-50 overflow-hidden transition-all ${
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Nút mở Menu Drawer trên Điện thoại & iPad (< lg) */}
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileSidebarOpen(true)}
+                        className={`lg:hidden p-2 rounded-xl border transition ${
                           isDark
-                            ? 'bg-slate-900 border-slate-800 text-slate-100'
-                            : 'bg-white border-slate-200 text-slate-800'
+                            ? 'bg-slate-800 border-slate-700 text-slate-200'
+                            : 'bg-slate-100 border-slate-200 text-slate-700'
+                        }`}
+                        aria-label="Open Navigation Menu"
+                      >
+                        <Menu className="w-4 h-4" />
+                      </button>
+
+                      <NotificationHeaderBell
+                        notifications={notificationsList}
+                        userRole={userSession.userProfile.role}
+                        webLanguage={webLanguage}
+                        isDark={isDark}
+                        onSelectAndNavigateNotification={
+                          handleSelectAndNavigateNotification
+                        }
+                        onHandleApprovalDecision={handleApprovalDecision}
+                        onMarkAllRead={() =>
+                          setNotificationsList((prev) =>
+                            prev.map((item) => ({ ...item, isRead: true }))
+                          )
+                        }
+                        onNavigateNotificationPage={() =>
+                          setActivePage('NOTIFICATION')
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bestNode = workspaceNodes.find(
+                            (n) => n.status === 'AVAILABLE'
+                          );
+                          if (bestNode) {
+                            setSelectedNode(bestNode);
+                            setActivePage('FLOORPLAN');
+                            pushRealtimeNotification(
+                              `Gợi ý Phòng họp Tối ưu: ${bestNode.nodeCode}`,
+                              `"${bestNode.nodeLabel}" đang trống và phù hợp nhất.`,
+                              'BOOKING_EVENT',
+                              bestNode.nodeId
+                            );
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">
+                          {webLanguage === 'en'
+                            ? 'Smart Room Suggest'
+                            : webLanguage === 'ja'
+                            ? '最適な会議室を提案'
+                            : 'Gợi ý Phòng họp'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextLofi = !audioSettings.lofiEnabled;
+                          persistAudioSettings({
+                            ...audioSettings,
+                            lofiEnabled: nextLofi,
+                          });
+                          playUiSoundEffect('CLICK');
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold border transition ${
+                          audioSettings.lofiEnabled
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                            : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
                         }`}
                       >
+                        {audioSettings.lofiEnabled ? (
+                          <>
+                            <Music className="w-3.5 h-3.5 animate-bounce" />
+                            <span className="hidden md:inline">
+                              {webLanguage === 'en'
+                                ? 'Lofi Music: ON'
+                                : webLanguage === 'ja'
+                                ? 'Lofi BGM: オン'
+                                : 'Nhạc Lofi: Đang bật'}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <VolumeX className="w-3.5 h-3.5" />
+                            <span className="hidden md:inline">
+                              {webLanguage === 'en'
+                                ? 'Enable Lofi Music'
+                                : webLanguage === 'ja'
+                                ? 'Lofi BGM を再生'
+                                : 'Bật Nhạc Lofi'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      <div
+                        className={`inline-flex items-center rounded-xl p-1 border ${
+                          isDark
+                            ? 'bg-slate-800 border-slate-700'
+                            : 'bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        <Globe className="w-3.5 h-3.5 ml-1 mr-1 text-indigo-500 hidden sm:inline" />
+                        {(['vi', 'en', 'ja'] as WebLanguageCodeType[]).map(
+                          (langCode) => (
+                            <button
+                              key={langCode}
+                              type="button"
+                              onClick={() => {
+                                setWebLanguage(langCode);
+                                try {
+                                  localStorage.setItem(
+                                    WEB_LANGUAGE_STORAGE_KEY,
+                                    langCode
+                                  );
+                                } catch {
+                                  // ignore
+                                }
+                                playUiSoundEffect('CLICK');
+                              }}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase transition ${
+                                webLanguage === langCode
+                                  ? 'bg-indigo-600 text-white'
+                                  : isDark
+                                  ? 'text-slate-400 hover:text-white'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                            >
+                              {langCode}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="relative ml-auto" ref={avatarDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAvatarMenuOpen(!isAvatarMenuOpen);
+                          playUiSoundEffect('CLICK');
+                        }}
+                        className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 flex items-center justify-center font-extrabold text-sm transition shadow-sm ${
+                          isDark
+                            ? 'bg-indigo-950 border-indigo-500/70 text-indigo-200'
+                            : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                        }`}
+                        title={`Đang trực tuyến: ${userSession.userProfile.fullName} (${userSession.userProfile.departmentName})`}
+                      >
+                        <span className="w-full h-full rounded-full overflow-hidden flex items-center justify-center">
+                          {currentCustomProfile.avatarUrl ? (
+                            <img
+                              src={currentCustomProfile.avatarUrl}
+                              alt="Avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            (userSession.userProfile.fullName || 'U')
+                              .charAt(0)
+                              .toUpperCase()
+                          )}
+                        </span>
+                        <span
+                          className="absolute -bottom-0.5 -right-0.5 z-20 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 shadow-md"
+                          title="Trạng thái: Đang Online"
+                        />
+                      </button>
+
+                      {isAvatarMenuOpen && (
                         <div
-                          className={`p-4 border-b ${
+                          className={`absolute right-0 mt-2.5 w-72 rounded-2xl border shadow-2xl z-50 overflow-hidden transition-all ${
                             isDark
-                              ? 'bg-slate-950/70 border-slate-800'
-                              : 'bg-slate-50/80 border-slate-100'
+                              ? 'bg-slate-900 border-slate-800 text-slate-100'
+                              : 'bg-white border-slate-200 text-slate-800'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            {currentCustomProfile.avatarUrl ? (
-                              <img
-                                src={currentCustomProfile.avatarUrl}
-                                alt="Avatar"
-                                className="w-11 h-11 rounded-full object-cover shrink-0 border border-indigo-500/30"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0">
-                                {(userSession.userProfile.fullName || 'U').charAt(0).toUpperCase()}
+                          <div
+                            className={`p-4 border-b ${
+                              isDark
+                                ? 'bg-slate-950/70 border-slate-800'
+                                : 'bg-slate-50/80 border-slate-100'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              {currentCustomProfile.avatarUrl ? (
+                                <img
+                                  src={currentCustomProfile.avatarUrl}
+                                  alt="Avatar"
+                                  className="w-11 h-11 rounded-full object-cover shrink-0 border border-indigo-500/30"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0">
+                                  {(userSession.userProfile.fullName || 'U')
+                                    .charAt(0)
+                                    .toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-extrabold truncate">
+                                  {userSession.userProfile.fullName}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">
+                                  @{userSession.userProfile.username}
+                                </p>
                               </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-extrabold truncate">
-                                {userSession.userProfile.fullName}
+                            </div>
+
+                            <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 space-y-1.5 text-xs">
+                              <p className="flex items-center justify-between">
+                                <span className="text-slate-400 flex items-center gap-1.5">
+                                  <Mail className="w-3.5 h-3.5" /> Email:
+                                </span>
+                                <strong className="font-semibold truncate max-w-[155px]">
+                                  {userSession.userProfile.userEmail}
+                                </strong>
                               </p>
-                              <p className="text-xs text-slate-400 truncate">
-                                @{userSession.userProfile.username}
+                              <p className="flex items-center justify-between">
+                                <span className="text-slate-400 flex items-center gap-1.5">
+                                  <Building2 className="w-3.5 h-3.5" /> Role:
+                                </span>
+                                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                                  {userSession.userProfile.role}
+                                </span>
+                              </p>
+                              <p className="flex items-center justify-between">
+                                <span className="text-slate-400 flex items-center gap-1.5">
+                                  <Award className="w-3.5 h-3.5" /> Trust Score:
+                                </span>
+                                <strong className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                                  {userSession.userProfile.trustScore} pts
+                                </strong>
                               </p>
                             </div>
                           </div>
 
-                          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-800 space-y-1.5 text-xs">
-                            <p className="flex items-center justify-between">
-                              <span className="text-slate-400 flex items-center gap-1.5">
-                                <Mail className="w-3.5 h-3.5" /> Email:
-                              </span>
-                              <strong className="font-semibold truncate max-w-[155px]">
-                                {userSession.userProfile.userEmail}
-                              </strong>
-                            </p>
-                            <p className="flex items-center justify-between">
-                              <span className="text-slate-400 flex items-center gap-1.5">
-                                <Building2 className="w-3.5 h-3.5" /> Role:
-                              </span>
-                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-                                {userSession.userProfile.role}
-                              </span>
-                            </p>
-                            <p className="flex items-center justify-between">
-                              <span className="text-slate-400 flex items-center gap-1.5">
-                                <Award className="w-3.5 h-3.5" /> Trust Score:
-                              </span>
-                              <strong className="font-extrabold text-indigo-600 dark:text-indigo-400">
-                                {userSession.userProfile.trustScore} pts
-                              </strong>
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="p-2 space-y-1 text-xs font-semibold">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsAvatarMenuOpen(false);
-                              setActivePage('PROFILE');
-                              playUiSoundEffect('CLICK');
-                            }}
-                            className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
-                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
-                            }`}
-                          >
-                            <User className="w-4 h-4 text-indigo-600" />
-                            <span>
-                              {webLanguage === 'en'
-                                ? 'Profile & AI Banner Studio'
-                                : webLanguage === 'ja'
-                                ? 'プロフィール＆AI背景生成'
-                                : 'Hồ sơ Cá nhân & Tạo Nền AI'}
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={toggleThemeMode}
-                            className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition ${
-                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
-                            }`}
-                          >
-                            <span className="flex items-center gap-2.5">
-                              {isDark ? (
-                                <Sun className="w-4 h-4 text-amber-400" />
-                              ) : (
-                                <Moon className="w-4 h-4 text-indigo-600" />
-                              )}
+                          <div className="p-2 space-y-1 text-xs font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAvatarMenuOpen(false);
+                                setActivePage('PROFILE');
+                                playUiSoundEffect('CLICK');
+                              }}
+                              className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
+                                isDark
+                                  ? 'hover:bg-slate-800'
+                                  : 'hover:bg-slate-100'
+                              }`}
+                            >
+                              <User className="w-4 h-4 text-indigo-600" />
                               <span>
                                 {webLanguage === 'en'
-                                  ? 'Light / Dark Theme'
+                                  ? 'Profile & AI Banner Studio'
                                   : webLanguage === 'ja'
-                                  ? 'ライト / ダークモード'
-                                  : 'Chế độ Sáng / Tối'}
+                                  ? 'プロフィール＆AI背景生成'
+                                  : 'Hồ sơ Cá nhân & Tạo Nền AI'}
                               </span>
-                            </span>
-                            <span className="text-[11px] font-bold text-slate-400">
-                              {isDark ? 'Dark' : 'Light'}
-                            </span>
-                          </button>
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsAvatarMenuOpen(false);
-                              setActivePage('SETTINGS');
-                              playUiSoundEffect('CLICK');
-                            }}
-                            className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
-                              isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100'
-                            }`}
-                          >
-                            <Settings className="w-4 h-4 text-indigo-600" />
-                            <span>
-                              {webLanguage === 'en'
-                                ? 'System Settings & Security'
-                                : webLanguage === 'ja'
-                                ? 'システム設定・セキュリティ'
-                                : 'Cài đặt Nhạc Lofi, Bảo mật & Ngôn ngữ'}
-                            </span>
-                          </button>
+                            <button
+                              type="button"
+                              onClick={toggleThemeMode}
+                              className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition ${
+                                isDark
+                                  ? 'hover:bg-slate-800'
+                                  : 'hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2.5">
+                                {isDark ? (
+                                  <Sun className="w-4 h-4 text-amber-400" />
+                                ) : (
+                                  <Moon className="w-4 h-4 text-indigo-600" />
+                                )}
+                                <span>
+                                  {webLanguage === 'en'
+                                    ? 'Light / Dark Theme'
+                                    : webLanguage === 'ja'
+                                    ? 'ライト / ダークモード'
+                                    : 'Chế độ Sáng / Tối'}
+                                </span>
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-400">
+                                {isDark ? 'Dark' : 'Light'}
+                              </span>
+                            </button>
 
-                          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsAvatarMenuOpen(false);
+                                setActivePage('SETTINGS');
+                                playUiSoundEffect('CLICK');
+                              }}
+                              className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 transition ${
+                                isDark
+                                  ? 'hover:bg-slate-800'
+                                  : 'hover:bg-slate-100'
+                              }`}
+                            >
+                              <Settings className="w-4 h-4 text-indigo-600" />
+                              <span>
+                                {webLanguage === 'en'
+                                  ? 'System Settings & Security'
+                                  : webLanguage === 'ja'
+                                  ? 'システム設定・セキュリティ'
+                                  : 'Cài đặt Nhạc Lofi, Bảo mật & Ngôn ngữ'}
+                              </span>
+                            </button>
 
-                          <button
-                            type="button"
-                            onClick={handleLogout}
-                            className="w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-rose-600 hover:bg-rose-500/10 font-bold transition"
-                          >
-                            <LogOut className="w-4 h-4" />
-                            <span>
-                              {webLanguage === 'en'
-                                ? 'Sign Out'
-                                : webLanguage === 'ja'
-                                ? 'ログアウト'
-                                : 'Đăng xuất tài khoản'}
-                            </span>
-                          </button>
+                            <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                            <button
+                              type="button"
+                              onClick={handleLogout}
+                              className="w-full px-3 py-2.5 rounded-xl flex items-center gap-2.5 text-rose-600 hover:bg-rose-500/10 font-bold transition"
+                            >
+                              <LogOut className="w-4 h-4" />
+                              <span>
+                                {webLanguage === 'en'
+                                  ? 'Sign Out'
+                                  : webLanguage === 'ja'
+                                  ? 'ログアウト'
+                                  : 'Đăng xuất tài khoản'}
+                              </span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Thanh chuyển trang nhanh trượt ngang trên Điện thoại & iPad (< lg) */}
+                  <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                    {sidebarItems.map((item) => {
+                      const IconComp = item.icon;
+                      const isActive = activePage === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setActivePage(item.id);
+                            playUiSoundEffect('CLICK');
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1.5 whitespace-nowrap shrink-0 transition ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : isDark
+                              ? 'bg-slate-800/80 text-slate-300'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          <IconComp className="w-3.5 h-3.5" />
+                          <span>{item.shortLabel}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </header>
 
-                <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 space-y-6">
+                <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 space-y-6">
                   {activePage === 'OVERVIEW' && (
                     <>
                       <DashboardMainPages
@@ -2956,14 +3533,18 @@ const MainWorkspaceRoutes: React.FC = () => {
                         bookingsList={bookingsList}
                         selectedNode={selectedNode}
                         userRole={userSession.userProfile.role}
-                        userDepartment={userSession.userProfile.departmentName}
+                        userDepartment={
+                          userSession.userProfile.departmentName
+                        }
                         webLanguage={webLanguage}
                         isDark={isDark}
                         onSelectNode={(n) => {
                           setSelectedNode(n);
                           playUiSoundEffect('CLICK');
                         }}
-                        onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
+                        onNavigateToBookingWithSlot={
+                          handleNavigateToBookingWithSlot
+                        }
                         onUpdateNodeCoords={handleUpdateNodeCoords}
                         onUpdateNodeStatus={handleUpdateNodeStatus}
                         onCreateNewNode={handleCreateNewNode}
@@ -2984,7 +3565,9 @@ const MainWorkspaceRoutes: React.FC = () => {
                         setSelectedNode(n);
                         playUiSoundEffect('CLICK');
                       }}
-                      onNavigateToBookingWithSlot={handleNavigateToBookingWithSlot}
+                      onNavigateToBookingWithSlot={
+                        handleNavigateToBookingWithSlot
+                      }
                       onUpdateNodeCoords={handleUpdateNodeCoords}
                       onUpdateNodeStatus={handleUpdateNodeStatus}
                       onCreateNewNode={handleCreateNewNode}
@@ -3010,11 +3593,19 @@ const MainWorkspaceRoutes: React.FC = () => {
                         timeWin?: BookingTimeWindowInput
                       ) => {
                         const matchedNode =
-                          workspaceNodes.find((n) => n.nodeCode === targetCode) ||
+                          workspaceNodes.find(
+                            (n) => n.nodeCode === targetCode
+                          ) ||
                           selectedNode ||
                           workspaceNodes[0];
                         if (matchedNode) {
-                          handleQuickBooking(matchedNode, email, purpose, targetCode, timeWin);
+                          handleQuickBooking(
+                            matchedNode,
+                            email,
+                            purpose,
+                            targetCode,
+                            timeWin
+                          );
                         }
                       }}
                       onCheckInBooking={handleCheckInBooking}
@@ -3040,17 +3631,23 @@ const MainWorkspaceRoutes: React.FC = () => {
                       isDark={isDark}
                       onUpsertDepartment={handleUpsertDepartment}
                       onDeleteDepartment={handleDeleteDepartment}
-                      onAssignUserSingleDepartment={handleAssignUserSingleDepartment}
+                      onAssignUserSingleDepartment={
+                        handleAssignUserSingleDepartment
+                      }
                       onUpsertGroup={handleUpsertGroup}
                       onDeleteGroup={handleDeleteGroup}
                       onToggleGroupMember={handleToggleGroupMember}
                       onNavigateToHallBooking={() => {
-                        const hallNode = workspaceNodes.find((n) => n.nodeCode === 'H-01');
+                        const hallNode = workspaceNodes.find(
+                          (n) => n.nodeCode === 'H-01'
+                        );
                         if (hallNode) setSelectedNode(hallNode);
                         setActivePage('BOOKING');
                         playUiSoundEffect('CLICK');
                       }}
-                      onSubmitEquipmentFaultReport={handleSubmitEquipmentFaultReport}
+                      onSubmitEquipmentFaultReport={
+                        handleSubmitEquipmentFaultReport
+                      }
                     />
                   )}
 
@@ -3060,7 +3657,9 @@ const MainWorkspaceRoutes: React.FC = () => {
                       userRole={userSession.userProfile.role}
                       webLanguage={webLanguage}
                       isDark={isDark}
-                      onSelectAndNavigateNotification={handleSelectAndNavigateNotification}
+                      onSelectAndNavigateNotification={
+                        handleSelectAndNavigateNotification
+                      }
                       onHandleApprovalDecision={handleApprovalDecision}
                       onMarkAllRead={() =>
                         setNotificationsList((prev) =>
@@ -3069,7 +3668,12 @@ const MainWorkspaceRoutes: React.FC = () => {
                       }
                       onDeleteNotification={handleDeleteNotification}
                       onTriggerTestNotification={(title, content) =>
-                        pushRealtimeNotification(title, content, 'BOOKING_EVENT', 'NODE-M101')
+                        pushRealtimeNotification(
+                          title,
+                          content,
+                          'BOOKING_EVENT',
+                          'NODE-M101'
+                        )
                       }
                     />
                   )}
@@ -3087,9 +3691,15 @@ const MainWorkspaceRoutes: React.FC = () => {
                       webLanguage={webLanguage}
                       isDark={isDark}
                       onUpdateEquipmentStatus={handleUpdateEquipmentStatus}
-                      onHandleEquipmentFaultDecision={handleEquipmentFaultDecision}
-                      onTriggerAiAutoProcessFaults={handleTriggerAiAutoProcessFaults}
-                      onTriggerMonthlyTrustBonus={handleTriggerMonthlyTrustBonus}
+                      onHandleEquipmentFaultDecision={
+                        handleEquipmentFaultDecision
+                      }
+                      onTriggerAiAutoProcessFaults={
+                        handleTriggerAiAutoProcessFaults
+                      }
+                      onTriggerMonthlyTrustBonus={
+                        handleTriggerMonthlyTrustBonus
+                      }
                     />
                   )}
 
@@ -3128,8 +3738,11 @@ const MainWorkspaceRoutes: React.FC = () => {
                       }}
                       userBookings={bookingsList}
                       isDark={isDark}
+                      webLanguage={webLanguage}
                       isSyncingMongo={isSyncingMongo}
-                      onSaveProfileCustomization={handleSaveProfileCustomization}
+                      onSaveProfileCustomization={
+                        handleSaveProfileCustomization
+                      }
                     />
                   )}
 
@@ -3163,13 +3776,22 @@ const MainWorkspaceRoutes: React.FC = () => {
                       lofiVolume={audioSettings.lofiVolume}
                       lofiTrackStyle={audioSettings.lofiTrackStyle}
                       onToggleLofi={(nextVal) =>
-                        persistAudioSettings({ ...audioSettings, lofiEnabled: nextVal })
+                        persistAudioSettings({
+                          ...audioSettings,
+                          lofiEnabled: nextVal,
+                        })
                       }
                       onToggleSfx={(nextVal) =>
-                        persistAudioSettings({ ...audioSettings, sfxEnabled: nextVal })
+                        persistAudioSettings({
+                          ...audioSettings,
+                          sfxEnabled: nextVal,
+                        })
                       }
                       onChangeLofiVolume={(nextVol) =>
-                        persistAudioSettings({ ...audioSettings, lofiVolume: nextVol })
+                        persistAudioSettings({
+                          ...audioSettings,
+                          lofiVolume: nextVol,
+                        })
                       }
                       onChangeLofiTrackStyle={(nextStyle) =>
                         persistAudioSettings({
@@ -3178,7 +3800,9 @@ const MainWorkspaceRoutes: React.FC = () => {
                           lofiEnabled: true,
                         })
                       }
-                      onPlayPreviewSfx={(type) => playUiSoundEffect(type, true)}
+                      onPlayPreviewSfx={(type) =>
+                        playUiSoundEffect(type, true)
+                      }
                     />
                   )}
                 </main>
@@ -3187,10 +3811,13 @@ const MainWorkspaceRoutes: React.FC = () => {
               <RealtimePopupToast
                 activePopup={activePopupNotification}
                 isDark={isDark}
+                webLanguage={webLanguage}
                 onDismissPopup={() => setActivePopupNotification(null)}
                 onOpenNotificationPage={() => {
                   if (activePopupNotification) {
-                    handleSelectAndNavigateNotification(activePopupNotification);
+                    handleSelectAndNavigateNotification(
+                      activePopupNotification
+                    );
                   } else {
                     setActivePage('NOTIFICATION');
                   }
@@ -3209,6 +3836,16 @@ const MainWorkspaceRoutes: React.FC = () => {
                 userProfile={userSession.userProfile}
                 webLanguage={webLanguage}
                 isDark={isDark}
+                onAiSyncBookingDraft={(node, slot) => {
+                  setSelectedNode(node);
+                  setPreselectedSlot({
+                    dateIso: slot.dateIso,
+                    start: slot.start,
+                    end: slot.end,
+                    purposeNote: slot.purposeNote,
+                    approvalRequestReason: slot.approvalRequestReason,
+                  });
+                }}
                 onAiNavigateAndPrefillBooking={(node, slot) => {
                   handleNavigateToBookingWithSlot(node, {
                     dateIso: slot.dateIso,
@@ -3238,7 +3875,9 @@ const MainWorkspaceRoutes: React.FC = () => {
                 onAiUpsertGroup={handleUpsertGroup}
                 onAiToggleGroupMember={handleToggleGroupMember}
                 onAiRenameDepartment={handleAiRenameDepartment}
-                onAiBatchUpdateEquipmentStatus={handleAiBatchUpdateEquipmentStatus}
+                onAiBatchUpdateEquipmentStatus={
+                  handleAiBatchUpdateEquipmentStatus
+                }
               />
             </div>
           )
@@ -3247,7 +3886,9 @@ const MainWorkspaceRoutes: React.FC = () => {
 
       <Route
         path="*"
-        element={<Navigate to={userSession ? '/dashboard' : '/welcome'} replace />}
+        element={
+          <Navigate to={userSession ? '/dashboard' : '/welcome'} replace />
+        }
       />
     </Routes>
   );

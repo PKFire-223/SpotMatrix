@@ -1,10 +1,14 @@
 import React from 'react';
 import { Bell, X } from 'lucide-react';
-import { NotificationRecordItem } from '../../../../Shared/Types/GlobalSystemTypes';
+import {
+  NotificationRecordItem,
+  WebLanguageCodeType,
+} from '../../../../Shared/Types/GlobalSystemTypes';
 
 interface RealtimePopupToastProps {
   activePopup: NotificationRecordItem | null;
   isDark: boolean;
+  webLanguage?: WebLanguageCodeType;
   onDismissPopup: () => void;
   onOpenNotificationPage: () => void;
 }
@@ -12,14 +16,29 @@ interface RealtimePopupToastProps {
 export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
   activePopup,
   isDark,
+  webLanguage = 'vi',
   onDismissPopup,
   onOpenNotificationPage,
 }) => {
   if (!activePopup) return null;
 
+  const badgeLabel =
+    webLanguage === 'en'
+      ? 'System Notification • Just now'
+      : webLanguage === 'ja'
+      ? 'システム通知 • たった今'
+      : 'Thông báo Hệ thống • Vừa xong';
+
+  const openCenterLabel =
+    webLanguage === 'en'
+      ? 'View in Notification Center'
+      : webLanguage === 'ja'
+      ? '通知センターで確認する'
+      : 'Xem trong Trung tâm Thông báo';
+
   return (
     <div
-      className={`fixed top-16 right-6 z-50 w-80 sm:w-96 rounded-2xl border p-4 shadow-xl transition-all duration-300 ${
+      className={`fixed top-16 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] sm:w-96 max-w-md rounded-2xl border p-4 shadow-xl transition-all duration-300 ${
         isDark
           ? 'bg-slate-900/95 border-slate-700/80 text-slate-100 shadow-black/50'
           : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-300/60'
@@ -39,7 +58,7 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              Thông báo Hệ thống • Vừa xong
+              {badgeLabel}
             </span>
             <button
               type="button"
@@ -50,7 +69,9 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
             </button>
           </div>
 
-          <p className="text-xs font-bold mt-1 truncate">{activePopup.titleText}</p>
+          <p className="text-xs font-bold mt-1 truncate">
+            {activePopup.titleText}
+          </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed line-clamp-2">
             {activePopup.contentText}
           </p>
@@ -64,7 +85,7 @@ export const RealtimePopupToast: React.FC<RealtimePopupToastProps> = ({
               }}
               className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              Xem trong Trung tâm Thông báo
+              {openCenterLabel}
             </button>
           </div>
         </div>

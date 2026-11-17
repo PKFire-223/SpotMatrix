@@ -9,6 +9,12 @@ import {
   handleGetTrustProfiles,
   handlePatchEquipmentStatus,
   handleSimulateConcurrencyLock,
+  handleCreateAuditLog,
+  handleGetFaultReports,
+  handleGetTrustHistory,
+  handlePatchFaultReport,
+  handlePostFaultReport,
+  handlePostTrustHistory,
   handleUpdatePolicyConfig,
 } from '../Controllers/DatamanagerController';
 
@@ -37,3 +43,9 @@ datamanagerRouter.post(
   '/audit-logs/simulate-conflict',
   handleSimulateConcurrencyLock
 );
+datamanagerRouter.post('/audit-logs', handleCreateAuditLog);
+datamanagerRouter.get('/fault-reports', handleGetFaultReports);
+datamanagerRouter.post('/fault-reports', handlePostFaultReport);
+datamanagerRouter.patch('/fault-reports/:reportId', handlePatchFaultReport);
+datamanagerRouter.get('/trust-history', handleGetTrustHistory);
+datamanagerRouter.post('/trust-history', handlePostTrustHistory);

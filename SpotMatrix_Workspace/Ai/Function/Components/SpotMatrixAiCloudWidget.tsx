@@ -19,6 +19,9 @@ import {
   CalendarCheck,
   ArrowRight,
   Users,
+  Minus,
+  EyeOff,
+  ChevronLeft,
 } from 'lucide-react';
 import {
   AuditConcurrencyLogItem,
@@ -36,12 +39,14 @@ import {
 
 export interface AiBookingSlotSuggestion {
   dateIso: string;
+  weekdayLabel: string;
   start: string;
   end: string;
   capacityNeeded: number;
   floorFilter?: number | null;
   purposeNote: string;
   approvalRequestReason: string;
+  timeAdjustedNote?: string | null;
   candidateRooms: WorkspaceNodeItem[];
 }
 
@@ -70,6 +75,16 @@ export interface SpotMatrixAiCloudWidgetProps {
   };
   webLanguage: WebLanguageCodeType;
   isDark: boolean;
+  onAiSyncBookingDraft?: (
+    node: WorkspaceNodeItem,
+    slot: {
+      dateIso: string;
+      start: string;
+      end: string;
+      purposeNote: string;
+      approvalRequestReason: string;
+    }
+  ) => void;
   onAiNavigateAndPrefillBooking?: (
     node: WorkspaceNodeItem,
     slot: {
@@ -120,6 +135,199 @@ interface AiChatMessageItem {
   attachments?: AttachedFilePayload[];
   bookingSuggestion?: AiBookingSlotSuggestion;
   groupDraftAction?: AiGroupDraftAction;
+}
+
+const AI_WIDGET_I18N: Record<
+  WebLanguageCodeType,
+  {
+    openAiLabel: string;
+    snoozeAiTooltip: string;
+    restoreAiLabel: string;
+    hoverTitle: string;
+    hoverSub: string;
+    minimizeChatBtn: string;
+    minimizeChatTooltip: string;
+    expandTooltip: string;
+    resetTooltip: string;
+    closeTooltip: string;
+    stageThinking: string;
+    stageSpeaking: string;
+    stageReady: string;
+    statFreeRooms: (free: number, total: number) => string;
+    statMyBookings: (count: number) => string;
+    statTrustScore: (score: number) => string;
+    readAloudTooltip: string;
+    chooseRoomHeader: (dateIso: string, weekday: string, start: string, end: string) => string;
+    roomCapFloor: (cap: number, fl: number) => string;
+    goToBookingPrefillBtn: string;
+    bookedSuccessBtn: string;
+    requestRoomNowBtn: (code: string) => string;
+    confirmRoomNowBtn: (code: string) => string;
+    groupFormHeader: (dept: string) => string;
+    groupCodeLabel: string;
+    groupTagLabel: string;
+    groupNameLabel: string;
+    groupLeaderLabel: string;
+    groupDescLabel: string;
+    groupCreatedBtn: string;
+    groupConfirmBtn: string;
+    attachImgTooltip: string;
+    attachFileTooltip: string;
+    inputPlaceholder: string;
+    sendTooltip: string;
+  }
+> = {
+  vi: {
+    openAiLabel: 'Mở Trợ lý AI AURA-X',
+    snoozeAiTooltip: 'Tạm ẩn biểu tượng AI sang mép màn hình',
+    restoreAiLabel: 'Mở lại AI',
+    hoverTitle: 'AURA-X • Trợ lý AI 3D',
+    hoverSub: 'Đặt phòng tự động • Gửi Ảnh/File & Hỏi đáp',
+    minimizeChatBtn: 'Tạm tắt',
+    minimizeChatTooltip: 'Tạm tắt / Thu gọn cửa sổ chat AI bên cạnh (Giữ nguyên nội dung chat)',
+    expandTooltip: 'Mở rộng / Thu gọn chiều ngang khung chat',
+    resetTooltip: 'Làm mới cuộc trò chuyện',
+    closeTooltip: 'Tạm tắt cửa sổ AI',
+    stageThinking: '⚡ Đang suy luận...',
+    stageSpeaking: '🔊 Đang phát giọng nói',
+    stageReady: '✨ Sẵn sàng hỗ trợ 24/7',
+    statFreeRooms: (free, total) => `Trống: ${free}/${total} phòng`,
+    statMyBookings: (count) => `Lịch của bạn: ${count} vé`,
+    statTrustScore: (score) => `Tín nhiệm: ${score}/100đ`,
+    readAloudTooltip: 'Đọc to câu trả lời này',
+    chooseRoomHeader: (dateIso, weekday, start, end) =>
+      `Chọn phòng bên dưới (${weekday}, ${dateIso} • ${start} – ${end}):`,
+    roomCapFloor: (cap, fl) => `${cap} chỗ • Tầng ${fl}`,
+    goToBookingPrefillBtn: 'Đi đến Trang Đặt phòng (Đã điền sẵn)',
+    bookedSuccessBtn: 'Đã Tạo Đơn Thành Công!',
+    requestRoomNowBtn: (code) => `Gửi Xin Phép ${code} Ngay`,
+    confirmRoomNowBtn: (code) => `Xác nhận Đặt ${code} Ngay`,
+    groupFormHeader: (dept) => `Điền thông tin tạo nhóm (${dept})`,
+    groupCodeLabel: 'Mã nhóm (Code)',
+    groupTagLabel: 'Nhãn dự án (Tag)',
+    groupNameLabel: 'Tên nhóm chuyên môn',
+    groupLeaderLabel: 'Chọn Trưởng nhóm phụ trách',
+    groupDescLabel: 'Mô tả nhiệm vụ nhóm',
+    groupCreatedBtn: 'Đã Tạo Nhóm Thành Công!',
+    groupConfirmBtn: 'Xác nhận Tạo Nhóm Ngay',
+    attachImgTooltip: 'Đính kèm Hình ảnh',
+    attachFileTooltip: 'Đính kèm Tệp tin',
+    inputPlaceholder: 'Ra lệnh đặt phòng (VD: đặt thứ 3 lúc 0h30), tạo nhóm hoặc hỏi đáp...',
+    sendTooltip: 'Gửi tin nhắn',
+  },
+  en: {
+    openAiLabel: 'Open AURA-X AI Assistant',
+    snoozeAiTooltip: 'Temporarily hide AI button to screen edge',
+    restoreAiLabel: 'Show AI',
+    hoverTitle: 'AURA-X • 3D AI Agent',
+    hoverSub: 'Auto Room Booking • Image/File Analysis & Q&A',
+    minimizeChatBtn: 'Minimize',
+    minimizeChatTooltip: 'Temporarily close / minimize AI chat drawer (Preserves chat history)',
+    expandTooltip: 'Expand / Collapse chat width',
+    resetTooltip: 'Reset conversation',
+    closeTooltip: 'Minimize AI window',
+    stageThinking: '⚡ Reasoning...',
+    stageSpeaking: '🔊 Speaking...',
+    stageReady: '✨ Ready 24/7',
+    statFreeRooms: (free, total) => `Free: ${free}/${total} rooms`,
+    statMyBookings: (count) => `My Tickets: ${count}`,
+    statTrustScore: (score) => `Trust: ${score}/100`,
+    readAloudTooltip: 'Read this response aloud',
+    chooseRoomHeader: (dateIso, weekday, start, end) =>
+      `Select a room below (${weekday}, ${dateIso} • ${start} – ${end}):`,
+    roomCapFloor: (cap, fl) => `${cap} seats • Floor ${fl}`,
+    goToBookingPrefillBtn: 'Open Booking Page (Pre-filled)',
+    bookedSuccessBtn: 'Booking Created Successfully!',
+    requestRoomNowBtn: (code) => `Submit Request for ${code}`,
+    confirmRoomNowBtn: (code) => `Book ${code} Immediately`,
+    groupFormHeader: (dept) => `Create New Squad (${dept})`,
+    groupCodeLabel: 'Squad Code',
+    groupTagLabel: 'Project Tag',
+    groupNameLabel: 'Squad Name',
+    groupLeaderLabel: 'Select Squad Leader',
+    groupDescLabel: 'Squad Mission / Description',
+    groupCreatedBtn: 'Squad Created Successfully!',
+    groupConfirmBtn: 'Confirm Create Squad',
+    attachImgTooltip: 'Attach Image',
+    attachFileTooltip: 'Attach File',
+    inputPlaceholder: 'Ask AI to book a room (e.g. book Tuesday), manage groups, or Q&A...',
+    sendTooltip: 'Send message',
+  },
+  ja: {
+    openAiLabel: 'AURA-X AIアシスタントを開く',
+    snoozeAiTooltip: 'AIアイコンを画面端へ一時非表示にする',
+    restoreAiLabel: 'AI表示',
+    hoverTitle: 'AURA-X • 3D AIエージェント',
+    hoverSub: '会議室自動予約・画像/ファイル解析＆質問応答',
+    minimizeChatBtn: '一時非表示',
+    minimizeChatTooltip: 'AIチャット画面を一時閉じる（会話履歴は保持されます）',
+    expandTooltip: 'チャット幅を拡大 / 縮小',
+    resetTooltip: '会話をリセット',
+    closeTooltip: 'AIチャットを一時閉じる',
+    stageThinking: '⚡ 推論中...',
+    stageSpeaking: '🔊 音声読み上げ中',
+    stageReady: '✨ 24時間稼働中',
+    statFreeRooms: (free, total) => `空室: ${free}/${total}室`,
+    statMyBookings: (count) => `自分の予約: ${count}件`,
+    statTrustScore: (score) => `信頼スコア: ${score}/100`,
+    readAloudTooltip: 'この回答を音声で読み上げる',
+    chooseRoomHeader: (dateIso, weekday, start, end) =>
+      `以下の会議室を選択 (${weekday}・${dateIso} • ${start} – ${end}):`,
+    roomCapFloor: (cap, fl) => `${cap}席 • ${fl}階`,
+    goToBookingPrefillBtn: '予約画面へ移動（自動入力済）',
+    bookedSuccessBtn: '予約を作成しました！',
+    requestRoomNowBtn: (code) => `${code} の承認申請を送信`,
+    confirmRoomNowBtn: (code) => `${code} を即時予約`,
+    groupFormHeader: (dept) => `新規グループ作成 (${dept})`,
+    groupCodeLabel: 'グループコード',
+    groupTagLabel: 'プロジェクトタグ',
+    groupNameLabel: '専門グループ名',
+    groupLeaderLabel: 'グループリーダー選択',
+    groupDescLabel: '業務内容・説明',
+    groupCreatedBtn: 'グループを作成しました！',
+    groupConfirmBtn: 'グループ作成を確定',
+    attachImgTooltip: '画像を添付',
+    attachFileTooltip: 'ファイルを添付',
+    inputPlaceholder: '会議室の自動予約（例：火曜日に4人で予約）、グループ作成、質問を入力...',
+    sendTooltip: '送信',
+  },
+};
+
+function getWeekdayNameByLocale(
+  dateObj: Date,
+  lang: WebLanguageCodeType
+): string {
+  const dow = dateObj.getDay();
+  const viNames = [
+    'Chủ Nhật',
+    'Thứ Hai',
+    'Thứ Ba',
+    'Thứ Tư',
+    'Thứ Năm',
+    'Thứ Sáu',
+    'Thứ Bảy',
+  ];
+  const enNames = [
+    'Sunday',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+  ];
+  const jaNames = [
+    '日曜日',
+    '月曜日',
+    '火曜日',
+    '水曜日',
+    '木曜日',
+    '金曜日',
+    '土曜日',
+  ];
+  if (lang === 'en') return enNames[dow];
+  if (lang === 'ja') return jaNames[dow];
+  return viNames[dow];
 }
 
 /**
@@ -173,21 +381,15 @@ function buildMascotStudioEnvironment(
   return target.texture;
 }
 
-/**
- * LINH VẬT AI 3D ĐỘC QUYỀN "AURA-X CYBER GUARDIAN"
- * Dựng bằng Three.js PBR siêu bóng nét:
- * - Đầu Robot Bo tròn Titanium Trắng Sứ + Kính Visor Khúc xạ Đen Bóng + Đôi Mắt LED Cyan biểu cảm
- * - Lõi Năng lượng Kim cương Đa diện xoay bên trong lồng ngực Kính Quang học
- * - Vương miện Ăng-ten Hologram + Tai nghe Cyber-Audio phát sáng
- * - 3 Vòng Gyroscope Vàng/Cyan/Indigo đồng tâm + 6 Tinh thể Vệ tinh + Đế Năng lượng Lơ lửng
- */
 const SpotMatrixMascot3DStage: React.FC<{
   isDark: boolean;
   aiMood: 'IDLE' | 'THINKING' | 'SPEAKING';
-}> = ({ isDark, aiMood }) => {
+  webLanguage: WebLanguageCodeType;
+}> = ({ isDark, aiMood, webLanguage }) => {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const moodRef = useRef<'IDLE' | 'THINKING' | 'SPEAKING'>(aiMood);
   const isDarkRef = useRef<boolean>(isDark);
+  const ui = AI_WIDGET_I18N[webLanguage] || AI_WIDGET_I18N.vi;
 
   useEffect(() => {
     moodRef.current = aiMood;
@@ -201,8 +403,8 @@ const SpotMatrixMascot3DStage: React.FC<{
     const container = stageRef.current;
     if (!container) return;
 
-    const width = container.clientWidth || 380;
-    const height = 215;
+    const width = container.clientWidth || 360;
+    const height = 195;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
@@ -214,11 +416,10 @@ const SpotMatrixMascot3DStage: React.FC<{
       powerPreference: 'high-performance',
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // Giới hạn PixelRatio ở mức 1.5 để tiết kiệm GPU/RAM và không ăn tài nguyên máy
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.38;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -226,35 +427,28 @@ const SpotMatrixMascot3DStage: React.FC<{
     const envMap = buildMascotStudioEnvironment(renderer, isDarkRef.current);
     scene.environment = envMap;
 
-    // Hệ thống đèn Studio chiếu sáng tạo viền bóng Specular cực nét
     const ambient = new THREE.AmbientLight(0xffffff, 1.15);
     scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
     keyLight.position.set(5, 8, 7);
-    keyLight.castShadow = true;
     scene.add(keyLight);
 
-    const cyanRim = new THREE.PointLight(0x38bdf8, 5.5, 16);
+    const cyanRim = new THREE.PointLight(0x38bdf8, 5.0, 16);
     cyanRim.position.set(-4, 3, 3);
     scene.add(cyanRim);
 
-    const indigoRim = new THREE.PointLight(0x818cf8, 5.0, 16);
+    const indigoRim = new THREE.PointLight(0x818cf8, 4.5, 16);
     indigoRim.position.set(4, 2, -3);
     scene.add(indigoRim);
 
-    const emeraldBottom = new THREE.PointLight(0x10b981, 4.2, 12);
-    emeraldBottom.position.set(0, -3, 2);
-    scene.add(emeraldBottom);
-
-    // Vật liệu PBR cao cấp
     const ceramicTitaniumMat = new THREE.MeshPhysicalMaterial({
       color: isDarkRef.current ? 0xe2e8f0 : 0xffffff,
       roughness: 0.08,
       metalness: 0.35,
       clearcoat: 1.0,
       clearcoatRoughness: 0.04,
-      envMapIntensity: 2.6,
+      envMapIntensity: 2.4,
     });
 
     const goldChromeMat = new THREE.MeshPhysicalMaterial({
@@ -264,7 +458,7 @@ const SpotMatrixMascot3DStage: React.FC<{
       roughness: 0.1,
       metalness: 0.95,
       clearcoat: 1.0,
-      envMapIntensity: 2.8,
+      envMapIntensity: 2.6,
     });
 
     const darkVisorGlassMat = new THREE.MeshPhysicalMaterial({
@@ -274,18 +468,18 @@ const SpotMatrixMascot3DStage: React.FC<{
       clearcoat: 1.0,
       clearcoatRoughness: 0.02,
       reflectivity: 1.0,
-      envMapIntensity: 3.0,
+      envMapIntensity: 2.8,
     });
 
     const refractiveCrystalShellMat = new THREE.MeshPhysicalMaterial({
       color: 0xbae6fd,
       roughness: 0.03,
       metalness: 0.1,
-      transmission: 0.9,
+      transmission: 0.88,
       ior: 1.52,
-      thickness: 1.2,
+      thickness: 1.1,
       clearcoat: 1.0,
-      envMapIntensity: 2.8,
+      envMapIntensity: 2.5,
       transparent: true,
       opacity: 0.88,
     });
@@ -300,53 +494,49 @@ const SpotMatrixMascot3DStage: React.FC<{
     const mascotRoot = new THREE.Group();
     scene.add(mascotRoot);
 
-    // 1. PHẦN ĐẦU ROBOT AI (HEAD GROUP + VISOR + ĐÔI MẮT LED + TAI NGHE + VƯƠNG MIỆN)
     const headGroup = new THREE.Group();
     headGroup.position.set(0, 0.78, 0);
     mascotRoot.add(headGroup);
 
     const headHelmetMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.76, 48, 48),
+      new THREE.SphereGeometry(0.76, 32, 32),
       ceramicTitaniumMat
     );
     headHelmetMesh.scale.set(1.12, 0.94, 0.98);
     headGroup.add(headHelmetMesh);
 
-    // Mặt kính Visor cong bóng gương phía trước
     const visorMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(0.71, 40, 40),
+      new THREE.SphereGeometry(0.71, 28, 28),
       darkVisorGlassMat
     );
     visorMesh.scale.set(1.06, 0.68, 0.88);
     visorMesh.position.set(0, 0.02, 0.18);
     headGroup.add(visorMesh);
 
-    // Viền vàng kim loại quanh Visor
     const visorHaloRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.66, 0.028, 16, 64),
+      new THREE.TorusGeometry(0.66, 0.028, 12, 48),
       goldChromeMat
     );
     visorHaloRing.scale.set(1.08, 0.72, 1);
     visorHaloRing.position.set(0, 0.02, 0.42);
     headGroup.add(visorHaloRing);
 
-    // Đôi mắt LED Biểu cảm (Trái & Phải) + Thanh Sóng Giọng nói ở giữa
     const leftEyeMesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.085, 0.11, 12, 24),
+      new THREE.CapsuleGeometry(0.085, 0.11, 8, 16),
       neonEyeMat
     );
     leftEyeMesh.position.set(-0.26, 0.06, 0.78);
     headGroup.add(leftEyeMesh);
 
     const rightEyeMesh = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.085, 0.11, 12, 24),
+      new THREE.CapsuleGeometry(0.085, 0.11, 8, 16),
       neonEyeMat
     );
     rightEyeMesh.position.set(0.26, 0.06, 0.78);
     headGroup.add(rightEyeMesh);
 
     const mouthVoiceBar = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.032, 0.22, 8, 16),
+      new THREE.CapsuleGeometry(0.032, 0.22, 6, 12),
       new THREE.MeshStandardMaterial({
         color: 0x34d399,
         emissive: 0x10b981,
@@ -357,28 +547,18 @@ const SpotMatrixMascot3DStage: React.FC<{
     mouthVoiceBar.position.set(0, -0.14, 0.77);
     headGroup.add(mouthVoiceBar);
 
-    // 2 Cụm Tai nghe Cyber-Audio 2 bên thái dương
     [-0.86, 0.86].forEach((earX) => {
       const earCup = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.24, 0.24, 0.16, 32),
+        new THREE.CylinderGeometry(0.24, 0.24, 0.16, 24),
         goldChromeMat
       );
       earCup.rotation.z = Math.PI / 2;
       earCup.position.set(earX, 0.02, 0);
       headGroup.add(earCup);
-
-      const earGlowRing = new THREE.Mesh(
-        new THREE.TorusGeometry(0.18, 0.025, 16, 32),
-        neonEyeMat
-      );
-      earGlowRing.rotation.y = Math.PI / 2;
-      earGlowRing.position.set(earX + (earX > 0 ? 0.09 : -0.09), 0.02, 0);
-      headGroup.add(earGlowRing);
     });
 
-    // Ăng-ten Vương miện Tinh thể trên đỉnh đầu
     const antennaStem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.03, 0.05, 0.36, 16),
+      new THREE.CylinderGeometry(0.03, 0.05, 0.36, 12),
       goldChromeMat
     );
     antennaStem.position.set(0, 0.84, 0);
@@ -398,29 +578,25 @@ const SpotMatrixMascot3DStage: React.FC<{
     crownStar.position.set(0, 1.1, 0);
     headGroup.add(crownStar);
 
-    // 2. PHẦN THÂN & LÕI TIM KIM CƯƠNG KHÚC XẠ (CRYSTAL CHEST REACTOR & FLOATING HANDS)
     const bodyGroup = new THREE.Group();
     bodyGroup.position.set(0, -0.35, 0);
     mascotRoot.add(bodyGroup);
 
-    // Vỏ ngực bằng Kính Quang học trong suốt nhìn xuyên vào Lõi Kim cương
     const chestGlassShell = new THREE.Mesh(
-      new THREE.SphereGeometry(0.62, 40, 40),
+      new THREE.SphereGeometry(0.62, 28, 28),
       refractiveCrystalShellMat
     );
     chestGlassShell.scale.set(1.05, 0.88, 0.85);
     bodyGroup.add(chestGlassShell);
 
-    // Giáp vai Titanium & Viền Vàng Chrome
     const shoulderArmor = new THREE.Mesh(
-      new THREE.TorusGeometry(0.58, 0.09, 20, 64),
+      new THREE.TorusGeometry(0.58, 0.09, 14, 48),
       ceramicTitaniumMat
     );
     shoulderArmor.rotation.x = Math.PI / 2;
     shoulderArmor.position.y = 0.36;
     bodyGroup.add(shoulderArmor);
 
-    // Lõi Tim Kim cương Đa diện phát sáng bên trong lồng ngực
     const heartReactorCore = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.3, 0),
       new THREE.MeshStandardMaterial({
@@ -434,45 +610,15 @@ const SpotMatrixMascot3DStage: React.FC<{
     );
     bodyGroup.add(heartReactorCore);
 
-    // Đôi Bàn tay Bay Lơ lửng (Floating Cyber Hands) hai bên
-    const leftHandGroup = new THREE.Group();
-    leftHandGroup.position.set(-1.18, 0.05, 0.25);
-    const leftPalm = new THREE.Mesh(
-      new THREE.SphereGeometry(0.19, 24, 24),
-      ceramicTitaniumMat
-    );
-    const leftWristRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.22, 0.025, 16, 32),
-      goldChromeMat
-    );
-    leftHandGroup.add(leftPalm);
-    leftHandGroup.add(leftWristRing);
-    bodyGroup.add(leftHandGroup);
-
-    const rightHandGroup = new THREE.Group();
-    rightHandGroup.position.set(1.18, 0.05, 0.25);
-    const rightPalm = new THREE.Mesh(
-      new THREE.SphereGeometry(0.19, 24, 24),
-      ceramicTitaniumMat
-    );
-    const rightWristRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.22, 0.025, 16, 32),
-      goldChromeMat
-    );
-    rightHandGroup.add(rightPalm);
-    rightHandGroup.add(rightWristRing);
-    bodyGroup.add(rightHandGroup);
-
-    // 3. HỆ THỐNG 3 VÒNG QUỸ ĐẠO GYROSCOPE & 6 VỆ TINH TINH THỂ BAO QUANH AI
     const gyroRing1 = new THREE.Mesh(
-      new THREE.TorusGeometry(1.58, 0.024, 20, 96),
+      new THREE.TorusGeometry(1.58, 0.024, 14, 64),
       goldChromeMat
     );
     gyroRing1.rotation.x = Math.PI / 2.6;
     mascotRoot.add(gyroRing1);
 
     const gyroRing2 = new THREE.Mesh(
-      new THREE.TorusGeometry(1.82, 0.02, 20, 96),
+      new THREE.TorusGeometry(1.82, 0.02, 14, 64),
       new THREE.MeshStandardMaterial({
         color: 0x38bdf8,
         emissive: 0x0284c7,
@@ -485,68 +631,6 @@ const SpotMatrixMascot3DStage: React.FC<{
     gyroRing2.rotation.y = Math.PI / 5;
     mascotRoot.add(gyroRing2);
 
-    const satelliteNodes: Array<{
-      mesh: THREE.Mesh;
-      radius: number;
-      speed: number;
-      phase: number;
-      yAmp: number;
-    }> = [];
-
-    for (let i = 0; i < 6; i++) {
-      const satColor =
-        i % 3 === 0 ? 0x38bdf8 : i % 3 === 1 ? 0x10b981 : 0xa855f7;
-      const satMesh = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.11, 0),
-        new THREE.MeshStandardMaterial({
-          color: satColor,
-          emissive: satColor,
-          emissiveIntensity: 1.1,
-          roughness: 0.1,
-          metalness: 0.85,
-          flatShading: true,
-        })
-      );
-      scene.add(satMesh);
-      satelliteNodes.push({
-        mesh: satMesh,
-        radius: 1.95 + (i % 2) * 0.25,
-        speed: (i % 2 === 0 ? 1 : -1) * (0.9 + i * 0.12),
-        phase: (i * Math.PI) / 3,
-        yAmp: 0.45 + (i % 3) * 0.18,
-      });
-    }
-
-    // 4. ĐẾ ĐÀI SEN HOLOGRAM PHÁT SÁNG DƯỚI CHÂN LINH VẬT
-    const holoPedestalGroup = new THREE.Group();
-    holoPedestalGroup.position.set(0, -1.32, 0);
-    scene.add(holoPedestalGroup);
-
-    const baseDisk = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.25, 1.45, 0.12, 48),
-      new THREE.MeshPhysicalMaterial({
-        color: 0x0f172a,
-        roughness: 0.12,
-        metalness: 0.85,
-        clearcoat: 1.0,
-      })
-    );
-    holoPedestalGroup.add(baseDisk);
-
-    const baseGlowRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.95, 1.22, 64),
-      new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.85,
-      })
-    );
-    baseGlowRing.rotation.x = -Math.PI / 2;
-    baseGlowRing.position.y = 0.07;
-    holoPedestalGroup.add(baseGlowRing);
-
-    // Tương tác rê chuột để mắt và đầu Linh vật AI nhìn theo con trỏ của người dùng
     let mouseTargetX = 0;
     let mouseTargetY = 0;
     const onPointerMove = (e: MouseEvent) => {
@@ -563,15 +647,12 @@ const SpotMatrixMascot3DStage: React.FC<{
       animId = requestAnimationFrame(animateMascot);
       const t = clock.getElapsedTime();
       const mood = moodRef.current;
-      const speedMult = mood === 'THINKING' ? 2.6 : mood === 'SPEAKING' ? 1.85 : 1.0;
+      const speedMult = mood === 'THINKING' ? 2.4 : mood === 'SPEAKING' ? 1.8 : 1.0;
 
-      // Hiệu ứng bay lơ lửng mượt mà
-      mascotRoot.position.y = Math.sin(t * 2.2) * 0.09;
-      mascotRoot.rotation.y += (mouseTargetX * 0.45 - mascotRoot.rotation.y) * 0.08;
-      headGroup.rotation.x += (mouseTargetY * 0.25 - headGroup.rotation.x) * 0.08;
-      headGroup.rotation.z = Math.sin(t * 1.5) * 0.04;
+      mascotRoot.position.y = Math.sin(t * 2.2) * 0.08;
+      mascotRoot.rotation.y += (mouseTargetX * 0.4 - mascotRoot.rotation.y) * 0.08;
+      headGroup.rotation.x += (mouseTargetY * 0.22 - headGroup.rotation.x) * 0.08;
 
-      // Nháy mắt tự nhiên & Biểu cảm theo trạng thái trả lời
       const blinkCycle = Math.sin(t * 1.7) > 0.96 ? 0.12 : 1.0;
       leftEyeMesh.scale.y = blinkCycle;
       rightEyeMesh.scale.y = blinkCycle;
@@ -590,31 +671,11 @@ const SpotMatrixMascot3DStage: React.FC<{
         mouthVoiceBar.scale.x = 1.0 + Math.sin(t * 3) * 0.12;
       }
 
-      // Chuyển động đôi tay lơ lửng
-      leftHandGroup.position.y = 0.05 + Math.sin(t * 2.8) * 0.12;
-      rightHandGroup.position.y = 0.05 + Math.cos(t * 2.8) * 0.12;
-      leftWristRing.rotation.x = t * 2.0 * speedMult;
-      rightWristRing.rotation.y = t * 2.0 * speedMult;
-
-      // Xoay lõi tim kim cương và vương miện
       heartReactorCore.rotation.x = t * 1.8 * speedMult;
       heartReactorCore.rotation.y = t * 2.4 * speedMult;
       crownStar.rotation.y = t * 2.5 * speedMult;
-
-      // Xoay các vòng Gyroscope và 6 tinh thể vệ tinh
       gyroRing1.rotation.z = t * 0.85 * speedMult;
       gyroRing2.rotation.z = -t * 1.05 * speedMult;
-
-      satelliteNodes.forEach((sat) => {
-        const ang = t * sat.speed * speedMult + sat.phase;
-        sat.mesh.position.set(
-          Math.cos(ang) * sat.radius,
-          Math.sin(t * 2.2 + sat.phase) * sat.yAmp,
-          Math.sin(ang) * sat.radius
-        );
-        sat.mesh.rotation.x = t * 2.0;
-        sat.mesh.rotation.y = t * 2.6;
-      });
 
       renderer.render(scene, camera);
     };
@@ -630,32 +691,26 @@ const SpotMatrixMascot3DStage: React.FC<{
   }, []);
 
   return (
-    <div className="relative w-full h-[215px] overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-[#05091a] via-[#0c1631] to-[#081024] shadow-inner">
-      {/* Hào quang trang trí phía sau Linh vật 3D */}
-      <div className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 w-56 h-32 rounded-full bg-cyan-500/20 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-8 left-1/2 -translate-x-1/2 w-64 h-24 rounded-full bg-indigo-500/25 blur-2xl" />
-
+    <div className="relative w-full h-[185px] sm:h-[195px] overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-b from-[#05091a] via-[#0c1631] to-[#081024] shadow-inner">
       <div ref={stageRef} className="w-full h-full" />
 
-      {/* Nhãn thông tin Linh vật AI 3D nổi trên góc sân khấu */}
       <div className="pointer-events-none absolute top-2.5 left-3 right-3 flex items-center justify-between text-[10px] font-extrabold">
         <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-cyan-400/40 text-cyan-300 backdrop-blur-md flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          AURA-X 3D • SPOTMATRIX AI CORE
+          AURA-X 3D • AI AGENT
         </span>
         <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-indigo-400/40 text-indigo-300 backdrop-blur-md">
           {aiMood === 'THINKING'
-            ? '⚡ Đang suy luận...'
+            ? ui.stageThinking
             : aiMood === 'SPEAKING'
-            ? '🔊 Đang phát giọng nói'
-            : '✨ Sẵn sàng hỗ trợ 24/7'}
+            ? ui.stageSpeaking
+            : ui.stageReady}
         </span>
       </div>
     </div>
   );
 };
 
-// Bộ kết xuất Markdown sang JSX sắc nét (Xử lý ### tiêu đề, **in đậm**, `code` mà không hiện ký tự thô)
 function renderInlineMarkdownSegments(lineText: string): React.ReactNode[] {
   const parts = lineText.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return parts.map((part, idx) => {
@@ -717,7 +772,7 @@ function renderFormattedAiMarkdown(contentText: string, isUser: boolean): React.
           const cleanBullet = line.replace(/^\s*[-•*]\s+/, '');
           return (
             <div key={lIdx} className="flex items-start gap-1.5 pl-1">
-              <span className="text-cyan-500 font-black mt-0.5">•</span>
+              <span className="text-indigo-500 font-black mt-0.5">•</span>
               <div className="flex-1">{renderInlineMarkdownSegments(cleanBullet)}</div>
             </div>
           );
@@ -735,10 +790,10 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
   trustProfiles,
   departmentsList,
   groupsList,
-  auditLogs,
   userProfile,
   webLanguage,
   isDark,
+  onAiSyncBookingDraft,
   onAiNavigateAndPrefillBooking,
   onAiExecuteDirectBooking,
   onAiUpsertGroup,
@@ -747,6 +802,7 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
   onAiBatchUpdateEquipmentStatus,
 }) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [isWidgetSnoozed, setIsWidgetSnoozed] = useState<boolean>(false);
   const [isExpandedWidth, setIsExpandedWidth] = useState<boolean>(false);
   const [promptInput, setPromptInput] = useState<string>('');
   const [aiMood, setAiMood] = useState<'IDLE' | 'THINKING' | 'SPEAKING'>('IDLE');
@@ -755,7 +811,20 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     AttachedFilePayload[]
   >([]);
 
-  // State cho Form Tạo Nhóm Nhanh ngay trong Chat AI (khi Manager/Admin yêu cầu tạo nhóm mới)
+  const ui = AI_WIDGET_I18N[webLanguage] || AI_WIDGET_I18N.vi;
+
+  // Nhấn phím Escape để tạm tắt nhanh khung chat AI bên cạnh
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen]);
+
   const [inlineGrpCode, setInlineGrpCode] = useState<string>('SQUAD-NEW-01');
   const [inlineGrpName, setInlineGrpName] = useState<string>('');
   const [inlineGrpDesc, setInlineGrpDesc] = useState<string>(
@@ -850,18 +919,23 @@ export const SpotMatrixAiCloudWidget: React.FC<SpotMatrixAiCloudWidgetProps> = (
     if (webLanguage === 'en') {
       return `Hello **${userProfile.fullName}** (\`@${userProfile.username}\` • Role: **${userProfile.role}** • Dept: **${userProfile.departmentName}** • Trust Score: **${userProfile.trustScore}/100**).
 
-I am **AURA-X**, your role-aware AI Agent. You can ask me to **book a room** (e.g. *"Book a room for 4 people for 2 hours at 16:00 today on floor 3"*), **manage groups** (for Managers/Admins), or **execute system commands & analytics** (for Admins).`;
+I am **AURA-X**, your role-aware AI Agent:
+- **Smart Weekday & Nearest-Slot Room Booking**: Ask e.g. *"Book a room on Tuesday for 4 people"* or *"Book a room at 00:30 AM"* (automatically shifts to the nearest valid opening slot **07:00 AM**).
+- **Group Management (Manager/Admin)**: Create groups, rename groups, or add members.
+- **Admin Commands & Analytics**: Rename departments, batch-update equipment status, and compare monthly booking history.`;
     }
     if (webLanguage === 'ja') {
       return `こんにちは、**${userProfile.fullName}** さん（\`@${userProfile.username}\` • ロール: **${userProfile.role}** • 部署: **${userProfile.departmentName}** • 信頼スコア: **${userProfile.trustScore}/100**）。
 
-私は **SpotMatrix** の AI エージェント **AURA-X** です。ロール権限に応じて、**会議室の自動検索・予約作成**（例：「今日16時から2時間、3階で4人用の会議室を予約して」）、**グループ作成・メンバー追加**（マネージャー/Admin）、**全社統計・設備制御**（Admin）を直接実行できます。`;
+私は **SpotMatrix** の AI エージェント **AURA-X** です：
+- **曜日・最短有効枠の自動会議室予約**：「火曜日に4人で予約したい」や深夜0時30分の予約指示でも、自動的に該当曜日および最短の営業時間（**朝07:00〜**）に合わせて設定します。
+- **グループ管理（マネージャー/Admin）**・**全社設備/統計管理（Admin）**にも対応しています。`;
     }
     return `Xin chào **${userProfile.fullName}** (\`@${userProfile.username}\` • Vai trò: **${userProfile.role}** • Phòng ban: **${userProfile.departmentName}** • Điểm tín nhiệm: **${userProfile.trustScore}/100đ**).
 
 Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quyền tài khoản của bạn:
-- **Đặt phòng tự động**: Nhắn VD *"Tạo cho tôi phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"* (hoặc *"sau 2 tiếng nữa"*).
-- **Quản lý Nhóm (Manager/Admin)**: Nhắn VD *"Tạo 1 nhóm mới tên là..."* hoặc *"Thêm thành viên ... vào nhóm ..."*.
+- **Đặt phòng tự động theo Thứ / Ngày & Giờ gần nhất**: Nhắn VD *"Tôi muốn đặt thứ 3 cho 4 người"* hoặc đặt lúc *0h30 sáng* (hệ thống tự động chọn đúng ngày Thứ Ba và tự động tiến đến khung giờ hợp lệ gần nhất là **07:00 sáng**).
+- **Quản lý Nhóm (Manager/Admin)**: Nhắn *"Tạo 1 nhóm mới tên là..."* hoặc *"Thêm thành viên ... vào nhóm ..."*.
 - **Lệnh Đặc quyền & Truy quét (Admin)**: Đổi tên phòng ban, chuyển thiết bị tầng/phòng sang bảo trì/báo hỏng, thống kê điểm tín nhiệm TB và so sánh lịch sử đặt phòng theo tháng.`;
   }, [userProfile, webLanguage]);
 
@@ -944,75 +1018,272 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
     e.target.value = '';
   };
 
-  // Hàm phân tích yêu cầu đặt phòng thông minh (Số người, Tầng, Giờ "16h"/"4h chiều"/"sau 2 tiếng nữa", Ngày "hôm nay"/"tuần sau")
+  /**
+   * BỘ PHÂN TÍCH ĐẶT PHÒNG THÔNG MINH THEO THỨ / NGÀY & TỰ ĐỘNG TIẾN ĐẾN GIỜ HỢP LỆ GẦN NHẤT (07:00 – 23:00):
+   * - Nhận diện đầy đủ Thứ 2..Thứ 7, Chủ nhật (cả tuần này & tuần sau), ngày mai, ngày mốt, hoặc ngày DD/MM/YYYY.
+   * - Nhận diện cả câu ngắn như "tôi muốn đặt thứ 3", "mún đặt thứ 3 lúc 0h30 phút sáng".
+   * - Nếu đặt vào giờ ngoài khung hoạt động (VD: 00:30 sáng -> < 07:00), tự động tiến đến chọn 07:00 sáng!
+   */
   const parseSmartBookingIntent = (
     rawQuery: string
   ): AiBookingSlotSuggestion | null => {
     const q = rawQuery.toLowerCase();
-    const hasBookingIntent =
-      (q.includes('đặt') ||
-        q.includes('xin phép') ||
-        q.includes('tạo cho tôi phòng') ||
-        q.includes('tạo phòng') ||
-        q.includes('tìm phòng') ||
-        q.includes('gợi ý phòng') ||
-        q.includes('mượn phòng') ||
-        q.includes('book')) &&
-      (q.includes('phòng') || q.includes('người') || q.includes('chỗ') || q.includes('room'));
 
-    // Không bắt nhầm câu hỏi "lịch sử đặt phòng" hoặc "truy quét lượt mượn phòng"
+    const hasActionVerb =
+      q.includes('đặt') ||
+      q.includes('mún đặt') ||
+      q.includes('muốn đặt') ||
+      q.includes('xin phép') ||
+      q.includes('tạo cho tôi') ||
+      q.includes('tạo phòng') ||
+      q.includes('tìm phòng') ||
+      q.includes('gợi ý phòng') ||
+      q.includes('mượn') ||
+      q.includes('thuê') ||
+      q.includes('chọn phòng') ||
+      q.includes('set cho tôi') ||
+      q.includes('book') ||
+      q.includes('reserve') ||
+      q.includes('予約');
+
+    const hasTargetContext =
+      q.includes('phòng') ||
+      q.includes('người') ||
+      q.includes('chỗ') ||
+      q.includes('tầng') ||
+      q.includes('thứ') ||
+      q.includes('chủ nhật') ||
+      q.includes('mai') ||
+      q.includes('mốt') ||
+      q.includes('tuần') ||
+      q.includes('hôm nay') ||
+      q.includes('sáng') ||
+      q.includes('chiều') ||
+      q.includes('tối') ||
+      q.includes('tiếng') ||
+      q.includes('giờ') ||
+      /\d{1,2}\s*h/.test(q) ||
+      q.includes('room') ||
+      q.includes('monday') ||
+      q.includes('tuesday') ||
+      q.includes('wednesday') ||
+      q.includes('thursday') ||
+      q.includes('friday') ||
+      q.includes('saturday') ||
+      q.includes('sunday') ||
+      q.includes('曜');
+
     if (
-      !hasBookingIntent ||
+      !hasActionVerb ||
+      !hasTargetContext ||
       q.includes('lịch sử') ||
       q.includes('truy quét') ||
       q.includes('thống kê') ||
-      q.includes('so với tháng trước')
+      q.includes('so với tháng trước') ||
+      q.includes('hủy đặt')
     ) {
       return null;
     }
 
     // 1. Bóc tách số người (VD: "4 người", "tầm 6 người", "8 chỗ")
-    const capMatch = q.match(/(\d+)\s*(?:người|nguoi|chỗ|cho|people|person|seats)/i);
+    const capMatch = q.match(
+      /(\d+)\s*(?:người|nguoi|chỗ|cho|ghế|ghe|people|person|seats|人)/i
+    );
     const capacityNeeded = capMatch ? Math.max(2, Number(capMatch[1])) : 4;
 
-    // 2. Bóc tách tầng (VD: "tầng 3", "floor 2")
-    const floorMatch = q.match(/(?:tầng|tang|floor)\s*([1-5])/i);
-    const floorFilter = floorMatch ? Number(floorMatch[1]) : null;
+    // 2. Bóc tách tầng (VD: "tầng 3", "floor 2", "3階")
+    const floorMatch = q.match(/(?:tầng|tang|floor)\s*([1-5])|([1-5])\s*階/i);
+    const floorFilter = floorMatch
+      ? Number(floorMatch[1] || floorMatch[2])
+      : null;
 
-    // 3. Bóc tách thời lượng họp (VD: "họp 2 tiếng", "3 giờ")
-    const durMatch = q.match(/(?:họp|hop|trong|khoảng)?\s*(\d+)\s*(?:tiếng|tieng|giờ|gio|hours|hour)(?!\s*nữa|\s*chiều|\s*sáng|\s*tối)/i);
+    // 3. Bóc tách thời lượng họp (VD: "họp 2 tiếng", "trong 3 giờ")
+    const durMatch = q.match(
+      /(?:họp|hop|trong|khoảng|kéo dài|for)\s*(\d+)\s*(?:tiếng|tieng|giờ|gio|hours|hour|時間)/i
+    );
     const durationHours = durMatch
       ? Math.max(1, Math.min(6, Number(durMatch[1])))
       : 2;
 
-    // 4. Bóc tách ngày ("hôm nay", "ngày mai", "tuần sau")
+    // 4. Bóc tách Ngày / Thứ chính xác theo ý người dùng
     const now = new Date();
-    const targetDate = new Date(now);
-    if (q.includes('tuần sau') || q.includes('next week')) {
-      targetDate.setDate(now.getDate() + 7);
-    } else if (q.includes('ngày mai') || q.includes('mai') || q.includes('tomorrow')) {
-      targetDate.setDate(now.getDate() + 1);
-    }
-    const dateIso = `${targetDate.getFullYear()}-${String(
-      targetDate.getMonth() + 1
-    ).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
-
-    // 5. Bóc tách giờ bắt đầu ("sau 2 tiếng nữa", "lúc 16h", "4h chiều", "9h sáng")
-    let startHour = 14;
-    const relativeMatch = q.match(/sau\s*(\d+)\s*(?:tiếng|tieng|giờ|gio)\s*(?:nữa|nua)?/i);
-    const explicitTimeMatch = q.match(
-      /(?:lúc|luc|vào|vao|at)?\s*(\d{1,2})(?:\s*:\s*(\d{2})|\s*h|\s*giờ|\s*gio)\s*(sáng|sang|chiều|chieu|tối|toi|pm|am)?/i
+    const targetDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
     );
+    let hasExplicitDateOrDay = false;
+
+    const isNextWeek =
+      q.includes('tuần sau') ||
+      q.includes('tuan sau') ||
+      q.includes('tuần tới') ||
+      q.includes('tuan toi') ||
+      q.includes('next week') ||
+      q.includes('来週');
+
+    // 4a. Kiểm tra ngày cụ thể DD/MM/YYYY hoặc DD/MM hoặc YYYY-MM-DD
+    const isoDateMatch = q.match(/\b(202\d)-(\d{1,2})-(\d{1,2})\b/);
+    const dmyDateMatch = q.match(
+      /(?:ngày|ngay)?\s*(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(202\d))?/i
+    );
+
+    // 4b. Kiểm tra Thứ trong tuần (Thứ 2 .. Thứ 7, Chủ Nhật, Monday..Sunday, 月曜..日曜)
+    const vnWeekdayMatch = q.match(
+      /(?:thứ|thu)\s*(2|hai|3|ba|4|tư|tu|bốn|bon|5|năm|nam|6|sáu|sau|7|bảy|bay)\b|\b(chủ\s*nhật|chu\s*nhat|cn)\b|\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|(月曜|火曜|水曜|木曜|金曜|土曜|日曜)/i
+    );
+
+    if (isoDateMatch) {
+      targetDate.setFullYear(
+        Number(isoDateMatch[1]),
+        Number(isoDateMatch[2]) - 1,
+        Number(isoDateMatch[3])
+      );
+      hasExplicitDateOrDay = true;
+    } else if (dmyDateMatch) {
+      const dayNum = Number(dmyDateMatch[1]);
+      const monthNum = Number(dmyDateMatch[2]);
+      const yearNum = dmyDateMatch[3]
+        ? Number(dmyDateMatch[3])
+        : now.getFullYear();
+      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+        targetDate.setFullYear(yearNum, monthNum - 1, dayNum);
+        hasExplicitDateOrDay = true;
+      }
+    } else if (vnWeekdayMatch) {
+      hasExplicitDateOrDay = true;
+      let targetDow = 1; // 0 = CN, 1 = Thứ 2, 2 = Thứ 3, ..., 6 = Thứ 7
+      if (vnWeekdayMatch[1]) {
+        const token = vnWeekdayMatch[1].toLowerCase();
+        if (token === '2' || token === 'hai') targetDow = 1;
+        else if (token === '3' || token === 'ba') targetDow = 2;
+        else if (
+          token === '4' ||
+          token === 'tư' ||
+          token === 'tu' ||
+          token === 'bốn' ||
+          token === 'bon'
+        )
+          targetDow = 3;
+        else if (token === '5' || token === 'năm' || token === 'nam')
+          targetDow = 4;
+        else if (token === '6' || token === 'sáu' || token === 'sau')
+          targetDow = 5;
+        else if (token === '7' || token === 'bảy' || token === 'bay')
+          targetDow = 6;
+      } else if (vnWeekdayMatch[2]) {
+        targetDow = 0; // Chủ nhật
+      } else if (vnWeekdayMatch[3]) {
+        const enMap: Record<string, number> = {
+          sunday: 0,
+          monday: 1,
+          tuesday: 2,
+          wednesday: 3,
+          thursday: 4,
+          friday: 5,
+          saturday: 6,
+        };
+        targetDow = enMap[vnWeekdayMatch[3].toLowerCase()] ?? 1;
+      } else if (vnWeekdayMatch[4]) {
+        const jaMap: Record<string, number> = {
+          日曜: 0,
+          月曜: 1,
+          火曜: 2,
+          水曜: 3,
+          木曜: 4,
+          金曜: 5,
+          土曜: 6,
+        };
+        targetDow = jaMap[vnWeekdayMatch[4]] ?? 1;
+      }
+
+      const currentDow = now.getDay();
+      if (isNextWeek) {
+        // Tính số ngày tới Thứ Hai của tuần kế tiếp, sau đó cộng độ lệch tới Thứ được chọn
+        const daysUntilNextMonday = ((1 - currentDow + 7) % 7) || 7;
+        const offsetFromMonday = targetDow === 0 ? 6 : targetDow - 1;
+        targetDate.setDate(now.getDate() + daysUntilNextMonday + offsetFromMonday);
+      } else {
+        // Chọn đúng ngày Thứ X gần nhất tính từ hôm nay (VD: hôm nay Thứ 2 mà bảo đặt Thứ 3 -> +1 ngày)
+        let daysAhead = (targetDow - currentDow + 7) % 7;
+        if (daysAhead === 0 && now.getHours() >= 22) {
+          daysAhead = 7;
+        }
+        targetDate.setDate(now.getDate() + daysAhead);
+      }
+    } else if (
+      q.includes('ngày mốt') ||
+      q.includes('ngay mot') ||
+      q.includes('ngày kia') ||
+      q.includes('day after tomorrow') ||
+      q.includes('明後日')
+    ) {
+      targetDate.setDate(now.getDate() + 2);
+      hasExplicitDateOrDay = true;
+    } else if (
+      q.includes('ngày mai') ||
+      q.includes('ngay mai') ||
+      /\bmai\b/.test(q) ||
+      q.includes('tomorrow') ||
+      q.includes('明日')
+    ) {
+      targetDate.setDate(now.getDate() + 1);
+      hasExplicitDateOrDay = true;
+    } else if (isNextWeek) {
+      targetDate.setDate(now.getDate() + 7);
+      hasExplicitDateOrDay = true;
+    }
+
+    // 5. Bóc tách Giờ bắt đầu & Tự động đẩy lên khung giờ hợp lệ gần nhất (07:00 – 23:00)
+    // Loại bỏ các cụm từ dễ gây nhầm số (như "thứ 3", "tầng 3", "4 người", "họp 2 tiếng") trước khi tìm giờ
+    const cleanedForTime = q
+      .replace(/(?:thứ|thu)\s*(?:2|3|4|5|6|7|hai|ba|tư|năm|sáu|bảy)/gi, ' ')
+      .replace(/(?:tầng|tang|floor)\s*[1-5]/gi, ' ')
+      .replace(/\d+\s*(?:người|nguoi|chỗ|cho|ghế|people|seats)/gi, ' ')
+      .replace(
+        /(?:họp|hop|trong|khoảng|kéo dài)\s*\d+\s*(?:tiếng|tieng|giờ|gio|hours|hour)/gi,
+        ' '
+      );
+
+    const relativeMatch = q.match(
+      /sau\s*(\d+)\s*(?:tiếng|tieng|giờ|gio)\s*(?:nữa|nua)?/i
+    );
+    const explicitTimeMatch = cleanedForTime.match(
+      /(?:lúc|luc|vào|vao|từ|tu|at)?\s*(\d{1,2})\s*(?:h|giờ|gio|:)\s*(\d{1,2})?\s*(?:phút|phut|p)?\s*(sáng|sang|trưa|trua|chiều|chieu|tối|toi|đêm|dem|khuya|pm|am)?/i
+    );
+
+    let startHour = 7;
+    let startMin = 0;
+    let timeAdjustedNote: string | null = null;
 
     if (relativeMatch) {
       const offsetHrs = Number(relativeMatch[1]);
-      // Lấy mốc thời gian hiện tại + N tiếng rồi làm tròn lên giờ chẵn tiếp theo
-      const roundedCurrentHour =
-        now.getMinutes() > 0 ? now.getHours() + 1 : now.getHours();
-      startHour = roundedCurrentHour + offsetHrs;
+      const rawCandidateHour =
+        (now.getMinutes() > 0 ? now.getHours() + 1 : now.getHours()) +
+        offsetHrs;
+      if (rawCandidateHour < 7) {
+        startHour = 7;
+        startMin = 0;
+        timeAdjustedNote = `Do thời điểm tính toán (${String(
+          Math.max(0, rawCandidateHour)
+        ).padStart(2, '0')}:00) nằm ngoài giờ mở cửa (07:00 – 23:00), hệ thống đã tự động tiến lên chọn khung giờ hợp lệ gần nhất là **07:00 sáng**.`;
+      } else if (rawCandidateHour >= 22) {
+        if (!hasExplicitDateOrDay) {
+          targetDate.setDate(targetDate.getDate() + 1);
+        }
+        startHour = 7;
+        startMin = 0;
+        timeAdjustedNote =
+          'Do thời điểm yêu cầu đã quá giờ đóng cửa (23:00), hệ thống đã tự động tiến sang **07:00 sáng** ca gần nhất.';
+      } else {
+        startHour = rawCandidateHour;
+        startMin = 0;
+      }
     } else if (explicitTimeMatch) {
       let parsedH = Number(explicitTimeMatch[1]);
+      const parsedM = explicitTimeMatch[2] ? Number(explicitTimeMatch[2]) : 0;
       const meridiem = (explicitTimeMatch[3] || '').toLowerCase();
+
       if (
         (meridiem.includes('chiều') ||
           meridiem.includes('chieu') ||
@@ -1022,28 +1293,114 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         parsedH < 12
       ) {
         parsedH += 12;
+      } else if (
+        (meridiem.includes('sáng') ||
+          meridiem.includes('sang') ||
+          meridiem.includes('đêm') ||
+          meridiem.includes('dem') ||
+          meridiem.includes('khuya') ||
+          meridiem === 'am') &&
+        parsedH === 12
+      ) {
+        parsedH = 0;
+      } else if (
+        !meridiem &&
+        parsedH >= 1 &&
+        parsedH <= 6 &&
+        !cleanedForTime.includes('0h')
+      ) {
+        // Nếu người dùng nói "lúc 2h", "lúc 4h" không kèm chữ "sáng" -> hiểu là 14:00, 16:00 chiều
+        parsedH += 12;
       }
-      startHour = parsedH;
+
+      const requestedLabel = `${String(parsedH).padStart(2, '0')}:${String(
+        parsedM
+      ).padStart(2, '0')}`;
+
+      if (parsedH < 7) {
+        startHour = 7;
+        startMin = 0;
+        timeAdjustedNote = `Do thời điểm bạn chọn (**${requestedLabel} sáng**) nằm ngoài khung giờ hoạt động của tòa nhà (**07:00 – 23:00**), hệ thống đã tự động tiến đến chọn khung giờ hợp lệ gần nhất là **07:00 sáng**.`;
+      } else if (parsedH >= 22) {
+        if (!hasExplicitDateOrDay) {
+          targetDate.setDate(targetDate.getDate() + 1);
+        }
+        startHour = 7;
+        startMin = 0;
+        timeAdjustedNote = `Do thời điểm **${requestedLabel}** quá sát hoặc vượt giờ đóng cửa (**23:00**), hệ thống đã tự động tiến đến khung giờ hợp lệ gần nhất là **07:00 sáng**.`;
+      } else {
+        startHour = parsedH;
+        startMin = parsedM >= 15 && parsedM <= 45 ? 30 : 0;
+        if (parsedM > 45) {
+          startHour = Math.min(21, startHour + 1);
+          startMin = 0;
+        }
+      }
+    } else {
+      // Người dùng không nêu giờ cụ thể (VD: "Đặt phòng vào thứ 3 cho 4 người" lúc 00:30 sáng)
+      const nowH = now.getHours();
+      const nowM = now.getMinutes();
+      const nowTimeText = `${String(nowH).padStart(2, '0')}:${String(
+        nowM
+      ).padStart(2, '0')}`;
+
+      const isTargetToday =
+        targetDate.getFullYear() === now.getFullYear() &&
+        targetDate.getMonth() === now.getMonth() &&
+        targetDate.getDate() === now.getDate();
+
+      if (nowH < 7) {
+        startHour = 7;
+        startMin = 0;
+        timeAdjustedNote = `Hiện tại là **${nowTimeText} sáng** (nằm ngoài khung giờ mở cửa 07:00 – 23:00), hệ thống đã tự động tiến đến chọn khung giờ hợp lệ gần nhất là **07:00 sáng**.`;
+      } else if (isTargetToday) {
+        if (nowH >= 21) {
+          if (!hasExplicitDateOrDay) {
+            targetDate.setDate(targetDate.getDate() + 1);
+          }
+          startHour = 7;
+          startMin = 0;
+          timeAdjustedNote = `Do thời điểm hiện tại (**${nowTimeText}**) đã cuối ngày, hệ thống tự động tiến sang khung giờ mở cửa gần nhất là **07:00 sáng**.`;
+        } else {
+          // Làm tròn lên khung 30 phút hoặc giờ chẵn tiếp theo gần nhất
+          if (nowM < 30) {
+            startHour = nowH;
+            startMin = 30;
+          } else {
+            startHour = nowH + 1;
+            startMin = 0;
+          }
+        }
+      } else {
+        // Đặt cho một ngày tương lai (VD: Thứ 3 tới) mà không nói giờ -> chọn ngay ca đầu ngày 07:00 sáng
+        startHour = 7;
+        startMin = 0;
+      }
     }
 
-    // Chuẩn hóa nằm trong khung hoạt động 07:00 – 23:00
-    startHour = Math.max(7, Math.min(22, startHour));
-    const endHour = Math.max(startHour + 1, Math.min(23, startHour + durationHours));
-    if (endHour <= startHour) {
-      startHour = 21;
-    }
+    const endHour = Math.max(
+      startHour + 1,
+      Math.min(23, startHour + durationHours)
+    );
+    const endMin = endHour === 23 ? 0 : startMin;
 
-    const startStr = `${String(startHour).padStart(2, '0')}:00`;
-    const endStr = `${String(Math.min(23, startHour + durationHours)).padStart(
-      2,
-      '0'
-    )}:00`;
+    const dateIso = `${targetDate.getFullYear()}-${String(
+      targetDate.getMonth() + 1
+    ).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+    const weekdayLabel = getWeekdayNameByLocale(targetDate, webLanguage);
 
-    // 6. Lọc danh sách phòng họp có thể đặt được (Trống, đủ sức chứa, đúng tầng, đúng quyền Role)
+    const startStr = `${String(startHour).padStart(2, '0')}:${String(
+      startMin
+    ).padStart(2, '0')}`;
+    const endStr = `${String(endHour).padStart(2, '0')}:${String(
+      endMin
+    ).padStart(2, '0')}`;
+
+    // 6. Lọc danh sách phòng họp có thể đặt được
     const candidateRooms = workspaceNodes
       .filter((rm) => {
         if (rm.floorLevel === 5 && userProfile.role === 'EMPLOYEE') {
-          return false; // Nhân viên không được thuê cả Hội trường Tầng 5
+          return false;
         }
         if (floorFilter && rm.floorLevel !== floorFilter) {
           return false;
@@ -1054,7 +1411,6 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         if (rm.status !== 'AVAILABLE') {
           return false;
         }
-        // Kiểm tra không bị trùng lịch đặt trong khung giờ đó
         const hasConflict = bookingsList.some(
           (b) =>
             b.nodeId === rm.nodeCode &&
@@ -1072,21 +1428,18 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
 
     return {
       dateIso,
+      weekdayLabel,
       start: startStr,
       end: endStr,
       capacityNeeded,
       floorFilter,
-      purposeNote: `Họp nhóm ${capacityNeeded} người (${startStr} – ${endStr})`,
-      approvalRequestReason: `Xin phép sử dụng phòng họp cho ${capacityNeeded} thành viên bộ phận ${userProfile.departmentName} trong khung giờ ${startStr} – ${endStr} ngày ${dateIso}.`,
+      purposeNote: `Họp nhóm ${capacityNeeded} người (${weekdayLabel}, ${dateIso} • ${startStr} – ${endStr})`,
+      approvalRequestReason: `Xin phép sử dụng phòng họp cho ${capacityNeeded} thành viên bộ phận ${userProfile.departmentName} trong khung giờ ${startStr} – ${endStr} (${weekdayLabel}, ngày ${dateIso}).`,
+      timeAdjustedNote,
       candidateRooms,
     };
   };
 
-  /**
-   * BỘ SUY LUẬN & THỰC THI TÁC VỤ WEB THEO ROLE (ROLE-SCOPED AGENTIC AI ENGINE):
-   * - Kiểm soát nghiêm ngặt dữ liệu tiết lộ theo từng Role (`EMPLOYEE` / `MANAGER` / `SYS_ADMIN`)
-   * - Thực thi trực tiếp các lệnh tạo đơn đặt phòng, quản lý nhóm, đổi tên phòng ban, đổi trạng thái thiết bị và truy quét thống kê
-   */
   const executeAgenticWorkflowAndAnswer = (
     rawQuery: string,
     attachedItems: AttachedFilePayload[]
@@ -1098,10 +1451,7 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
     const q = rawQuery.trim().toLowerCase();
     const kb = roleScopedKnowledgeBase;
 
-    // =========================================================================
     // 1. KIỂM TRA GIỚI HẠN BẢO MẬT DỮ LIỆU THEO ROLE (DATA ISOLATION GUARD)
-    // =========================================================================
-    // Nếu Nhân viên (EMPLOYEE) cố tình hỏi lịch sử đặt phòng của người khác, điểm tín nhiệm của người khác, phòng ban khác hoặc thiết bị Admin
     if (userProfile.role === 'EMPLOYEE') {
       const otherUsers = trustProfiles.filter(
         (tp) => tp.userEmail.toLowerCase() !== userProfile.userEmail.toLowerCase()
@@ -1137,7 +1487,10 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         };
       }
 
-      if (mentionedOtherDept && (q.includes('thành viên') || q.includes('nhân sự') || q.includes('nhóm'))) {
+      if (
+        mentionedOtherDept &&
+        (q.includes('thành viên') || q.includes('nhân sự') || q.includes('nhóm'))
+      ) {
         return {
           replyText: `### 🔒 Giới hạn Quyền Truy cập Phòng ban (\`EMPLOYEE\`)
 - Bạn đang thuộc phòng ban **${userProfile.departmentName}**. Vai trò \`EMPLOYEE\` không có quyền truy xuất danh sách nhân sự hoặc cấu trúc nhóm nội bộ của phòng ban khác (**${mentionedOtherDept.departmentName}**).`,
@@ -1159,7 +1512,6 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
       }
     }
 
-    // Nếu Quản lý (MANAGER) cố tình yêu cầu đổi tên Phòng ban hoặc tạo Phòng ban hoặc điều khiển thiết bị Admin
     if (userProfile.role === 'MANAGER') {
       if (
         (q.includes('đổi tên') ||
@@ -1186,17 +1538,20 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
       }
     }
 
-    // =========================================================================
-    // 2. THỰC THI LỆNH CỦA QUẢN LÝ (MANAGER) & ADMIN (SYS_ADMIN): TẠO NHÓM, ĐỔI TÊN NHÓM, THÊM THÀNH VIÊN VÀO NHÓM
-    // =========================================================================
+    // 2. THỰC THI LỆNH CỦA QUẢN LÝ (MANAGER) & ADMIN (SYS_ADMIN)
     if (isManager || isSysAdmin) {
-      // 2a. Lệnh: "Thêm cho tôi thành viên tên X vào nhóm tên Y"
       const addMemMatch = rawQuery.match(
         /thêm(?:\s+cho\s+tôi)?(?:\s+thành\s+viên|\s+nhân\s+sự|\s+người)?(?:\s+tên)?\s+(.+?)\s+vào\s+nhóm(?:\s+tên)?\s+(.+)/i
       );
       if (addMemMatch) {
-        const rawPersonKey = addMemMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
-        const rawGroupKey = addMemMatch[2].replace(/["'“”]/g, '').trim().toLowerCase();
+        const rawPersonKey = addMemMatch[1]
+          .replace(/["'“”]/g, '')
+          .trim()
+          .toLowerCase();
+        const rawGroupKey = addMemMatch[2]
+          .replace(/["'“”]/g, '')
+          .trim()
+          .toLowerCase();
 
         const targetGroup = groupsList.find(
           (g) =>
@@ -1273,12 +1628,14 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         };
       }
 
-      // 2b. Lệnh: "Đổi tên nhóm X thành Y"
       const renameGrpMatch = rawQuery.match(
         /(?:đổi|thay\s+đổi|sửa)\s+tên\s+nhóm\s+(.+?)\s+thành\s+(.+)/i
       );
       if (renameGrpMatch) {
-        const oldGrpKey = renameGrpMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
+        const oldGrpKey = renameGrpMatch[1]
+          .replace(/["'“”]/g, '')
+          .trim()
+          .toLowerCase();
         const newGrpName = renameGrpMatch[2].replace(/["'“”]/g, '').trim();
 
         const targetGroup = groupsList.find(
@@ -1322,7 +1679,6 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         };
       }
 
-      // 2c. Lệnh: "Tạo 1 nhóm mới tên là X"
       const createGrpMatch = rawQuery.match(
         /tạo(?:\s+cho\s+tôi)?(?:\s+1|\s+một)?\s+nhóm(?:\s+con)?(?:\s+mới)?(?:\s+có)?(?:\s+tên\s+là|\s+tên)?\s+(.+)/i
       );
@@ -1348,16 +1704,16 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
       }
     }
 
-    // =========================================================================
     // 3. THỰC THI LỆNH ĐẶC QUYỀN & TRUY QUÉT CHUYÊN SÂU CỦA SYS_ADMIN
-    // =========================================================================
     if (isSysAdmin) {
-      // 3a. Lệnh: "Thay đổi tên phòng ban X thành Y"
       const renameDeptMatch = rawQuery.match(
         /(?:đổi|thay\s+đổi|sửa)\s+tên\s+phòng\s+ban\s+(.+?)\s+thành(?:\s+phòng\s+ban)?\s+(.+)/i
       );
       if (renameDeptMatch) {
-        const oldDeptKey = renameDeptMatch[1].replace(/["'“”]/g, '').trim().toLowerCase();
+        const oldDeptKey = renameDeptMatch[1]
+          .replace(/["'“”]/g, '')
+          .trim()
+          .toLowerCase();
         const newDeptName = renameDeptMatch[2].replace(/["'“”]/g, '').trim();
 
         const targetDept = departmentsList.find(
@@ -1388,7 +1744,6 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
         };
       }
 
-      // 3b. Lệnh: "Đổi thiết bị tầng X / phòng Y thành bảo trì / báo hỏng / sử dụng được"
       if (
         (q.includes('đổi thiết bị') ||
           q.includes('chuyển thiết bị') ||
@@ -1437,13 +1792,15 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
 - **Trạng thái mới**: **\`${statusLabelVi}\`**
 - **Danh sách thiết bị vừa cập nhật**:
 ${affectedEquips
-              .map((e) => `- \`${e.equipmentCode}\` — **${e.equipmentName}** (${e.assignedNodeId})`)
+              .map(
+                (e) =>
+                  `- \`${e.equipmentCode}\` — **${e.equipmentName}** (${e.assignedNodeId})`
+              )
               .join('\n')}`,
           };
         }
       }
 
-      // 3c. Truy quét: "Tổng kết điểm trung bình tín nhiệm nhân viên"
       if (
         q.includes('trung bình tín nhiệm') ||
         (q.includes('tổng kết') && q.includes('tín nhiệm')) ||
@@ -1482,7 +1839,6 @@ ${userLines}`,
         };
       }
 
-      // 3d. Truy quét: "Truy quét lượt mượn phòng trong tháng X"
       const monthScanMatch = q.match(/tháng\s*(\d{1,2})/i);
       if (
         monthScanMatch &&
@@ -1532,18 +1888,22 @@ ${detailLines}`,
         };
       }
 
-      // 3e. Truy quét: "Nhân viên X có lịch sử đặt phòng thế nào so với tháng trước?"
       if (
         q.includes('so với tháng trước') ||
         (q.includes('lịch sử đặt phòng') &&
-          (q.includes('nhân viên') || q.includes('quân') || q.includes('hà') || q.includes('nam') || q.includes('ngọc')))
+          (q.includes('nhân viên') ||
+            q.includes('quân') ||
+            q.includes('hà') ||
+            q.includes('nam') ||
+            q.includes('ngọc')))
       ) {
         const targetStaff =
           trustProfiles.find(
             (tp) =>
               q.includes(tp.fullName.toLowerCase().split('(')[0].trim()) ||
               q.includes(tp.userEmail.toLowerCase()) ||
-              (q.includes('quân') && tp.fullName.toLowerCase().includes('quân')) ||
+              (q.includes('quân') &&
+                tp.fullName.toLowerCase().includes('quân')) ||
               (q.includes('hà') && tp.fullName.toLowerCase().includes('hà'))
           ) || trustProfiles[2];
 
@@ -1571,7 +1931,6 @@ ${detailLines}`,
         };
       }
 
-      // 3f. Truy quét: "Cung cấp các thành viên nhóm A hay phòng ban X cho tôi"
       if (
         (q.includes('cung cấp') ||
           q.includes('liệt kê') ||
@@ -1627,28 +1986,41 @@ ${matchedDept.memberEmails
       }
     }
 
-    // =========================================================================
     // 4. THỰC THI YÊU CẦU TÌM & ĐẶT PHÒNG HỌP TỰ ĐỘNG (CHO MỌI ROLE)
-    // =========================================================================
     const bookingSuggestion = parseSmartBookingIntent(rawQuery);
     if (bookingSuggestion) {
       const {
         dateIso,
+        weekdayLabel,
         start,
         end,
         capacityNeeded,
         floorFilter,
+        purposeNote,
+        approvalRequestReason,
+        timeAdjustedNote,
         candidateRooms,
       } = bookingSuggestion;
 
       if (candidateRooms.length === 0) {
         return {
           replyText: `### ⚠️ Không tìm thấy Phòng trống khớp điều kiện
-- Yêu cầu của bạn: **${capacityNeeded} người**, khung giờ **${start} – ${end}** ngày **${dateIso}**${
+- Yêu cầu của bạn: **${capacityNeeded} người**, khung giờ **${start} – ${end}** (**${weekdayLabel}, ngày ${dateIso}**)${
             floorFilter ? ` tại **Tầng ${floorFilter}**` : ''
           }.
 - Hiện không còn phòng trống thỏa mãn điều kiện này. Bạn hãy thử đổi sang tầng khác hoặc khung giờ lân cận nhé!`,
         };
+      }
+
+      // Tự động đồng bộ ngay Ngày + Giờ + Phòng số 1 vào biểu mẫu Đặt phòng để người dùng thấy form đổi ngay theo ý muốn
+      if (onAiSyncBookingDraft && candidateRooms[0]) {
+        onAiSyncBookingDraft(candidateRooms[0], {
+          dateIso,
+          start,
+          end,
+          purposeNote,
+          approvalRequestReason,
+        });
       }
 
       const approvalNote =
@@ -1664,22 +2036,20 @@ ${matchedDept.memberEmails
         .join('\n');
 
       return {
-        replyText: `### ✨ Đề xuất Phòng họp Có thể Đặt được Ngay (${dateIso} • ${start} – ${end})
-- **Thông số đã phân tích tự động**: Nhóm **${capacityNeeded} người** • Khung giờ **${start} – ${end}** • Ngày **${dateIso}**${
+        replyText: `### ✨ Đã Tự Động Chọn Ngày & Giờ Hợp Lệ Gần Nhất (${weekdayLabel}, ${dateIso} • ${start} – ${end})
+- **Ngày & Thứ đã thiết lập theo ý bạn**: **${weekdayLabel}, ngày \`${dateIso}\`**
+- **Khung giờ đã chọn**: **\`${start} – ${end}\`** • Sức chứa yêu cầu: **${capacityNeeded} người**${
           floorFilter ? ` • Ưu tiên **Tầng ${floorFilter}**` : ''
-        }.
+        }
+${timeAdjustedNote ? `- ⏰ **Tự động điều chỉnh giờ thông minh**: ${timeAdjustedNote}\n` : ''}- **Đồng bộ Biểu mẫu**: Đã tự động điền sẵn ngày **${dateIso}** và khung giờ **${start} – ${end}** (Phòng **${candidateRooms[0].nodeCode}**) vào biểu mẫu Đặt phòng!
 - **Cơ chế theo Role \`${userProfile.role}\`**: ${approvalNote}
 ### Danh sách phòng phù hợp nhất
-${roomListLines}
-
-👉 **Hãy bấm chọn phòng ở thẻ tương tác bên dưới** để điền sẵn toàn bộ vào trang Đặt phòng hoặc Xác nhận tạo đơn ngay lập tức:`,
+${roomListLines}`,
         bookingSuggestion,
       };
     }
 
-    // =========================================================================
     // 5. NHẬN DIỆN CÂU HỎI "BẠN LÀ AI", CHÀO HỎI & GIAO TIẾP TỰ NHIÊN
-    // =========================================================================
     const isAskingWhoAreYou =
       q.includes('bạn là ai') ||
       q.includes('ban la ai') ||
@@ -1704,7 +2074,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
 
 - **Phân quyền tài khoản hiện tại của bạn**: Vai trò **\`${userProfile.role}\`** • Phòng ban **${userProfile.departmentName}** • Điểm tín nhiệm **${userProfile.trustScore}/100đ**.
 - **Các tác vụ tôi có thể thực thi trực tiếp cho bạn**:
-  - **Đặt phòng tự động theo ngôn ngữ tự nhiên**: Nhắn VD *"Tạo cho tôi phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"* (hoặc *"sau 2 tiếng nữa"*), tôi sẽ tính toán giờ và tạo nút chọn phòng điền sẵn 100% thông tin.
+  - **Đặt phòng tự động theo Thứ/Ngày & Giờ gần nhất**: Nhắn VD *"Tôi muốn đặt thứ 3 cho 4 người"* hoặc đặt lúc *0h30 sáng*, tôi sẽ tự động chuyển ngày sang Thứ Ba và tiến đến khung giờ mở cửa gần nhất (**07:00 sáng**).
   - **Quản lý Nhóm (Dành cho Manager & Admin)**: Nhắn *"Tạo 1 nhóm mới tên là..."*, *"Đổi tên nhóm ... thành ..."*, hoặc *"Thêm thành viên ... vào nhóm ..."*.
   - **Điều khiển Hệ thống & Truy quét (Dành riêng cho Admin)**: Đổi tên phòng ban, chuyển thiết bị tầng/phòng sang bảo trì/báo hỏng, tổng kết điểm tín nhiệm TB và phân tích lịch sử đặt phòng so với tháng trước!`,
       };
@@ -1712,7 +2082,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
 
     if (isGreetingOnly) {
       return {
-        replyText: `Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Hiện tòa nhà đang có **${kb.freeRooms.length}/25 phòng họp trống**. Bạn muốn tôi đặt nhanh một phòng họp, kiểm tra lịch cá nhân hay giải đáp câu hỏi nào hôm nay?`,
+        replyText: `Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Hiện tòa nhà đang có **${kb.freeRooms.length}/25 phòng họp trống**. Bạn muốn tôi đặt nhanh một phòng họp (VD: *"Đặt phòng vào thứ 3 cho 4 người"*), kiểm tra lịch cá nhân hay giải đáp câu hỏi nào hôm nay?`,
       };
     }
 
@@ -1818,7 +2188,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
 
     if (sections.length === 0) {
       sections.push(
-        `### 💡 Phản hồi từ AURA-X cho: “${rawQuery}”\n- Mình là **AURA-X**, trợ lý AI đồng hành cùng **${userProfile.fullName}** (\`${userProfile.role}\` • Phòng ban \`${userProfile.departmentName}\`).\n- Bạn có thể yêu cầu mình **tạo lịch đặt phòng tự động** (VD: *"Đặt phòng 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3"*), hoặc hỏi bất kỳ kiến thức chuyên môn nào!`
+        `### 💡 Phản hồi từ AURA-X cho: “${rawQuery}”\n- Mình là **AURA-X**, trợ lý AI đồng hành cùng **${userProfile.fullName}** (\`${userProfile.role}\` • Phòng ban \`${userProfile.departmentName}\`).\n- Bạn có thể yêu cầu mình **tạo lịch đặt phòng tự động theo Thứ & Giờ gần nhất** (VD: *"Đặt phòng vào thứ 3 cho 4 người"* hoặc *"Đặt phòng lúc 0h30 sáng"*), hoặc hỏi bất kỳ kiến thức chuyên môn nào!`
       );
     }
 
@@ -1892,7 +2262,6 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
     setPendingAttachments([]);
     setAiMood('THINKING');
 
-    // Bước 1: Kiểm tra xem câu lệnh có phải là Lệnh Thực Thi Web (Agentic Action) hoặc bị giới hạn Role hay không
     const localAgentResult = executeAgenticWorkflowAndAnswer(
       text,
       currentAttachments
@@ -1910,22 +2279,28 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
       ? localAgentResult.replyText
       : '';
 
-    // Bước 2: Nếu là câu hỏi tự do bên ngoài hoặc hội thoại chung -> Gọi Live Cloud LLM (có truyền kèm phạm vi dữ liệu được phép tiết lộ theo Role)
     if (!finalReply) {
       const allowedScopedContext =
         userProfile.role === 'SYS_ADMIN'
           ? `[QUYỀN SYS_ADMIN - TOÀN QUYỀN TRUY CẬP]: Người dùng: ${userProfile.fullName} (@${userProfile.username}). Tổng phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25. Toàn bộ nhân sự: ${trustProfiles
-              .map((u) => `${u.fullName}(${u.role}, ${u.departmentName}, ${u.trustScore}đ)`)
+              .map(
+                (u) =>
+                  `${u.fullName}(${u.role}, ${u.departmentName}, ${u.trustScore}đ)`
+              )
               .join('; ')}. Các phòng ban: ${departmentsList
               .map((d) => d.departmentName)
               .join(', ')}.`
           : userProfile.role === 'MANAGER'
           ? `[QUYỀN MANAGER - CHỈ TIẾT LỘ PHÒNG BAN ${userProfile.departmentName}]: Người dùng: ${userProfile.fullName} (@${userProfile.username}, Điểm tín nhiệm: ${userProfile.trustScore}/100). Tổng phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25. Các nhóm thuộc phòng ban ${userProfile.departmentName}: ${roleScopedKnowledgeBase.myGroups
               .map((g) => g.groupName)
-              .join(', ')}. TUYỆT ĐỐI KHÔNG tiết lộ dữ liệu của phòng ban khác hoặc nhật ký IP của Admin.`
+              .join(
+                ', '
+              )}. TUYỆT ĐỐI KHÔNG tiết lộ dữ liệu của phòng ban khác hoặc nhật ký IP của Admin.`
           : `[QUYỀN EMPLOYEE - CHỈ TIẾT LỘ DỮ LIỆU CÁ NHÂN & PHÒNG TRỐNG]: Người dùng: ${userProfile.fullName} (@${userProfile.username}, Phòng ban: ${userProfile.departmentName}, Điểm tín nhiệm: ${userProfile.trustScore}/100). Phòng trống: ${roleScopedKnowledgeBase.freeRooms.length}/25 (${roleScopedKnowledgeBase.freeRooms
               .map((r) => `${r.nodeCode}:${r.capacityCount}P`)
-              .join(', ')}). Lịch cá nhân: ${roleScopedKnowledgeBase.myBookings.length} vé. TUYỆT ĐỐI KHÔNG tiết lộ điểm tín nhiệm hay lịch đặt phòng của người khác, không tiết lộ phòng ban khác.`;
+              .join(
+                ', '
+              )}). Lịch cá nhân: ${roleScopedKnowledgeBase.myBookings.length} vé. TUYỆT ĐỐI KHÔNG tiết lộ điểm tín nhiệm hay lịch đặt phòng của người khác, không tiết lộ phòng ban khác.`;
 
       try {
         const response = await fetch('/api/v1/ai/chat', {
@@ -1947,7 +2322,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
           }
         }
       } catch {
-        // Chuyển sang gọi trực tiếp Cloud LLM từ trình duyệt
+        // Fallback sang Cloud LLM
       }
 
       if (!finalReply) {
@@ -1960,7 +2335,7 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
               messages: [
                 {
                   role: 'system',
-                  content: `Bạn là AURA-X, AI Agent 3D độc quyền của hệ thống SpotMatrix. Hãy trả lời tự nhiên, thông minh, linh hoạt bằng tiếng Việt (hoặc ngôn ngữ người dùng chọn). Tuân thủ nghiêm ngặt giới hạn dữ liệu theo Role:
+                  content: `Bạn là AURA-X, AI Agent 3D độc quyền của hệ thống SpotMatrix. Hãy trả lời tự nhiên, thông minh, linh hoạt bằng ngôn ngữ (${webLanguage}). Tuân thủ nghiêm ngặt giới hạn dữ liệu theo Role:
 ${allowedScopedContext}`,
                 },
                 { role: 'user', content: text },
@@ -2000,29 +2375,47 @@ ${allowedScopedContext}`,
   };
 
   const quickSuggestedPrompts = useMemo(() => {
+    if (webLanguage === 'en') {
+      return [
+        'Book a room on Tuesday for 4 people for 2 hours',
+        'Book a room at 00:30 AM for 4 people on floor 3',
+        isSysAdmin
+          ? 'Summarize average employee trust score'
+          : 'Check my booking schedule & trust score',
+      ];
+    }
+    if (webLanguage === 'ja') {
+      return [
+        '火曜日に4人で2時間、3階の会議室を予約して',
+        '午前0時30分に4人用の会議室を予約して',
+        isSysAdmin
+          ? '社員の平均信頼スコアを集計して'
+          : '自分の予約履歴と信頼スコアを確認',
+      ];
+    }
     if (isSysAdmin) {
       return [
-        'Tạo phòng cho 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3',
+        'Tôi muốn đặt phòng vào thứ 3 cho 4 người ở tầng 3',
+        'Đặt phòng lúc 0h30 phút sáng cho 4 người họp 2 tiếng',
         'Tổng kết điểm trung bình tín nhiệm nhân viên',
-        'Nhân viên Nguyễn Minh Quân có lịch sử đặt phòng thế nào so với tháng trước?',
         'Đổi thiết bị tầng 1 cho tôi thành bảo trì',
       ];
     }
     if (isManager) {
       return [
-        'Tạo phòng cho 4 người họp 2 tiếng sau 2 tiếng nữa ở tầng 3',
+        'Tôi muốn đặt phòng vào thứ 3 cho 4 người họp 2 tiếng',
+        'Đặt phòng lúc 0h30 phút sáng cho 4 người ở tầng 3',
         'Tạo 1 nhóm mới tên là Nhóm Tối ưu 3D',
         'Thêm thành viên Nguyễn Minh Quân vào nhóm SQUAD-3D-TWIN',
-        'Kiểm tra lịch đặt & quyền của tài khoản tôi',
       ];
     }
     return [
-      'Yêu cầu xin phép 1 phòng họp cho tầm 4 người họp 2 tiếng lúc 16h hôm nay ở tầng 3',
-      'Đặt phòng cho 4 người họp 2 tiếng sau 2 tiếng nữa',
+      'Tôi muốn đặt phòng vào thứ 3 cho 4 người ở tầng 3',
+      'Đặt phòng lúc 0h30 phút sáng cho 4 người họp 2 tiếng',
       'Kiểm tra lịch đặt & điểm tín nhiệm của tôi',
       'Phòng họp nào đang trống ngay lúc này?',
     ];
-  }, [isSysAdmin, isManager]);
+  }, [isSysAdmin, isManager, webLanguage]);
 
   const deptEligibleLeaders = useMemo(() => {
     return trustProfiles.filter(
@@ -2036,642 +2429,700 @@ ${allowedScopedContext}`,
   return (
     <>
       {/* =====================================================================
-          NÚT ICON MỞ AI GỌN GÀNG Ở GÓC DƯỚI PHẢI (CHỈ HIỆN ICON, RÊ CHUỘT MỚI HIỆN NỘI DUNG)
+          NÚT MỞ AI GÓC DƯỚI PHẢI HOẶC THANH THU GỌN SÁT MÉP PHẢI KHI TẠM ẨN
          ===================================================================== */}
-      <div className="fixed bottom-5 right-5 z-50 flex items-center">
-        {!isOpen && (
-          <button
-            type="button"
-            onClick={() => setIsOpen(true)}
-            className="group relative w-13 h-13 p-3.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl border border-indigo-400/40 flex items-center justify-center transition-all duration-200 hover:scale-105"
-            aria-label="Mở Trợ lý AI AURA-X"
-          >
-            <Cloud className="w-6 h-6 text-white fill-white/15" />
-            <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
+      {!isOpen && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-1.5">
+          {isWidgetSnoozed ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsWidgetSnoozed(false);
+                setIsOpen(true);
+              }}
+              className="px-2.5 py-2 rounded-l-2xl rounded-r-lg bg-slate-900/90 hover:bg-indigo-600 text-white border border-slate-700 shadow-lg flex items-center gap-1 text-[11px] font-extrabold transition"
+              title={ui.openAiLabel}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <Cloud className="w-3.5 h-3.5" />
+              <span>{ui.restoreAiLabel}</span>
+            </button>
+          ) : (
+            <div className="relative group flex items-center">
+              {/* Nút nhỏ góc trên trái để tạm ẩn hẳn icon AI sang mép phải nếu vướng mắt */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsWidgetSnoozed(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full bg-slate-800 hover:bg-rose-600 text-white border border-slate-600 flex items-center justify-center shadow-md"
+                title={ui.snoozeAiTooltip}
+              >
+                <EyeOff className="w-3 h-3" />
+              </button>
 
-            {/* Tooltip chỉ xuất hiện mượt mà khi rê chuột (hover) vào nút Icon */}
-            <div className="pointer-events-none opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-200 absolute right-16 top-1/2 -translate-y-1/2 whitespace-nowrap px-3.5 py-2 rounded-2xl bg-slate-900/95 text-white border border-slate-700 shadow-xl text-left">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-xs font-extrabold">
-                  AURA-X • Trợ lý AI 3D
-                </span>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
-                  {userProfile.role}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-300 mt-0.5">
-                Đặt phòng tự động • Gửi Ảnh/File & Hỏi đáp
-              </p>
+              <button
+                type="button"
+                onClick={() => setIsOpen(true)}
+                className="relative w-13 h-13 p-3.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl border border-indigo-400/40 flex items-center justify-center transition-all duration-200 hover:scale-105"
+                aria-label={ui.openAiLabel}
+              >
+                <Cloud className="w-6 h-6 text-white fill-white/15" />
+                <span className="absolute top-0.5 right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-950" />
+
+                <div className="pointer-events-none opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-200 absolute right-16 top-1/2 -translate-y-1/2 whitespace-nowrap px-3.5 py-2 rounded-2xl bg-slate-900/95 text-white border border-slate-700 shadow-xl text-left hidden sm:block">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="text-xs font-extrabold">
+                      {ui.hoverTitle}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-600 text-white">
+                      {userProfile.role}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 mt-0.5">
+                    {ui.hoverSub}
+                  </p>
+                </div>
+              </button>
             </div>
-          </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* =====================================================================
-          NGĂN KÉO CHAT AI BÊN PHẢI VỚI LINH VẬT AI 3D & THỰC THI TÁC VỤ THEO ROLE
+          NGĂN KÉO CHAT AI BÊN PHẢI VỚI NÚT "TẠM TẮT" RÕ RÀNG & HỖ TRỢ ĐA THIẾT BỊ
          ===================================================================== */}
       {isOpen && (
-        <aside
-          className={`fixed bottom-4 right-4 top-4 z-50 flex flex-col rounded-3xl border shadow-2xl overflow-hidden backdrop-blur-2xl transition-all duration-300 ${
-            isExpandedWidth
-              ? 'w-[95vw] sm:w-[640px]'
-              : 'w-[94vw] sm:w-[450px]'
-          } ${
-            isDark
-              ? 'bg-slate-950/95 border-slate-800 text-slate-100 shadow-black/80'
-              : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-900/20'
-          }`}
-        >
-          {/* Header gọn gàng, màu sắc tinh tế */}
+        <>
+          {/* Lớp nền mờ trên điện thoại/iPad để chạm ra ngoài là tạm tắt nhanh */}
           <div
-            className={`px-4 py-3 border-b flex items-center justify-between gap-2 shrink-0 ${
+            className="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-40 sm:hidden"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <aside
+            className={`fixed bottom-2 sm:bottom-4 right-2 sm:right-4 top-14 sm:top-4 z-50 flex flex-col rounded-3xl border shadow-2xl overflow-hidden backdrop-blur-2xl transition-all duration-300 ${
+              isExpandedWidth
+                ? 'w-[calc(100vw-1rem)] sm:w-[620px]'
+                : 'w-[calc(100vw-1rem)] sm:w-[440px]'
+            } ${
               isDark
-                ? 'bg-slate-900 border-slate-800 text-white'
-                : 'bg-slate-900 border-slate-800 text-white'
+                ? 'bg-slate-950/95 border-slate-800 text-slate-100 shadow-black/80'
+                : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-900/20'
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0">
-                <Cloud className="w-5 h-5 text-white" />
+            {/* Header có nút "− Tạm tắt" rõ ràng ngay bên cạnh */}
+            <div className="px-3.5 py-3 border-b bg-slate-900 border-slate-800 text-white flex items-center justify-between gap-2 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0">
+                  <Cloud className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-black truncate">
+                    AURA-X • AI ({userProfile.role})
+                  </h3>
+                  <p className="text-[10px] text-slate-300 truncate">
+                    @{userProfile.username} • {userProfile.departmentName}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h3 className="text-xs sm:text-sm font-black truncate">
-                  AURA-X • AI Agent ({userProfile.role})
-                </h3>
-                <p className="text-[10px] text-slate-300 truncate">
-                  @{userProfile.username} • {userProfile.departmentName}
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsExpandedWidth((prev) => !prev)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
-                title="Mở rộng / Thu gọn khung chat"
-              >
-                {isExpandedWidth ? (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setMessages([
-                    {
-                      id: `WELCOME-${Date.now()}`,
-                      sender: 'AI',
-                      contentText: welcomeMessageText,
-                      timestampText: 'Now',
-                    },
-                  ])
-                }
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
-                title="Làm mới cuộc trò chuyện"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white transition"
-                title="Đóng cửa sổ AI"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* SÂN KHẤU WEBGL 3D CỦA LINH VẬT AI */}
-          <div className="p-3 pb-1.5 shrink-0">
-            <SpotMatrixMascot3DStage isDark={isDark} aiMood={aiMood} />
-
-            <div
-              className={`mt-2 px-3 py-1.5 rounded-xl border text-[10px] font-bold flex flex-wrap items-center justify-between gap-2 ${
-                isDark
-                  ? 'bg-slate-900/90 border-slate-800 text-slate-300'
-                  : 'bg-slate-100 border-slate-200 text-slate-700'
-              }`}
-            >
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-indigo-500" />
-                Trống: {roleScopedKnowledgeBase.freeRooms.length}/25 phòng
-              </span>
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-indigo-500" />
-                Lịch của bạn: {roleScopedKnowledgeBase.myBookings.length} vé
-              </span>
-              <span className="flex items-center gap-1">
-                <Cpu className="w-3 h-3 text-indigo-500" />
-                Tín nhiệm: {userProfile.trustScore}/100đ
-              </span>
-            </div>
-          </div>
-
-          {/* DANH SÁCH TIN NHẮN & THẺ HÀNH ĐỘNG TƯƠNG TÁC TRỰC TIẾP */}
-          <div
-            ref={chatScrollRef}
-            className="flex-1 overflow-y-auto px-3.5 py-2 space-y-3"
-          >
-            {messages.map((msg) => {
-              const isUser = msg.sender === 'USER';
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${
-                    isUser ? 'items-end' : 'items-start'
-                  }`}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Nút Tạm tắt Chat bên cạnh theo đúng yêu cầu */}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-200 hover:text-slate-950 border border-amber-400/40 text-[11px] font-extrabold flex items-center gap-1 transition"
+                  title={ui.minimizeChatTooltip}
                 >
+                  <Minus className="w-3.5 h-3.5" />
+                  <span>{ui.minimizeChatBtn}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsExpandedWidth((prev) => !prev)}
+                  className="hidden sm:inline-flex p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+                  title={ui.expandTooltip}
+                >
+                  {isExpandedWidth ? (
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMessages([
+                      {
+                        id: `WELCOME-${Date.now()}`,
+                        sender: 'AI',
+                        contentText: welcomeMessageText,
+                        timestampText: 'Now',
+                      },
+                    ])
+                  }
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition"
+                  title={ui.resetTooltip}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="p-1.5 rounded-xl bg-white/10 hover:bg-rose-600 text-white transition"
+                  title={ui.closeTooltip}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* SÂN KHẤU WEBGL 3D CỦA LINH VẬT AI */}
+            <div className="p-3 pb-1.5 shrink-0">
+              <SpotMatrixMascot3DStage
+                isDark={isDark}
+                aiMood={aiMood}
+                webLanguage={webLanguage}
+              />
+
+              <div
+                className={`mt-2 px-3 py-1.5 rounded-xl border text-[10px] font-bold flex flex-wrap items-center justify-between gap-2 ${
+                  isDark
+                    ? 'bg-slate-900/90 border-slate-800 text-slate-300'
+                    : 'bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-indigo-500" />
+                  {ui.statFreeRooms(roleScopedKnowledgeBase.freeRooms.length, 25)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                  {ui.statMyBookings(roleScopedKnowledgeBase.myBookings.length)}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Cpu className="w-3 h-3 text-indigo-500" />
+                  {ui.statTrustScore(userProfile.trustScore)}
+                </span>
+              </div>
+            </div>
+
+            {/* DANH SÁCH TIN NHẮN & THẺ HÀNH ĐỘNG TƯƠNG TÁC TRỰC TIẾP */}
+            <div
+              ref={chatScrollRef}
+              className="flex-1 overflow-y-auto px-3.5 py-2 space-y-3"
+            >
+              {messages.map((msg) => {
+                const isUser = msg.sender === 'USER';
+                return (
                   <div
-                    className={`max-w-[94%] rounded-2xl p-3.5 text-xs space-y-2.5 shadow-sm ${
-                      isUser
-                        ? 'bg-indigo-600 text-white'
-                        : isDark
-                        ? 'bg-slate-900 border border-slate-800 text-slate-100'
-                        : 'bg-slate-100/90 border border-slate-200/90 text-slate-800'
+                    key={msg.id}
+                    className={`flex flex-col ${
+                      isUser ? 'items-end' : 'items-start'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3 text-[10px] opacity-75 font-extrabold border-b border-current/10 pb-1">
-                      <span>
-                        {isUser
-                          ? `${userProfile.fullName} (@${userProfile.username})`
-                          : 'AURA-X • SpotMatrix AI Agent'}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <span>{msg.timestampText}</span>
-                        {!isUser && (
-                          <button
-                            type="button"
-                            onClick={() => handleSpeakMessage(msg.contentText)}
-                            className="p-0.5 rounded hover:bg-indigo-500/20 text-indigo-400"
-                            title="Đọc to câu trả lời này"
-                          >
-                            {isSpeaking ? (
-                              <VolumeX className="w-3 h-3" />
+                    <div
+                      className={`max-w-[94%] rounded-2xl p-3.5 text-xs space-y-2.5 shadow-sm ${
+                        isUser
+                          ? 'bg-indigo-600 text-white'
+                          : isDark
+                          ? 'bg-slate-900 border border-slate-800 text-slate-100'
+                          : 'bg-slate-100/90 border border-slate-200/90 text-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3 text-[10px] opacity-75 font-extrabold border-b border-current/10 pb-1">
+                        <span>
+                          {isUser
+                            ? `${userProfile.fullName} (@${userProfile.username})`
+                            : 'AURA-X • SpotMatrix AI Agent'}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{msg.timestampText}</span>
+                          {!isUser && (
+                            <button
+                              type="button"
+                              onClick={() => handleSpeakMessage(msg.contentText)}
+                              className="p-0.5 rounded hover:bg-indigo-500/20 text-indigo-400"
+                              title={ui.readAloudTooltip}
+                            >
+                              {isSpeaking ? (
+                                <VolumeX className="w-3 h-3" />
+                              ) : (
+                                <Volume2 className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="grid grid-cols-1 gap-2 pt-1">
+                          {msg.attachments.map((att) =>
+                            att.base64DataUrl ? (
+                              <div
+                                key={att.id}
+                                className="rounded-xl overflow-hidden border border-white/20 bg-black/20"
+                              >
+                                <img
+                                  src={att.base64DataUrl}
+                                  alt={att.fileName}
+                                  className="w-full max-h-44 object-cover"
+                                />
+                                <div className="px-2.5 py-1 text-[10px] font-bold flex items-center justify-between">
+                                  <span className="truncate">{att.fileName}</span>
+                                  <span>{att.imageDimensions}</span>
+                                </div>
+                              </div>
                             ) : (
-                              <Volume2 className="w-3 h-3" />
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    {msg.attachments && msg.attachments.length > 0 && (
-                      <div className="grid grid-cols-1 gap-2 pt-1">
-                        {msg.attachments.map((att) =>
-                          att.base64DataUrl ? (
-                            <div
-                              key={att.id}
-                              className="rounded-xl overflow-hidden border border-white/20 bg-black/20"
-                            >
-                              <img
-                                src={att.base64DataUrl}
-                                alt={att.fileName}
-                                className="w-full max-h-44 object-cover"
-                              />
-                              <div className="px-2.5 py-1 text-[10px] font-bold flex items-center justify-between">
-                                <span className="truncate">{att.fileName}</span>
-                                <span>{att.imageDimensions}</span>
+                              <div
+                                key={att.id}
+                                className="p-2 rounded-xl bg-black/15 border border-white/15 flex items-center gap-2 text-[11px]"
+                              >
+                                <FileText className="w-4 h-4 shrink-0 text-indigo-300" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-bold truncate">
+                                    {att.fileName}
+                                  </p>
+                                  <p className="text-[10px] opacity-75">
+                                    {(att.sizeBytes / 1024).toFixed(1)} KB
+                                  </p>
+                                </div>
                               </div>
+                            )
+                          )}
+                        </div>
+                      )}
+
+                      {renderFormattedAiMarkdown(msg.contentText, isUser)}
+
+                      {/* THẺ HÀNH ĐỘNG 1: CHỌN PHÒNG ĐỂ ĐIỀN SẴN HOẶC ĐẶT / XIN PHÉP NGAY TẠI ĐÂY */}
+                      {msg.bookingSuggestion &&
+                        msg.bookingSuggestion.candidateRooms.length > 0 && (
+                          <div
+                            className={`mt-2 p-3 rounded-2xl border space-y-2 ${
+                              isDark
+                                ? 'bg-slate-950 border-slate-800'
+                                : 'bg-white border-slate-200'
+                            }`}
+                          >
+                            <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                              <CalendarCheck className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {ui.chooseRoomHeader(
+                                  msg.bookingSuggestion.dateIso,
+                                  msg.bookingSuggestion.weekdayLabel,
+                                  msg.bookingSuggestion.start,
+                                  msg.bookingSuggestion.end
+                                )}
+                              </span>
+                            </p>
+
+                            <div className="space-y-2">
+                              {msg.bookingSuggestion.candidateRooms.map((rm) => {
+                                const alreadyBookedCode =
+                                  executedBookingMsgIds[msg.id];
+                                const isThisBooked =
+                                  alreadyBookedCode === rm.nodeCode;
+
+                                return (
+                                  <div
+                                    key={rm.nodeCode}
+                                    className={`p-2.5 rounded-xl border flex flex-col gap-2 ${
+                                      isDark
+                                        ? 'bg-slate-900 border-slate-800'
+                                        : 'bg-slate-50 border-slate-200/80'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-extrabold text-xs">
+                                        [{rm.nodeCode}] {rm.nodeLabel}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 shrink-0">
+                                        {ui.roomCapFloor(
+                                          rm.capacityCount,
+                                          rm.floorLevel
+                                        )}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      {onAiNavigateAndPrefillBooking && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            onAiNavigateAndPrefillBooking(rm, {
+                                              dateIso:
+                                                msg.bookingSuggestion!.dateIso,
+                                              start:
+                                                msg.bookingSuggestion!.start,
+                                              end: msg.bookingSuggestion!.end,
+                                              purposeNote:
+                                                msg.bookingSuggestion!
+                                                  .purposeNote,
+                                              approvalRequestReason:
+                                                msg.bookingSuggestion!
+                                                  .approvalRequestReason,
+                                            });
+                                          }}
+                                          className={`flex-1 py-1.5 px-2.5 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition ${
+                                            isDark
+                                              ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+                                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                                          }`}
+                                        >
+                                          <span>{ui.goToBookingPrefillBtn}</span>
+                                          <ArrowRight className="w-3 h-3" />
+                                        </button>
+                                      )}
+
+                                      {onAiExecuteDirectBooking && (
+                                        <button
+                                          type="button"
+                                          disabled={Boolean(alreadyBookedCode)}
+                                          onClick={() => {
+                                            onAiExecuteDirectBooking(rm, {
+                                              dateIso:
+                                                msg.bookingSuggestion!.dateIso,
+                                              start:
+                                                msg.bookingSuggestion!.start,
+                                              end: msg.bookingSuggestion!.end,
+                                              purposeNote:
+                                                msg.bookingSuggestion!
+                                                  .purposeNote,
+                                              approvalRequestReason:
+                                                msg.bookingSuggestion!
+                                                  .approvalRequestReason,
+                                            });
+                                            setExecutedBookingMsgIds((prev) => ({
+                                              ...prev,
+                                              [msg.id]: rm.nodeCode,
+                                            }));
+                                          }}
+                                          className={`flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold flex items-center justify-center gap-1 transition ${
+                                            isThisBooked
+                                              ? 'bg-emerald-600 text-white'
+                                              : alreadyBookedCode
+                                              ? 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-800 text-slate-500'
+                                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
+                                          }`}
+                                        >
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                          <span>
+                                            {isThisBooked
+                                              ? ui.bookedSuccessBtn
+                                              : userProfile.role === 'EMPLOYEE'
+                                              ? ui.requestRoomNowBtn(rm.nodeCode)
+                                              : ui.confirmRoomNowBtn(rm.nodeCode)}
+                                          </span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          ) : (
-                            <div
-                              key={att.id}
-                              className="p-2 rounded-xl bg-black/15 border border-white/15 flex items-center gap-2 text-[11px]"
-                            >
-                              <FileText className="w-4 h-4 shrink-0 text-indigo-300" />
-                              <div className="min-w-0 flex-1">
-                                <p className="font-bold truncate">
-                                  {att.fileName}
-                                </p>
-                                <p className="text-[10px] opacity-75">
-                                  {(att.sizeBytes / 1024).toFixed(1)} KB
-                                </p>
-                              </div>
-                            </div>
-                          )
+                          </div>
                         )}
-                      </div>
-                    )}
 
-                    {renderFormattedAiMarkdown(msg.contentText, isUser)}
-
-                    {/* THẺ HÀNH ĐỘNG 1: CHỌN PHÒNG ĐỂ ĐIỀN SẴN HOẶC ĐẶT / XIN PHÉP NGAY TẠI ĐÂY */}
-                    {msg.bookingSuggestion &&
-                      msg.bookingSuggestion.candidateRooms.length > 0 && (
+                      {/* THẺ HÀNH ĐỘNG 2: FORM BỔ SUNG THÔNG TIN ĐỂ TẠO NHÓM MỚI TRỰC TIẾP TRONG CHAT AI */}
+                      {msg.groupDraftAction && (
                         <div
-                          className={`mt-2 p-3 rounded-2xl border space-y-2 ${
+                          className={`mt-2 p-3.5 rounded-2xl border space-y-2.5 ${
                             isDark
                               ? 'bg-slate-950 border-slate-800'
                               : 'bg-white border-slate-200'
                           }`}
                         >
-                          <p className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
-                            <CalendarCheck className="w-3.5 h-3.5" />
+                          <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
+                            <Users className="w-4 h-4" />
                             <span>
-                              Chọn phòng bên dưới ({msg.bookingSuggestion.dateIso} •{' '}
-                              {msg.bookingSuggestion.start} –{' '}
-                              {msg.bookingSuggestion.end}):
+                              {ui.groupFormHeader(
+                                msg.groupDraftAction.departmentName
+                              )}
                             </span>
-                          </p>
+                          </div>
 
-                          <div className="space-y-2">
-                            {msg.bookingSuggestion.candidateRooms.map((rm) => {
-                              const alreadyBookedCode =
-                                executedBookingMsgIds[msg.id];
-                              const isThisBooked =
-                                alreadyBookedCode === rm.nodeCode;
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                                {ui.groupCodeLabel}
+                              </label>
+                              <input
+                                type="text"
+                                value={inlineGrpCode}
+                                onChange={(e) => setInlineGrpCode(e.target.value)}
+                                className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                  isDark
+                                    ? 'bg-slate-900 border-slate-700 text-white'
+                                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                                {ui.groupTagLabel}
+                              </label>
+                              <input
+                                type="text"
+                                value={inlineGrpTag}
+                                onChange={(e) => setInlineGrpTag(e.target.value)}
+                                className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                  isDark
+                                    ? 'bg-slate-900 border-slate-700 text-white'
+                                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                                }`}
+                              />
+                            </div>
+                          </div>
 
-                              return (
-                                <div
-                                  key={rm.nodeCode}
-                                  className={`p-2.5 rounded-xl border flex flex-col gap-2 ${
-                                    isDark
-                                      ? 'bg-slate-900 border-slate-800'
-                                      : 'bg-slate-50 border-slate-200/80'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-extrabold text-xs">
-                                      [{rm.nodeCode}] {rm.nodeLabel}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">
-                                      {rm.capacityCount} chỗ • Tầng {rm.floorLevel}
-                                    </span>
-                                  </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                              {ui.groupNameLabel}
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineGrpName}
+                              onChange={(e) => setInlineGrpName(e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                              }`}
+                            />
+                          </div>
 
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {onAiNavigateAndPrefillBooking && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          onAiNavigateAndPrefillBooking(rm, {
-                                            dateIso:
-                                              msg.bookingSuggestion!.dateIso,
-                                            start: msg.bookingSuggestion!.start,
-                                            end: msg.bookingSuggestion!.end,
-                                            purposeNote:
-                                              msg.bookingSuggestion!.purposeNote,
-                                            approvalRequestReason:
-                                              msg.bookingSuggestion!
-                                                .approvalRequestReason,
-                                          });
-                                        }}
-                                        className={`flex-1 py-1.5 px-2.5 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition ${
-                                          isDark
-                                            ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-                                            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                                        }`}
-                                      >
-                                        <span>Đi đến Trang Đặt phòng (Điền sẵn)</span>
-                                        <ArrowRight className="w-3 h-3" />
-                                      </button>
-                                    )}
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                              {ui.groupLeaderLabel}
+                            </label>
+                            <select
+                              value={inlineGrpLeader}
+                              onChange={(e) => setInlineGrpLeader(e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                              }`}
+                            >
+                              {deptEligibleLeaders.map((ld) => (
+                                <option key={ld.userEmail} value={ld.userEmail}>
+                                  {ld.fullName} ({ld.role})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                                    {onAiExecuteDirectBooking && (
-                                      <button
-                                        type="button"
-                                        disabled={Boolean(alreadyBookedCode)}
-                                        onClick={() => {
-                                          onAiExecuteDirectBooking(rm, {
-                                            dateIso:
-                                              msg.bookingSuggestion!.dateIso,
-                                            start: msg.bookingSuggestion!.start,
-                                            end: msg.bookingSuggestion!.end,
-                                            purposeNote:
-                                              msg.bookingSuggestion!.purposeNote,
-                                            approvalRequestReason:
-                                              msg.bookingSuggestion!
-                                                .approvalRequestReason,
-                                          });
-                                          setExecutedBookingMsgIds((prev) => ({
-                                            ...prev,
-                                            [msg.id]: rm.nodeCode,
-                                          }));
-                                        }}
-                                        className={`flex-1 py-1.5 px-2.5 rounded-lg text-[11px] font-extrabold flex items-center justify-center gap-1 transition ${
-                                          isThisBooked
-                                            ? 'bg-emerald-600 text-white'
-                                            : alreadyBookedCode
-                                            ? 'opacity-40 cursor-not-allowed bg-slate-300 dark:bg-slate-800 text-slate-500'
-                                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                                        }`}
-                                      >
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                        <span>
-                                          {isThisBooked
-                                            ? 'Đã Tạo Đơn Thành Công!'
-                                            : userProfile.role === 'EMPLOYEE'
-                                            ? `Gửi Xin Phép ${rm.nodeCode} Ngay`
-                                            : `Xác nhận Đặt ${rm.nodeCode} Ngay`}
-                                        </span>
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
+                              {ui.groupDescLabel}
+                            </label>
+                            <input
+                              type="text"
+                              value={inlineGrpDesc}
+                              onChange={(e) => setInlineGrpDesc(e.target.value)}
+                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] ${
+                                isDark
+                                  ? 'bg-slate-900 border-slate-700 text-white'
+                                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                              }`}
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={Boolean(executedGroupMsgIds[msg.id])}
+                            onClick={() => {
+                              if (!onAiUpsertGroup || !inlineGrpName.trim())
+                                return;
+                              const leaderObj = trustProfiles.find(
+                                (tp) =>
+                                  tp.userEmail.toLowerCase() ===
+                                  inlineGrpLeader.toLowerCase()
                               );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                    {/* THẺ HÀNH ĐỘNG 2: FORM BỔ SUNG THÔNG TIN ĐỂ TẠO NHÓM MỚI TRỰC TIẾP TRONG CHAT AI (MANAGER / ADMIN) */}
-                    {msg.groupDraftAction && (
-                      <div
-                        className={`mt-2 p-3.5 rounded-2xl border space-y-2.5 ${
-                          isDark
-                            ? 'bg-slate-950 border-slate-800'
-                            : 'bg-white border-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                          <Users className="w-4 h-4" />
-                          <span>
-                            Điền thông tin tạo nhóm ({msg.groupDraftAction.departmentName})
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                              Mã nhóm (Code)
-                            </label>
-                            <input
-                              type="text"
-                              value={inlineGrpCode}
-                              onChange={(e) => setInlineGrpCode(e.target.value)}
-                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
-                                isDark
-                                  ? 'bg-slate-900 border-slate-700 text-white'
-                                  : 'bg-slate-50 border-slate-200 text-slate-900'
-                              }`}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                              Nhãn dự án (Tag)
-                            </label>
-                            <input
-                              type="text"
-                              value={inlineGrpTag}
-                              onChange={(e) => setInlineGrpTag(e.target.value)}
-                              className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
-                                isDark
-                                  ? 'bg-slate-900 border-slate-700 text-white'
-                                  : 'bg-slate-50 border-slate-200 text-slate-900'
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                            Tên nhóm chuyên môn
-                          </label>
-                          <input
-                            type="text"
-                            value={inlineGrpName}
-                            onChange={(e) => setInlineGrpName(e.target.value)}
-                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
-                              isDark
-                                ? 'bg-slate-900 border-slate-700 text-white'
-                                : 'bg-slate-50 border-slate-200 text-slate-900'
-                            }`}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                            Chọn Trưởng nhóm phụ trách
-                          </label>
-                          <select
-                            value={inlineGrpLeader}
-                            onChange={(e) => setInlineGrpLeader(e.target.value)}
-                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] font-bold ${
-                              isDark
-                                ? 'bg-slate-900 border-slate-700 text-white'
-                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                              const newGroup: OrganizationGroupItem = {
+                                groupId: `GRP-AI-${Date.now()}`,
+                                groupCode: inlineGrpCode.trim().toUpperCase(),
+                                groupName: inlineGrpName.trim(),
+                                departmentName:
+                                  msg.groupDraftAction!.departmentName,
+                                description: inlineGrpDesc.trim(),
+                                leaderEmail: inlineGrpLeader,
+                                leaderName:
+                                  leaderObj?.fullName || userProfile.fullName,
+                                projectTag: inlineGrpTag.trim() || 'AI Squad',
+                                memberEmails: [inlineGrpLeader],
+                                updatedAtIso: new Date().toISOString(),
+                              };
+                              onAiUpsertGroup(newGroup);
+                              setExecutedGroupMsgIds((prev) => ({
+                                ...prev,
+                                [msg.id]: true,
+                              }));
+                            }}
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
+                              executedGroupMsgIds[msg.id]
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
                             }`}
                           >
-                            {deptEligibleLeaders.map((ld) => (
-                              <option key={ld.userEmail} value={ld.userEmail}>
-                                {ld.fullName} ({ld.role})
-                              </option>
-                            ))}
-                          </select>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>
+                              {executedGroupMsgIds[msg.id]
+                                ? ui.groupCreatedBtn
+                                : ui.groupConfirmBtn}
+                            </span>
+                          </button>
                         </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-400 block mb-0.5">
-                            Mô tả nhiệm vụ nhóm
-                          </label>
-                          <input
-                            type="text"
-                            value={inlineGrpDesc}
-                            onChange={(e) => setInlineGrpDesc(e.target.value)}
-                            className={`w-full px-2.5 py-1.5 rounded-lg border text-[11px] ${
-                              isDark
-                                ? 'bg-slate-900 border-slate-700 text-white'
-                                : 'bg-slate-50 border-slate-200 text-slate-900'
-                            }`}
-                          />
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={Boolean(executedGroupMsgIds[msg.id])}
-                          onClick={() => {
-                            if (!onAiUpsertGroup || !inlineGrpName.trim()) return;
-                            const leaderObj = trustProfiles.find(
-                              (tp) =>
-                                tp.userEmail.toLowerCase() ===
-                                inlineGrpLeader.toLowerCase()
-                            );
-                            const newGroup: OrganizationGroupItem = {
-                              groupId: `GRP-AI-${Date.now()}`,
-                              groupCode: inlineGrpCode.trim().toUpperCase(),
-                              groupName: inlineGrpName.trim(),
-                              departmentName:
-                                msg.groupDraftAction!.departmentName,
-                              description: inlineGrpDesc.trim(),
-                              leaderEmail: inlineGrpLeader,
-                              leaderName:
-                                leaderObj?.fullName || userProfile.fullName,
-                              projectTag: inlineGrpTag.trim() || 'AI Squad',
-                              memberEmails: [inlineGrpLeader],
-                              updatedAtIso: new Date().toISOString(),
-                            };
-                            onAiUpsertGroup(newGroup);
-                            setExecutedGroupMsgIds((prev) => ({
-                              ...prev,
-                              [msg.id]: true,
-                            }));
-                          }}
-                          className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition ${
-                            executedGroupMsgIds[msg.id]
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                          }`}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>
-                            {executedGroupMsgIds[msg.id]
-                              ? 'Đã Tạo Nhóm Thành Công!'
-                              : 'Xác nhận Tạo Nhóm Ngay'}
-                          </span>
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          {/* CÁC NÚT GỢI Ý LỆNH THỰC THI NHANH THEO ROLE */}
-          <div className="px-3.5 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar border-t border-slate-200/60 dark:border-slate-800/80 shrink-0">
-            {quickSuggestedPrompts.map((qText) => (
-              <button
-                key={qText}
-                type="button"
-                onClick={() => handleSubmitChat(undefined, qText)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap transition shrink-0 ${
-                  isDark
-                    ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
-                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-indigo-400'
-                }`}
-              >
-                {qText}
-              </button>
-            ))}
-          </div>
-
-          {pendingAttachments.length > 0 && (
-            <div
-              className={`px-3.5 py-2 border-t flex flex-wrap gap-2 max-h-28 overflow-y-auto ${
-                isDark
-                  ? 'bg-slate-900/90 border-slate-800'
-                  : 'bg-slate-50 border-slate-200'
-              }`}
-            >
-              {pendingAttachments.map((att) => (
-                <div
-                  key={att.id}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold ${
+            {/* CÁC NÚT GỢI Ý LỆNH THỰC THI NHANH THEO ROLE */}
+            <div className="px-3.5 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar border-t border-slate-200/60 dark:border-slate-800/80 shrink-0">
+              {quickSuggestedPrompts.map((qText) => (
+                <button
+                  key={qText}
+                  type="button"
+                  onClick={() => handleSubmitChat(undefined, qText)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap transition shrink-0 ${
                     isDark
-                      ? 'bg-slate-950 border-slate-700 text-slate-200'
-                      : 'bg-white border-slate-200 text-slate-800'
+                      ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-indigo-400'
                   }`}
                 >
-                  {att.base64DataUrl ? (
-                    <img
-                      src={att.base64DataUrl}
-                      alt={att.fileName}
-                      className="w-7 h-7 rounded object-cover"
-                    />
-                  ) : (
-                    <FileText className="w-4 h-4 text-indigo-500" />
-                  )}
-                  <span className="truncate max-w-[130px]">{att.fileName}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPendingAttachments((prev) =>
-                        prev.filter((item) => item.id !== att.id)
-                      )
-                    }
-                    className="text-slate-400 hover:text-rose-500"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                  {qText}
+                </button>
               ))}
             </div>
-          )}
 
-          {/* THANH NHẬP LỆNH / CÂU HỎI + ĐÍNH KÈM ẢNH & FILE */}
-          <form
-            onSubmit={(e) => handleSubmitChat(e)}
-            className={`p-3 border-t flex items-center gap-2 shrink-0 ${
-              isDark
-                ? 'bg-slate-950 border-slate-800'
-                : 'bg-white border-slate-200'
-            }`}
-          >
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handleFileUploadChange(e, 'IMAGE')}
-              className="hidden"
-            />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".txt,.csv,.json,.md,.ts,.tsx,.js,.py,.log,.html,.xml,.pdf,.doc,.docx"
-              multiple
-              onChange={(e) => handleFileUploadChange(e, 'FILE')}
-              className="hidden"
-            />
+            {pendingAttachments.length > 0 && (
+              <div
+                className={`px-3.5 py-2 border-t flex flex-wrap gap-2 max-h-28 overflow-y-auto ${
+                  isDark
+                    ? 'bg-slate-900/90 border-slate-800'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                {pendingAttachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold ${
+                      isDark
+                        ? 'bg-slate-950 border-slate-700 text-slate-200'
+                        : 'bg-white border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    {att.base64DataUrl ? (
+                      <img
+                        src={att.base64DataUrl}
+                        alt={att.fileName}
+                        className="w-7 h-7 rounded object-cover"
+                      />
+                    ) : (
+                      <FileText className="w-4 h-4 text-indigo-500" />
+                    )}
+                    <span className="truncate max-w-[130px]">
+                      {att.fileName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPendingAttachments((prev) =>
+                          prev.filter((item) => item.id !== att.id)
+                        )
+                      }
+                      className="text-slate-400 hover:text-rose-500"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className={`p-2.5 rounded-xl border transition shrink-0 ${
+            {/* THANH NHẬP LỆNH / CÂU HỎI + ĐÍNH KÈM ẢNH & FILE */}
+            <form
+              onSubmit={(e) => handleSubmitChat(e)}
+              className={`p-3 border-t flex items-center gap-2 shrink-0 ${
                 isDark
-                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  ? 'bg-slate-950 border-slate-800'
+                  : 'bg-white border-slate-200'
               }`}
-              title="Đính kèm Hình ảnh"
             >
-              <ImageIcon className="w-4 h-4" />
-            </button>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handleFileUploadChange(e, 'IMAGE')}
+                className="hidden"
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.json,.md,.ts,.tsx,.js,.py,.log,.html,.xml,.pdf,.doc,.docx"
+                multiple
+                onChange={(e) => handleFileUploadChange(e, 'FILE')}
+                className="hidden"
+              />
 
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className={`p-2.5 rounded-xl border transition shrink-0 ${
-                isDark
-                  ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
-                  : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-              }`}
-              title="Đính kèm Tệp tin"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                className={`p-2.5 rounded-xl border transition shrink-0 ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+                title={ui.attachImgTooltip}
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
 
-            <input
-              type="text"
-              value={promptInput}
-              onChange={(e) => setPromptInput(e.target.value)}
-              placeholder={
-                webLanguage === 'en'
-                  ? 'Ask AI to book a room, manage groups, or run analytics...'
-                  : webLanguage === 'ja'
-                  ? '会議室の自動予約、グループ管理、データ分析を指示...'
-                  : 'Ra lệnh đặt phòng, tạo nhóm, đổi thiết bị hoặc hỏi đáp...'
-              }
-              className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
-                isDark
-                  ? 'bg-slate-900 border-slate-800 text-white focus:border-indigo-500'
-                  : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500'
-              }`}
-            />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-2.5 rounded-xl border transition shrink-0 ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50'
+                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                }`}
+                title={ui.attachFileTooltip}
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
 
-            <button
-              type="submit"
-              className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition shrink-0"
-              title="Gửi tin nhắn"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
-        </aside>
+              <input
+                type="text"
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                placeholder={ui.inputPlaceholder}
+                className={`flex-1 px-3.5 py-2.5 rounded-xl border text-xs font-semibold outline-none ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-white focus:border-indigo-500'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-indigo-500'
+                }`}
+              />
+
+              <button
+                type="submit"
+                className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition shrink-0"
+                title={ui.sendTooltip}
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </form>
+          </aside>
+        </>
       )}
     </>
   );
