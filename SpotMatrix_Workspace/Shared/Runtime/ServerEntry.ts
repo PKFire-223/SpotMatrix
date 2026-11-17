@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
@@ -52,13 +52,16 @@ async function bootstrapBackendServer(): Promise<void> {
   const indexHtmlPath = path.join(distDir, 'index.html');
   if (fs.existsSync(indexHtmlPath)) {
     appServer.use(express.static(distDir));
-    appServer.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api/')) {
-        next();
-        return;
+    appServer.get(
+      '*',
+      (req: Request, res: Response, next: NextFunction): void => {
+        if (req.path.startsWith('/api/')) {
+          next();
+          return;
+        }
+        res.sendFile(indexHtmlPath);
       }
-      res.sendFile(indexHtmlPath);
-    });
+    );
   }
 
   appServer.use(handleGlobalException);

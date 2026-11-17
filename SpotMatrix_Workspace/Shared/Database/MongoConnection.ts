@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose, { ConnectOptions } from 'mongoose';
 import { loadSystemEnvConfig } from '../Config/EnvConfig';
 import { WorkspaceNodeItem } from '../Types/GlobalSystemTypes';
 
@@ -75,9 +75,10 @@ export const fallbackMemoryNodes: WorkspaceNodeItem[] = [
 export async function connectMongoDatabase(): Promise<boolean> {
   const envConfig = loadSystemEnvConfig();
   try {
-    await mongoose.connect(envConfig.mongoUri, {
+    const connectOpts: ConnectOptions = {
       serverSelectionTimeoutMS: 2500,
-    });
+    };
+    await mongoose.connect(envConfig.mongoUri, connectOpts);
     isMongoConnectedState = true;
     console.log('[MongoDB] Da ket noi thanh cong toi:', envConfig.mongoUri);
     return true;
