@@ -372,7 +372,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
         isDark ? 'bg-[#040711] text-slate-100' : 'bg-[#EEF4FF] text-slate-900'
       }`}
     >
-      {/* LỚP NỀN WEBGL 3D THREE.JS PBR CỐ ĐỊNH TOÀN MÀN HÌNH */}
+      {/* LỚP NỀN WEBGL 3D THREE.JS SIÊU NÉT (HIỂN THỊ KHI MỚI VÀO TRANG HOẶC KHI TƯƠNG TÁC 3D) */}
       <SpotMatrixHeroCanvas3D
         scrollProgress={scrollProgress}
         activeChapter={activeChapter}
@@ -382,14 +382,42 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
         isPaused={isScenePaused}
       />
 
+      {/* LỚP BACKGROUND ẢNH TÒA NHÀ KIẾN TRÚC CỐ ĐỊNH PHÍA SAU KHI CUỘN XUỐNG ĐỌC NỘI DUNG */}
+      <div
+        className="pointer-events-none fixed inset-0 z-[1] transition-opacity duration-700"
+        style={{
+          opacity:
+            pure3dInspectMode || isCinematicAutoFly || selectedFloorPreview !== null
+              ? 0
+              : Math.min(1, Math.max(0, (scrollProgress - 0.08) / 0.14)),
+        }}
+        aria-hidden="true"
+      >
+        <img
+          src="/assets/spotmatrix-hq-backdrop.jpg"
+          alt="SpotMatrix Architectural Headquarters Backdrop"
+          className="w-full h-full object-cover object-center scale-105"
+          style={{
+            transform: `scale(${1.04 + scrollProgress * 0.05}) translateY(${-scrollProgress * 18}px)`,
+          }}
+        />
+        <div
+          className={`absolute inset-0 ${
+            isDark
+              ? 'bg-slate-950/75'
+              : 'bg-white/78'
+          }`}
+        />
+      </div>
+
       {/* LỚP PHỦ VIGNETTE GIÚP CHỮ BÊN TRÁI LUÔN RÕ NÉT TRÊN MỌI NỀN SÁNG/TỐI */}
       <div
-        className={`pointer-events-none fixed inset-0 z-[1] transition-opacity duration-500 ${
+        className={`pointer-events-none fixed inset-0 z-[2] transition-opacity duration-500 ${
           pure3dInspectMode ? 'opacity-0' : 'opacity-100'
         } ${
           isDark
-            ? 'bg-gradient-to-r from-[#040711]/95 via-[#040711]/55 to-transparent'
-            : 'bg-gradient-to-r from-white/95 via-white/65 to-transparent'
+            ? 'bg-gradient-to-r from-[#040711]/90 via-[#040711]/45 to-transparent'
+            : 'bg-gradient-to-r from-white/90 via-white/45 to-transparent'
         }`}
       />
 
@@ -413,35 +441,12 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
                   : 'bg-indigo-50 border-indigo-200 text-indigo-700'
               }`}
             >
-              <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
+              <Radio className="w-3 h-3 text-emerald-500" />
               {t.navBadge}
             </span>
           </div>
 
-          {/* 4 Nút chuyển nhanh Chương 3D theo thanh cuộn */}
-          <nav className="hidden lg:flex items-center gap-1.5">
-            {t.chapterLabels.map((label, idx) => {
-              const chapterNum = (idx + 1) as 1 | 2 | 3 | 4;
-              const isCurrent = activeChapter === chapterNum;
-              const targetRatios = [0.0, 0.36, 0.68, 0.94];
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => scrollToChapterRatio(targetRatios[idx])}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all ${
-                    isCurrent
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : isDark
-                      ? 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </nav>
+
 
           {/* Cụm Nút Ngắm 3D, Chuyển đổi Ngôn ngữ (VI / EN / JA), Sáng/Tối & Nút vào Hệ thống */}
           <div className="flex items-center gap-2">

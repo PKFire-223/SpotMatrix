@@ -374,15 +374,15 @@ export const QuickCommandPalette: React.FC<QuickCommandPaletteProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center pt-[10vh] px-3 sm:px-4 bg-slate-950/55 backdrop-blur-xs"
+      className="fixed inset-0 z-[70] flex items-start justify-center pt-[10vh] px-3 sm:px-4 bg-slate-950/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl border transition-all duration-200 ${
           isDark
-            ? 'bg-slate-900/95 border-slate-700/80 text-slate-100'
-            : 'bg-white/98 border-slate-200 text-slate-800'
+            ? 'bg-slate-900 border-slate-700 text-slate-100'
+            : 'bg-white border-slate-200 text-slate-800'
         }`}
       >
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200/70 dark:border-slate-800">
@@ -399,7 +399,7 @@ export const QuickCommandPalette: React.FC<QuickCommandPaletteProps> = ({
                 ? '会議室コード (M3-04, H-01)、ページ、設定を検索...'
                 : 'Tìm nhanh phòng họp (M3-04, H-01), chuyển trang hoặc cài đặt...'
             }
-            className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+            className="flex-1 bg-transparent text-sm font-semibold outline-none focus:outline-none focus-visible:outline-none placeholder:text-slate-400"
           />
           <button
             type="button"

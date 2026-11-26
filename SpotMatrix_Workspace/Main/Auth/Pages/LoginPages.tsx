@@ -453,8 +453,7 @@ export const LoginPages: React.FC<LoginPagesProps> = ({
                   : 'bg-white/90 border-slate-200/90 shadow-indigo-500/10'
               }`}
             >
-              {/* Tia quet Radar chuyen dong doc */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-transparent via-indigo-500/10 to-emerald-500/20 border-b border-emerald-400/40 animate-radar-sweep" />
+
 
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
                 <div className="flex items-center gap-2">
