@@ -127,6 +127,20 @@ interface AttachedFilePayload {
   imageDimensions?: string;
 }
 
+interface AiAnalyticsChartBarItem {
+  label: string;
+  value: number;
+  maxValue: number;
+  accent: 'indigo' | 'emerald' | 'amber' | 'rose';
+}
+
+interface AiAnalyticsChartPayload {
+  title: string;
+  subtitle: string;
+  unit: string;
+  bars: AiAnalyticsChartBarItem[];
+}
+
 interface AiChatMessageItem {
   id: string;
   sender: 'USER' | 'AI';
@@ -135,6 +149,7 @@ interface AiChatMessageItem {
   attachments?: AttachedFilePayload[];
   bookingSuggestion?: AiBookingSlotSuggestion;
   groupDraftAction?: AiGroupDraftAction;
+  analyticsChart?: AiAnalyticsChartPayload;
 }
 
 const AI_WIDGET_I18N: Record<
@@ -696,7 +711,7 @@ const SpotMatrixMascot3DStage: React.FC<{
 
       <div className="pointer-events-none absolute top-2.5 left-3 right-3 flex items-center justify-between text-[10px] font-extrabold">
         <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-cyan-400/40 text-cyan-300 backdrop-blur-md flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
           AURA-X 3D • AI AGENT
         </span>
         <span className="px-2.5 py-1 rounded-full bg-slate-950/80 border border-indigo-400/40 text-indigo-300 backdrop-blur-md">
@@ -1447,6 +1462,7 @@ Tôi là **AURA-X**, AI Agent thực thi tác vụ trực tiếp theo phân quy�
     replyText: string;
     bookingSuggestion?: AiBookingSlotSuggestion;
     groupDraftAction?: AiGroupDraftAction;
+    analyticsChart?: AiAnalyticsChartPayload;
   } => {
     const q = rawQuery.trim().toLowerCase();
     const kb = roleScopedKnowledgeBase;
@@ -1836,6 +1852,24 @@ ${affectedEquips
 - **Chính sách cộng/trừ hiện hành**: Cộng định kỳ **+20 điểm/tháng** • Quét QR đúng hạn **+2 điểm** • Trễ hạn thu hồi phòng **-10 điểm**.
 ### Chi tiết từng nhân sự
 ${userLines}`,
+          analyticsChart: {
+            title: 'Biểu đồ Điểm Tín nhiệm Nhân sự (Generative UI)',
+            subtitle: `Trung bình toàn công ty: ${avgAll}/100đ`,
+            unit: 'đ',
+            bars: trustProfiles.slice(0, 6).map((u) => ({
+              label: `${u.fullName.split(' ').slice(-2).join(' ')} (${u.role})`,
+              value: u.trustScore,
+              maxValue: 100,
+              accent:
+                u.trustScore >= 90
+                  ? 'emerald'
+                  : u.trustScore >= 75
+                  ? 'indigo'
+                  : u.trustScore >= 60
+                  ? 'amber'
+                  : 'rose',
+            })),
+          },
         };
       }
 
@@ -1877,6 +1911,7 @@ ${userLines}`,
                 .join('\n')
             : `- Tháng ${targetMonth}/2026 ghi nhận 18 lượt mượn phòng lưu trữ định kỳ (Tỷ lệ quét QR đúng hạn đạt 94.4%).`;
 
+        const chartMax = Math.max(1, totalCount, checkedInCount, confirmedWait, cancelledOrExpired);
         return {
           replyText: `### 🔍 [SYS_ADMIN] Kết quả Truy quét Lượt Mượn Phòng Tháng ${targetMonth}/2026
 - **Tổng số phiên đăng ký trong tháng ${targetMonth}**: **${
@@ -1885,6 +1920,31 @@ ${userLines}`,
 - **Phân loại trạng thái**: Đã quét QR nhận phòng: **${checkedInCount}** • Đang hoạt động/Chờ quét: **${confirmedWait}** • Đã hủy/Trễ hạn: **${cancelledOrExpired}**
 ### Danh sách truy vết chi tiết
 ${detailLines}`,
+          analyticsChart: {
+            title: `Phân bổ Trạng thái Đặt phòng Tháng ${targetMonth}/2026`,
+            subtitle: `Tổng số phiên ghi nhận: ${totalCount > 0 ? totalCount : 18} lượt`,
+            unit: ' lượt',
+            bars: [
+              {
+                label: 'Đã quét QR nhận phòng',
+                value: checkedInCount,
+                maxValue: chartMax,
+                accent: 'emerald',
+              },
+              {
+                label: 'Đã duyệt • Chờ quét QR',
+                value: confirmedWait,
+                maxValue: chartMax,
+                accent: 'indigo',
+              },
+              {
+                label: 'Đã hủy / Trễ hạn',
+                value: cancelledOrExpired,
+                maxValue: chartMax,
+                accent: 'rose',
+              },
+            ],
+          },
         };
       }
 
@@ -2302,8 +2362,11 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
                 ', '
               )}). Lịch cá nhân: ${roleScopedKnowledgeBase.myBookings.length} vé. TUYỆT ĐỐI KHÔNG tiết lộ điểm tín nhiệm hay lịch đặt phòng của người khác, không tiết lộ phòng ban khác.`;
 
+      const streamingMsgId = `AI-STREAM-${Date.now() + 1}`;
+      let streamedMessageInserted = false;
+
       try {
-        const response = await fetch('/api/v1/ai/chat', {
+        const streamRes = await fetch('/api/v1/ai/chat-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2315,14 +2378,113 @@ Chào **${userProfile.fullName}** (\`@${userProfile.username}\`)! Tôi là **AUR
             webLanguage,
           }),
         });
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.replyText && typeof data.replyText === 'string') {
-            finalReply = data.replyText.trim();
+
+        if (streamRes.ok && streamRes.body) {
+          const reader = streamRes.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let sseBuffer = '';
+          let accumulatedText = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+            sseBuffer += decoder.decode(value, { stream: true });
+            const sseEvents = sseBuffer.split('\n\n');
+            sseBuffer = sseEvents.pop() || '';
+
+            for (const rawEvent of sseEvents) {
+              const dataLine = rawEvent
+                .split('\n')
+                .find((line) => line.startsWith('data: '));
+              if (!dataLine) {
+                continue;
+              }
+              try {
+                const parsed = JSON.parse(dataLine.slice(6)) as {
+                  type?: string;
+                  delta?: string;
+                  replyText?: string | null;
+                };
+                if (parsed.type === 'delta' && typeof parsed.delta === 'string') {
+                  accumulatedText += parsed.delta;
+                  if (!streamedMessageInserted) {
+                    streamedMessageInserted = true;
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        id: streamingMsgId,
+                        sender: 'AI',
+                        contentText: accumulatedText,
+                        timestampText: nowTimeStr,
+                      },
+                    ]);
+                  } else {
+                    const snapshotText = accumulatedText;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === streamingMsgId
+                          ? { ...m, contentText: snapshotText }
+                          : m
+                      )
+                    );
+                  }
+                } else if (
+                  parsed.type === 'done' &&
+                  typeof parsed.replyText === 'string' &&
+                  parsed.replyText.trim().length > 0
+                ) {
+                  accumulatedText = parsed.replyText.trim();
+                }
+              } catch {
+                // Bỏ qua chunk JSON không trọn vẹn
+              }
+            }
+          }
+
+          if (accumulatedText.trim().length > 0) {
+            finalReply = accumulatedText.trim();
+            if (streamedMessageInserted) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === streamingMsgId
+                    ? { ...m, contentText: finalReply }
+                    : m
+                )
+              );
+              setAiMood('IDLE');
+              return;
+            }
           }
         }
       } catch {
-        // Fallback sang Cloud LLM
+        // Fallback sang endpoint JSON truyền thống /api/v1/ai/chat
+      }
+
+      if (!finalReply) {
+        try {
+          const response = await fetch('/api/v1/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              promptText: text,
+              personaLabel: 'AURA-X — AI Agent Độc quyền SpotMatrix',
+              workspaceContextText: allowedScopedContext,
+              conversationHistory: messages.slice(-5),
+              attachments: currentAttachments,
+              webLanguage,
+            }),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data?.replyText && typeof data.replyText === 'string') {
+              finalReply = data.replyText.trim();
+            }
+          }
+        } catch {
+          // Fallback sang Cloud LLM
+        }
       }
 
       if (!finalReply) {
@@ -2368,6 +2530,7 @@ ${allowedScopedContext}`,
       timestampText: nowTimeStr,
       bookingSuggestion: localAgentResult.bookingSuggestion,
       groupDraftAction: localAgentResult.groupDraftAction,
+      analyticsChart: localAgentResult.analyticsChart,
     };
 
     setMessages((prev) => [...prev, aiMsg]);
@@ -2700,6 +2863,64 @@ ${allowedScopedContext}`,
                       )}
 
                       {renderFormattedAiMarkdown(msg.contentText, isUser)}
+
+                      {/* GENERATIVE UI: BIỂU ĐỒ MINI-BAR TƯƠNG TÁC TRONG KHUNG CHAT (THEO CHUẨN OPENUI / VERCEL AI) */}
+                      {msg.analyticsChart && msg.analyticsChart.bars.length > 0 && (
+                        <div
+                          className={`mt-2 p-3 rounded-2xl border space-y-2.5 ${
+                            isDark
+                              ? 'bg-slate-950/90 border-slate-800'
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-200/70 dark:border-slate-800 pb-1.5">
+                            <p className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100">
+                              {msg.analyticsChart.title}
+                            </p>
+                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0">
+                              {msg.analyticsChart.subtitle}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            {msg.analyticsChart.bars.map((bar) => {
+                              const pct = Math.min(
+                                100,
+                                Math.max(
+                                  4,
+                                  Math.round((bar.value / Math.max(1, bar.maxValue)) * 100)
+                                )
+                              );
+                              const barColorClass =
+                                bar.accent === 'emerald'
+                                  ? 'bg-emerald-500'
+                                  : bar.accent === 'amber'
+                                  ? 'bg-amber-500'
+                                  : bar.accent === 'rose'
+                                  ? 'bg-rose-500'
+                                  : 'bg-indigo-600';
+                              return (
+                                <div key={bar.label} className="space-y-1">
+                                  <div className="flex items-center justify-between text-[10px] font-bold">
+                                    <span className="truncate pr-2 text-slate-700 dark:text-slate-300">
+                                      {bar.label}
+                                    </span>
+                                    <span className="tabular-nums font-extrabold text-slate-900 dark:text-white shrink-0">
+                                      {bar.value}
+                                      {msg.analyticsChart?.unit}
+                                    </span>
+                                  </div>
+                                  <div className="h-2 w-full rounded-full bg-slate-200/80 dark:bg-slate-800 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-[width] duration-300 ${barColorClass}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* THẺ HÀNH ĐỘNG 1: CHỌN PHÒNG ĐỂ ĐIỀN SẴN HOẶC ĐẶT / XIN PHÉP NGAY TẠI ĐÂY */}
                       {msg.bookingSuggestion &&

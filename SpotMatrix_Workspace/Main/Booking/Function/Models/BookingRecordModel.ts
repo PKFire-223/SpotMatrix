@@ -78,6 +78,20 @@ const bookingRecordSchema = new Schema<BookingPayloadItem>(
   { timestamps: true, collection: 'spotmatrix_booking_records' }
 );
 
+// Compound Indexes tăng tốc truy vấn kiểm tra trùng lịch, lịch cá nhân và quét No-Show
+bookingRecordSchema.index(
+  { nodeId: 1, bookingDateIso: 1, bookingStatus: 1 },
+  { name: 'idx_node_date_status' }
+);
+bookingRecordSchema.index(
+  { userEmail: 1, bookingDateIso: -1 },
+  { name: 'idx_user_booking_history' }
+);
+bookingRecordSchema.index(
+  { bookingStatus: 1, approvalStatus: 1 },
+  { name: 'idx_status_approval_queue' }
+);
+
 export const BookingRecordModel =
   mongoose.models.SpotMatrixBookingRecord ||
   mongoose.model<BookingPayloadItem>(

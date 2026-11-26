@@ -26,9 +26,12 @@ import {
   VolumeX,
   Globe,
   Menu,
+  Search,
   X,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { SpotMatrixLogo } from '../Components/SpotMatrixLogo';
+import { QuickCommandPalette } from '../Components/QuickCommandPalette';
 import {
   AuditConcurrencyLogItem,
   BookingPayloadItem,
@@ -621,6 +624,19 @@ const MainWorkspaceRoutes: React.FC = () => {
   const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
     useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] =
+    useState<boolean>(false);
+
+  useEffect(() => {
+    const handleGlobalCmdK = (ev: KeyboardEvent) => {
+      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') {
+        ev.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalCmdK);
+    return () => window.removeEventListener('keydown', handleGlobalCmdK);
+  }, []);
   const [isSyncingMongo, setIsSyncingMongo] = useState<boolean>(false);
 
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
@@ -3057,15 +3073,22 @@ const MainWorkspaceRoutes: React.FC = () => {
                             setIsMobileSidebarOpen(false);
                             playUiSoundEffect('CLICK');
                           }}
-                          className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-all ${
+                          className={`relative w-full flex items-center justify-between px-3.5 py-3 rounded-xl text-left transition-colors ${
                             isActive
-                              ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20'
+                              ? 'text-white font-bold'
                               : isDark
                               ? 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                           }`}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          {isActive && (
+                            <motion.span
+                              layoutId="smxSidebarActivePill"
+                              transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                              className="absolute inset-0 rounded-xl bg-indigo-600 shadow-md shadow-indigo-600/25"
+                            />
+                          )}
+                          <div className="relative z-10 flex items-center gap-3 min-w-0">
                             <IconComponent
                               className={`w-4 h-4 shrink-0 ${
                                 isActive
@@ -3089,7 +3112,7 @@ const MainWorkspaceRoutes: React.FC = () => {
                             </div>
                           </div>
                           <ChevronRight
-                            className={`w-3.5 h-3.5 shrink-0 ${
+                            className={`relative z-10 w-3.5 h-3.5 shrink-0 ${
                               isActive ? 'opacity-100' : 'opacity-25'
                             }`}
                           />
@@ -3169,6 +3192,32 @@ const MainWorkspaceRoutes: React.FC = () => {
                           setActivePage('NOTIFICATION')
                         }
                       />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCommandPaletteOpen(true);
+                          playUiSoundEffect('CLICK');
+                        }}
+                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition ${
+                          isDark
+                            ? 'bg-slate-800/90 border-slate-700 text-slate-300 hover:border-indigo-500/60'
+                            : 'bg-slate-100/90 border-slate-200 text-slate-600 hover:border-indigo-300'
+                        }`}
+                        title="Ctrl + K"
+                      >
+                        <Search className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="hidden md:inline">
+                          {webLanguage === 'en'
+                            ? 'Quick Search'
+                            : webLanguage === 'ja'
+                            ? 'クイック検索'
+                            : 'Tìm nhanh'}
+                        </span>
+                        <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-900 text-[10px] font-mono text-slate-500">
+                          ⌘K
+                        </kbd>
+                      </button>
 
                       <button
                         type="button"
@@ -3821,6 +3870,34 @@ const MainWorkspaceRoutes: React.FC = () => {
                   } else {
                     setActivePage('NOTIFICATION');
                   }
+                }}
+              />
+
+              <QuickCommandPalette
+                isOpen={isCommandPaletteOpen}
+                isDark={isDark}
+                userRole={userSession.userProfile.role}
+                webLanguage={webLanguage}
+                workspaceNodes={workspaceNodes}
+                onClose={() => setIsCommandPaletteOpen(false)}
+                onNavigatePage={(page) => {
+                  setActivePage(page);
+                  playUiSoundEffect('CLICK');
+                }}
+                onSelectRoomAndBook={(node) => {
+                  setSelectedNode(node);
+                  setActivePage('BOOKING');
+                  playUiSoundEffect('CLICK');
+                }}
+                onToggleTheme={toggleThemeMode}
+                onChangeLanguage={(lang) => {
+                  setWebLanguage(lang);
+                  try {
+                    localStorage.setItem(WEB_LANGUAGE_STORAGE_KEY, lang);
+                  } catch {
+                    // ignore
+                  }
+                  playUiSoundEffect('CLICK');
                 }}
               />
 

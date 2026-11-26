@@ -24,6 +24,8 @@ import {
   WebLanguageCodeType,
   WorkspaceNodeItem,
 } from '../../../Shared/Types/GlobalSystemTypes';
+import { AnimatedMetricTicker } from '../../../Shared/Components/AnimatedMetricTicker';
+import { SpotlightGlassCard } from '../../../Shared/Components/SpotlightGlassCard';
 import { loadPersistedSystemPreferences } from '../../Auth/Pages/SettingsPages';
 
 export interface DashboardMainPagesProps {
@@ -538,52 +540,53 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 4 THẺ KPI TỔNG QUAN */}
+      {/* 4 THẺ KPI TỔNG QUAN (SPOTLIGHT HAIRLINE CARD + ZERO-RERENDER NUMBER TICKER) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div
+        <SpotlightGlassCard
+          isDark={isDark}
           onClick={() => onNavigateSection('FLOORPLAN')}
-          className={`p-5 rounded-3xl border cursor-pointer transition hover:-translate-y-0.5 ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 hover:border-indigo-500/50'
-              : 'bg-white border-indigo-100/80 shadow-sm hover:border-indigo-300'
-          }`}
+          spotlightColor="rgba(79, 70, 229, 0.16)"
+          className="p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase text-slate-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
               {t.kpi1Title}
             </span>
-            <Building2 className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-              {metrics.availableRooms}/{metrics.totalRooms}
+            <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Building2 className="w-4 h-4" />
             </span>
-            <span className="text-xs font-bold text-teal-600">
+          </div>
+          <div className="flex items-baseline gap-2 mt-2.5">
+            <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums">
+              <AnimatedMetricTicker value={metrics.availableRooms} />/
+              {metrics.totalRooms}
+            </span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
               {t.kpi1FreeSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
             {t.kpi1Sub(metrics.occupiedRooms, metrics.holdingRooms)}
           </p>
-        </div>
+        </SpotlightGlassCard>
 
-        <div
+        <SpotlightGlassCard
+          isDark={isDark}
           onClick={() => onNavigateSection('BOOKING')}
-          className={`p-5 rounded-3xl border cursor-pointer transition hover:-translate-y-0.5 ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 hover:border-teal-500/50'
-              : 'bg-white border-indigo-100/80 shadow-sm hover:border-teal-300'
-          }`}
+          spotlightColor="rgba(16, 185, 129, 0.14)"
+          className="p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase text-slate-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
               {t.kpi2Title}
             </span>
-            <CalendarCheck className="w-4 h-4 text-teal-600" />
+            <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <CalendarCheck className="w-4 h-4" />
+            </span>
           </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-teal-600 dark:text-teal-400">
-              {metrics.activeBookingsCount}
+          <div className="flex items-baseline gap-2 mt-2.5">
+            <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+              <AnimatedMetricTicker value={metrics.activeBookingsCount} />
             </span>
             <span className="text-xs font-bold text-slate-400">
               {t.kpi2SubSuffix}
@@ -595,59 +598,61 @@ export const DashboardMainPages: React.FC<DashboardMainPagesProps> = ({
               metrics.pendingApprovals.length
             )}
           </p>
-        </div>
+        </SpotlightGlassCard>
 
-        <div
+        <SpotlightGlassCard
+          isDark={isDark}
           onClick={() => onNavigateSection('DATAMANAGER')}
-          className={`p-5 rounded-3xl border cursor-pointer transition hover:-translate-y-0.5 ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 hover:border-amber-500/50'
-              : 'bg-white border-indigo-100/80 shadow-sm hover:border-amber-300'
-          }`}
+          spotlightColor="rgba(99, 102, 241, 0.14)"
+          className="p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase text-slate-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
               {t.kpi3Title}
             </span>
-            <Cpu className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-amber-500">
-              {metrics.healthyEquipments}/{metrics.totalEquipments}
+            <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Cpu className="w-4 h-4" />
             </span>
-            <span className="text-xs font-bold text-teal-600">
+          </div>
+          <div className="flex items-baseline gap-2 mt-2.5">
+            <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
+              <AnimatedMetricTicker value={metrics.healthyEquipments} />/
+              {metrics.totalEquipments}
+            </span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
               {t.kpi3WorkingSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
             {t.kpi3Sub(metrics.brokenEquipments)}
           </p>
-        </div>
+        </SpotlightGlassCard>
 
-        <div
-          onClick={() => onNavigateSection('ORGANIZATION')}
-          className={`p-5 rounded-3xl border cursor-pointer transition hover:-translate-y-0.5 ${
-            isDark
-              ? 'bg-slate-900/90 border-slate-800 hover:border-indigo-500/50'
-              : 'bg-white border-indigo-100/80 shadow-sm hover:border-indigo-300'
-          }`}
+        <SpotlightGlassCard
+          isDark={isDark}
+          onClick={() => onNavigateSection('DATAMANAGER')}
+          spotlightColor="rgba(79, 70, 229, 0.16)"
+          className="p-5"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase text-slate-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
               {t.kpi4Title}
             </span>
-            <Award className="w-4 h-4 text-indigo-500" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-              {metrics.avgTrust}/100
+            <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Award className="w-4 h-4" />
             </span>
-            <span className="text-xs font-bold text-teal-600">
+          </div>
+          <div className="flex items-baseline gap-2 mt-2.5">
+            <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400 tabular-nums">
+              <AnimatedMetricTicker value={metrics.avgTrust} />
+              /100
+            </span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
               {t.kpi4StandardSuffix}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-1">{t.kpi4Sub}</p>
-        </div>
+        </SpotlightGlassCard>
       </div>
 
       {/* KHU VỰC PHÊ DUYỆT NHANH CHO ADMIN & MANAGER (HIỂN THỊ CẢ LÝ DO XIN PHÉP) */}

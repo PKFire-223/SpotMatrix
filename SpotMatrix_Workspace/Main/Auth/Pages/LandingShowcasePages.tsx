@@ -20,6 +20,9 @@ import {
   Users,
   ChevronDown,
   Eye,
+  Play,
+  Pause,
+  Film,
 } from 'lucide-react';
 import { SpotMatrixLogo } from '../../../Shared/Components/SpotMatrixLogo';
 import { WebLanguageCodeType } from '../../../Shared/Types/GlobalSystemTypes';
@@ -322,6 +325,8 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [selectedFloorPreview, setSelectedFloorPreview] = useState<number | null>(null);
   const [pure3dInspectMode, setPure3dInspectMode] = useState<boolean>(false);
+  const [isCinematicAutoFly, setIsCinematicAutoFly] = useState<boolean>(false);
+  const [isScenePaused, setIsScenePaused] = useState<boolean>(false);
 
   const t = LANDING_TRANSLATIONS[webLanguage] || LANDING_TRANSLATIONS.vi;
 
@@ -373,6 +378,8 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
         activeChapter={activeChapter}
         selectedFloorPreview={selectedFloorPreview}
         isDark={isDark}
+        isCinematicAutoFly={isCinematicAutoFly}
+        isPaused={isScenePaused}
       />
 
       {/* LỚP PHỦ VIGNETTE GIÚP CHỮ BÊN TRÁI LUÔN RÕ NÉT TRÊN MỌI NỀN SÁNG/TỐI */}
@@ -453,6 +460,55 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
               <span>{t.inspect3dToggle}</span>
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedFloorPreview(null);
+                setIsCinematicAutoFly((prev) => !prev);
+                setIsScenePaused(false);
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition ${
+                isCinematicAutoFly
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : isDark
+                  ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">
+                {webLanguage === 'en'
+                  ? isCinematicAutoFly
+                    ? 'Auto-Fly: ON'
+                    : 'Cinematic Tour'
+                  : webLanguage === 'ja'
+                  ? isCinematicAutoFly
+                    ? '自動シネマ: ON'
+                    : '3Dシネマ映像'
+                  : isCinematicAutoFly
+                  ? 'Phim 3D: Đang bay'
+                  : 'Chế độ Phim 3D'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsScenePaused((prev) => !prev)}
+              className={`p-2 rounded-xl border transition ${
+                isDark
+                  ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+              title={isScenePaused ? 'Play 3D' : 'Pause 3D'}
+              aria-label={isScenePaused ? 'Play 3D' : 'Pause 3D'}
+            >
+              {isScenePaused ? (
+                <Play className="w-3.5 h-3.5" />
+              ) : (
+                <Pause className="w-3.5 h-3.5" />
+              )}
+            </button>
+
             <div
               className={`inline-flex items-center rounded-xl p-1 border ${
                 isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
@@ -493,7 +549,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             <button
               type="button"
               onClick={isAuthenticated ? onNavigateToDashboard : onNavigateToLogin}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white text-xs font-extrabold shadow-lg shadow-indigo-600/25 flex items-center gap-1.5 transition-transform hover:-translate-y-0.5"
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-600/25 flex items-center gap-1.5 transition-transform hover:-translate-y-0.5"
             >
               <span>{isAuthenticated ? t.ctaBackDashboard : t.ctaEnterSystem}</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -505,7 +561,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
         <div className="max-w-7xl mx-auto mt-1.5 px-2">
           <div className="w-full h-1 rounded-full bg-slate-500/20 overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 transition-all duration-150"
+              className="h-full bg-indigo-600 transition-all duration-150"
               style={{ width: `${Math.round(scrollProgress * 100)}%` }}
             />
           </div>
@@ -671,7 +727,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
               <button
                 type="button"
                 onClick={isAuthenticated ? onNavigateToDashboard : onNavigateToLogin}
-                className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all hover:-translate-y-0.5"
+                className="px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all hover:-translate-y-0.5"
               >
                 <span>{isAuthenticated ? t.ctaBackDashboard : t.ctaEnterSystem}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -818,7 +874,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
             <button
               type="button"
               onClick={() => setSelectedFloorPreview(5)}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 transition"
+              className="w-full py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold shadow-lg shadow-emerald-600/25 transition"
             >
               {t.ch3FocusBtn}
             </button>
@@ -887,7 +943,7 @@ export const LandingShowcasePages: React.FC<LandingShowcasePagesProps> = ({
               <button
                 type="button"
                 onClick={isAuthenticated ? onNavigateToDashboard : onNavigateToLogin}
-                className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-emerald-500 hover:from-indigo-500 hover:to-emerald-400 text-white font-extrabold text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5"
+                className="flex-1 py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5"
               >
                 <span>{isAuthenticated ? t.ctaBackDashboard : t.ctaEnterSystem}</span>
                 <ArrowRight className="w-4 h-4" />

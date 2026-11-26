@@ -1,198 +1,404 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 export interface SpotMatrixHeroCanvas3DProps {
   scrollProgress: number;
   activeChapter: 1 | 2 | 3 | 4;
   selectedFloorPreview: number | null;
   isDark: boolean;
+  isCinematicAutoFly?: boolean;
+  isPaused?: boolean;
 }
 
-interface RoomBeaconEntry {
-  coreMesh: THREE.Mesh;
-  haloMesh: THREE.Mesh;
-  pulseRingMesh: THREE.Mesh;
-  tvGlowMesh: THREE.Mesh;
-  floorIndex: number;
-  roomIndex: number;
-  baseStatusColor: number;
-}
-
-interface ColosseumSeatEntry {
-  cushionMesh: THREE.Mesh;
-  backrestMesh: THREE.Mesh;
-  rowIdx: number;
-  seatIdx: number;
-  baseColor: number;
-}
-
-interface FloatingCrystalEntry {
-  group: THREE.Group;
-  coreMesh: THREE.Mesh;
-  ringMesh: THREE.Mesh;
-  orbitRadius: number;
-  orbitSpeed: number;
+interface FloorLayerRig {
+  floorNumber: number;
   baseY: number;
-  phaseOffset: number;
+  group: THREE.Group;
+  edgeStripMat: THREE.MeshStandardMaterial;
 }
 
-interface DataPulsePacketEntry {
+interface DataPacketNode {
   mesh: THREE.Mesh;
-  cornerIndex: number;
+  laneX: number;
+  laneZ: number;
   speed: number;
   offset: number;
 }
 
-function createBeveledBoxGeometry(
-  width: number,
-  height: number,
-  depth: number,
-  cornerRadius: number,
-  bevelSize: number
-): THREE.ExtrudeGeometry {
-  const hw = Math.max(0.02, width / 2 - bevelSize);
-  const hd = Math.max(0.02, depth / 2 - bevelSize);
-  const r = Math.min(cornerRadius, hw * 0.45, hd * 0.45);
+interface SpotMatrixBuildingRig {
+  rootGroup: THREE.Group;
+  floorLayers: FloorLayerRig[];
+  volumetricCones: THREE.Mesh[];
+  dataPackets: DataPacketNode[];
+  colosseumHaloRing: THREE.Mesh;
+  dustPoints: THREE.Points;
+  disposeResources: () => void;
+}
 
-  const shape = new THREE.Shape();
-  shape.moveTo(-hw + r, -hd);
-  shape.lineTo(hw - r, -hd);
-  shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
-  shape.lineTo(hw, hd - r);
-  shape.quadraticCurveTo(hw, hd, hw - r, hd);
-  shape.lineTo(-hw + r, hd);
-  shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
-  shape.lineTo(-hw, -hd + r);
-  shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+/**
+ * Factory dựng mô hình Tòa nhà 5 Tầng SpotMatrix bằng mã nguồn thuần (Procedural Factory)
+ * Học từ kiến trúc img2threejs (tách biệt dữ liệu & hình học khỏi vòng lặp render,
+ * phân cấp Macro -> Meso -> Micro, hỗ trợ tách lớp Explodable & InstancedMesh giảm draw calls).
+ */
+function createSpotMatrixBuildingModel(
+  isDarkTheme: boolean
+): SpotMatrixBuildingRig {
+  const disposables: Array<{ dispose: () => void }> = [];
+  const track = <T extends { dispose: () => void }>(res: T): T => {
+    disposables.push(res);
+    return res;
+  };
 
-  const extrudeDepth = Math.max(0.01, height - bevelSize * 2);
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: extrudeDepth,
-    bevelEnabled: true,
-    bevelSegments: 3,
-    steps: 1,
-    bevelSize,
-    bevelThickness: bevelSize,
-    curveSegments: 12,
+  const rootGroup = new THREE.Group();
+  const floorLayers: FloorLayerRig[] = [];
+  const volumetricCones: THREE.Mesh[] = [];
+  const dataPackets: DataPacketNode[] = [];
+
+  // Shared PBR Materials (Học từ pmndrs/react-three-fiber Discussion #425: chỉ biên dịch shader 1 lần)
+  const slabMat = track(
+    new THREE.MeshPhysicalMaterial({
+      color: isDarkTheme ? 0x111827 : 0xf1f5f9,
+      roughness: 0.25,
+      metalness: 0.35,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.15,
+    })
+  );
+
+  const glassWallMat = track(
+    new THREE.MeshPhysicalMaterial({
+      color: isDarkTheme ? 0x60a5fa : 0xbae6fd,
+      roughness: 0.06,
+      metalness: 0.08,
+      transmission: 0.72,
+      ior: 1.48,
+      thickness: 0.45,
+      transparent: true,
+      opacity: isDarkTheme ? 0.42 : 0.48,
+    })
+  );
+
+  const frameMetalMat = track(
+    new THREE.MeshStandardMaterial({
+      color: isDarkTheme ? 0x334155 : 0x64748b,
+      roughness: 0.3,
+      metalness: 0.85,
+    })
+  );
+
+  const deskMat = track(
+    new THREE.MeshStandardMaterial({
+      color: isDarkTheme ? 0x1e293b : 0xe2e8f0,
+      roughness: 0.45,
+      metalness: 0.15,
+    })
+  );
+
+  const screenGlowMat = track(
+    new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: isDarkTheme ? 1.35 : 0.7,
+      roughness: 0.15,
+    })
+  );
+
+  // Shared Geometries
+  const floorSlabGeo = track(new THREE.BoxGeometry(10.2, 0.24, 6.8));
+  const roomGlassBackGeo = track(new THREE.BoxGeometry(2.7, 1.35, 0.06));
+  const roomGlassSideGeo = track(new THREE.BoxGeometry(0.06, 1.35, 2.3));
+  const deskGeo = track(new THREE.BoxGeometry(1.35, 0.08, 0.72));
+  const screenGeo = track(new THREE.BoxGeometry(1.1, 0.56, 0.05));
+  const pillarGeo = track(new THREE.CylinderGeometry(0.08, 0.08, 1.45, 12));
+
+  // Đế móng kiến trúc & Lưới mặt đất
+  const basePlinthGeo = track(new THREE.BoxGeometry(12.2, 0.35, 8.8));
+  const basePlinth = new THREE.Mesh(basePlinthGeo, slabMat);
+  basePlinth.position.y = -3.85;
+  rootGroup.add(basePlinth);
+
+  const gridHelper = new THREE.GridHelper(
+    46,
+    46,
+    isDarkTheme ? 0x334155 : 0xcbd5e1,
+    isDarkTheme ? 0x1e293b : 0xe2e8f0
+  );
+  gridHelper.position.y = -4.04;
+  rootGroup.add(gridHelper);
+
+  // TẦNG 1 ĐẾN TẦNG 4: 24 Phòng họp Kính Open-Top (Không mái tam giác, rõ nội thất)
+  for (let floorIdx = 0; floorIdx < 4; floorIdx++) {
+    const floorNumber = floorIdx + 1;
+    const baseY = -3.4 + floorIdx * 1.9;
+    const floorGroup = new THREE.Group();
+    floorGroup.position.y = baseY;
+
+    const slabMesh = new THREE.Mesh(floorSlabGeo, slabMat);
+    floorGroup.add(slabMesh);
+
+    const edgeStripMat = track(
+      new THREE.MeshStandardMaterial({
+        color: 0x4f46e5,
+        emissive: 0x4f46e5,
+        emissiveIntensity: isDarkTheme ? 1.1 : 0.45,
+        roughness: 0.2,
+      })
+    );
+    const edgeRingGeo = track(new THREE.BoxGeometry(10.32, 0.07, 6.92));
+    const edgeStrip = new THREE.Mesh(edgeRingGeo, edgeStripMat);
+    edgeStrip.position.y = -0.06;
+    floorGroup.add(edgeStrip);
+
+    // 4 cột kết cấu góc bằng InstancedMesh (1 draw call / tầng)
+    const pillarInst = new THREE.InstancedMesh(pillarGeo, frameMetalMat, 4);
+    const dummy = new THREE.Object3D();
+    const cornerCoords: Array<[number, number]> = [
+      [-4.85, -3.15],
+      [4.85, -3.15],
+      [-4.85, 3.15],
+      [4.85, 3.15],
+    ];
+    cornerCoords.forEach(([cx, cz], idx) => {
+      dummy.position.set(cx, 0.84, cz);
+      dummy.updateMatrix();
+      pillarInst.setMatrixAt(idx, dummy.matrix);
+    });
+    pillarInst.instanceMatrix.needsUpdate = true;
+    floorGroup.add(pillarInst);
+
+    // 6 Phòng họp kính mỗi tầng (2 hàng x 3 cột)
+    for (let rIdx = 0; rIdx < 6; rIdx++) {
+      const col = rIdx % 3;
+      const row = Math.floor(rIdx / 3);
+      const rx = (col - 1) * 3.15;
+      const rz = row === 0 ? -1.7 : 1.7;
+
+      const roomGroup = new THREE.Group();
+      roomGroup.position.set(rx, 0.12, rz);
+
+      const backGlass = new THREE.Mesh(roomGlassBackGeo, glassWallMat);
+      backGlass.position.set(0, 0.68, row === 0 ? -1.12 : 1.12);
+      roomGroup.add(backGlass);
+
+      const leftGlass = new THREE.Mesh(roomGlassSideGeo, glassWallMat);
+      leftGlass.position.set(-1.34, 0.68, 0);
+      roomGroup.add(leftGlass);
+
+      const rightGlass = new THREE.Mesh(roomGlassSideGeo, glassWallMat);
+      rightGlass.position.set(1.34, 0.68, 0);
+      roomGroup.add(rightGlass);
+
+      const tableMesh = new THREE.Mesh(deskGeo, deskMat);
+      tableMesh.position.set(0, 0.42, 0);
+      roomGroup.add(tableMesh);
+
+      const tvMesh = new THREE.Mesh(screenGeo, screenGlowMat);
+      tvMesh.position.set(0, 0.82, row === 0 ? -1.04 : 1.04);
+      roomGroup.add(tvMesh);
+
+      // Đèn trạng thái phòng (Xanh trống / Indigo đang họp)
+      const isOccupiedSample = (floorIdx + rIdx) % 4 === 1;
+      const beaconGeo = track(new THREE.SphereGeometry(0.11, 14, 14));
+      const beaconMat = track(
+        new THREE.MeshStandardMaterial({
+          color: isOccupiedSample ? 0x6366f1 : 0x10b981,
+          emissive: isOccupiedSample ? 0x4f46e5 : 0x10b981,
+          emissiveIntensity: isDarkTheme ? 1.8 : 0.9,
+        })
+      );
+      const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
+      beaconMesh.position.set(0, 1.38, 0);
+      roomGroup.add(beaconMesh);
+
+      floorGroup.add(roomGroup);
+    }
+
+    rootGroup.add(floorGroup);
+    floorLayers.push({
+      floorNumber,
+      baseY,
+      group: floorGroup,
+      edgeStripMat,
+    });
+  }
+
+  // TẦNG 5: HỘI TRƯỜNG ĐẤU TRƯỜNG LA MÃ (H-01) VỚI 30 GHẾ INSTANCEDMESH & CHÙM SÁNG ĐIỆN ẢNH
+  const hallBaseY = -3.4 + 4 * 1.9;
+  const hallGroup = new THREE.Group();
+  hallGroup.position.y = hallBaseY;
+
+  const hallFloorGeo = track(new THREE.CylinderGeometry(5.15, 5.3, 0.28, 48));
+  const hallFloorMesh = new THREE.Mesh(hallFloorGeo, slabMat);
+  hallGroup.add(hallFloorMesh);
+
+  const hallEdgeMat = track(
+    new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0284c7,
+      emissiveIntensity: isDarkTheme ? 1.5 : 0.7,
+      roughness: 0.15,
+    })
+  );
+  const colosseumHaloRing = new THREE.Mesh(
+    track(new THREE.TorusGeometry(5.2, 0.075, 16, 72)),
+    hallEdgeMat
+  );
+  colosseumHaloRing.rotation.x = Math.PI / 2;
+  colosseumHaloRing.position.y = 0.08;
+  hallGroup.add(colosseumHaloRing);
+
+  // Tường vòm kính bao quanh Đấu trường La Mã
+  const arenaGlassGeo = track(
+    new THREE.CylinderGeometry(4.95, 4.95, 1.65, 48, 1, true, 0, Math.PI * 1.65)
+  );
+  const arenaGlassMesh = new THREE.Mesh(arenaGlassGeo, glassWallMat);
+  arenaGlassMesh.position.y = 0.95;
+  arenaGlassMesh.rotation.y = Math.PI * 0.18;
+  hallGroup.add(arenaGlassMesh);
+
+  // Bục diễn giả trung tâm + Màn hình cong Panorama
+  const podiumGeo = track(new THREE.CylinderGeometry(1.15, 1.35, 0.35, 32));
+  const podiumMesh = new THREE.Mesh(podiumGeo, frameMetalMat);
+  podiumMesh.position.set(0, 0.3, 0);
+  hallGroup.add(podiumMesh);
+
+  const centerHoloRing = new THREE.Mesh(
+    track(new THREE.TorusGeometry(1.3, 0.045, 12, 48)),
+    screenGlowMat
+  );
+  centerHoloRing.rotation.x = Math.PI / 2;
+  centerHoloRing.position.y = 0.5;
+  hallGroup.add(centerHoloRing);
+
+  // 30 Ghế vòm La Mã dựng bằng 1 InstancedMesh duy nhất (Tối ưu 30 -> 1 draw call)
+  const seatGeo = track(new THREE.BoxGeometry(0.46, 0.38, 0.42));
+  const seatMat = track(
+    new THREE.MeshStandardMaterial({
+      color: isDarkTheme ? 0x818cf8 : 0x4f46e5,
+      emissive: 0x312e81,
+      emissiveIntensity: isDarkTheme ? 0.45 : 0.12,
+      roughness: 0.35,
+      metalness: 0.3,
+    })
+  );
+  const seatsInstanced = new THREE.InstancedMesh(seatGeo, seatMat, 30);
+  const seatDummy = new THREE.Object3D();
+  let seatCursor = 0;
+  const ringConfigs = [
+    { count: 8, radius: 2.35, y: 0.36 },
+    { count: 10, radius: 3.15, y: 0.54 },
+    { count: 12, radius: 3.95, y: 0.72 },
+  ];
+  ringConfigs.forEach((ring) => {
+    for (let s = 0; s < ring.count; s++) {
+      const theta = -Math.PI * 0.75 + (s / (ring.count - 1)) * Math.PI * 1.5;
+      seatDummy.position.set(
+        Math.cos(theta) * ring.radius,
+        ring.y,
+        Math.sin(theta) * ring.radius
+      );
+      seatDummy.lookAt(0, ring.y, 0);
+      seatDummy.updateMatrix();
+      seatsInstanced.setMatrixAt(seatCursor, seatDummy.matrix);
+      seatCursor += 1;
+    }
+  });
+  seatsInstanced.instanceMatrix.needsUpdate = true;
+  hallGroup.add(seatsInstanced);
+
+  // Chùm sáng điện ảnh Volumetric Light Cone chiếu xuống Bục Diễn Giả
+  const coneGeo = track(new THREE.ConeGeometry(3.2, 6.2, 32, 1, true));
+  const coneMat = track(
+    new THREE.MeshBasicMaterial({
+      color: isDarkTheme ? 0x38bdf8 : 0x6366f1,
+      transparent: true,
+      opacity: isDarkTheme ? 0.085 : 0.045,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+  const mainCone = new THREE.Mesh(coneGeo, coneMat);
+  mainCone.position.set(0, 3.25, 0);
+  hallGroup.add(mainCone);
+  volumetricCones.push(mainCone);
+
+  rootGroup.add(hallGroup);
+  floorLayers.push({
+    floorNumber: 5,
+    baseY: hallBaseY,
+    group: hallGroup,
+    edgeStripMat: hallEdgeMat,
   });
 
-  geometry.rotateX(-Math.PI / 2);
-  geometry.center();
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function buildStudioEnvironmentTexture(
-  renderer: THREE.WebGLRenderer,
-  isDarkTheme: boolean
-): THREE.Texture {
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  pmremGenerator.compileEquirectangularShader();
-
-  const envScene = new THREE.Scene();
-  envScene.background = new THREE.Color(isDarkTheme ? 0x050816 : 0xeef4ff);
-
-  const topPanel = new THREE.Mesh(
-    new THREE.PlaneGeometry(28, 28),
-    new THREE.MeshBasicMaterial({
-      color: isDarkTheme ? 0xe0f2fe : 0xffffff,
-      side: THREE.DoubleSide,
-    })
-  );
-  topPanel.position.set(0, 18, 0);
-  topPanel.rotation.x = Math.PI / 2;
-  envScene.add(topPanel);
-
-  const cyanStrip = new THREE.Mesh(
-    new THREE.PlaneGeometry(24, 7),
-    new THREE.MeshBasicMaterial({
+  // Các gói tín hiệu dữ liệu chạy dọc 4 trục đứng của tòa nhà
+  const packetGeo = track(new THREE.BoxGeometry(0.12, 0.55, 0.12));
+  const packetMat = track(
+    new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      side: THREE.DoubleSide,
+      emissive: 0x38bdf8,
+      emissiveIntensity: isDarkTheme ? 2.2 : 1.0,
     })
   );
-  cyanStrip.position.set(18, 6, 10);
-  cyanStrip.lookAt(0, 0, 0);
-  envScene.add(cyanStrip);
-
-  const indigoStrip = new THREE.Mesh(
-    new THREE.PlaneGeometry(24, 7),
-    new THREE.MeshBasicMaterial({
-      color: 0x818cf8,
-      side: THREE.DoubleSide,
-    })
-  );
-  indigoStrip.position.set(-18, 7, -10);
-  indigoStrip.lookAt(0, 0, 0);
-  envScene.add(indigoStrip);
-
-  const emeraldStrip = new THREE.Mesh(
-    new THREE.PlaneGeometry(18, 5),
-    new THREE.MeshBasicMaterial({
-      color: 0x34d399,
-      side: THREE.DoubleSide,
-    })
-  );
-  emeraldStrip.position.set(0, 10, 18);
-  emeraldStrip.lookAt(0, 0, 0);
-  envScene.add(emeraldStrip);
-
-  const envRenderTarget = pmremGenerator.fromScene(envScene, 0.03);
-  pmremGenerator.dispose();
-  return envRenderTarget.texture;
-}
-
-function createPanoramaScreenTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    const grad = ctx.createLinearGradient(0, 0, 1024, 256);
-    grad.addColorStop(0, '#020617');
-    grad.addColorStop(0.25, '#0f172a');
-    grad.addColorStop(0.5, '#0369a1');
-    grad.addColorStop(0.75, '#1e1b4b');
-    grad.addColorStop(1, '#064e3b');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 1024, 256);
-
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-    ctx.lineWidth = 2;
-    for (let x = 0; x < 1024; x += 32) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, 256);
-      ctx.stroke();
+  const lanePositions: Array<[number, number]> = [
+    [-5.25, -3.5],
+    [5.25, -3.5],
+    [-5.25, 3.5],
+    [5.25, 3.5],
+  ];
+  lanePositions.forEach(([lx, lz], idx) => {
+    for (let p = 0; p < 2; p++) {
+      const pMesh = new THREE.Mesh(packetGeo, packetMat);
+      pMesh.position.set(lx, -3.5, lz);
+      rootGroup.add(pMesh);
+      dataPackets.push({
+        mesh: pMesh,
+        laneX: lx,
+        laneZ: lz,
+        speed: 0.24 + (idx % 2) * 0.07,
+        offset: p * 0.5 + idx * 0.17,
+      });
     }
-    for (let y = 0; y < 256; y += 32) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(1024, y);
-      ctx.stroke();
-    }
+  });
 
-    ctx.strokeStyle = '#34d399';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    for (let x = 0; x <= 1024; x += 8) {
-      const y = 135 + Math.sin(x * 0.025) * 42 * Math.cos(x * 0.008);
-      if (x === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 34px Inter, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SPOTMATRIX COLOSSEUM H-01 • 360° ULTRA-LED ARENA', 512, 82);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 20px Inter, Arial, sans-serif';
-    ctx.fillText('INTERNAL ENTERPRISE ROOM & HALL BOOKING SYSTEM', 512, 208);
+  // Hạt bụi ánh sáng khí quyển (Atmospheric Depth Particles)
+  const particleCount = 160;
+  const positions = new Float32Array(particleCount * 3);
+  for (let i = 0; i < particleCount; i++) {
+    const r = 7 + (i % 13) * 0.85;
+    const ang = i * 1.6180339 * Math.PI * 2;
+    positions[i * 3] = Math.cos(ang) * r;
+    positions[i * 3 + 1] = ((i * 37) % 140) / 10 - 4.5;
+    positions[i * 3 + 2] = Math.sin(ang) * r;
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
+  const dustGeo = track(new THREE.BufferGeometry());
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const dustMat = track(
+    new THREE.PointsMaterial({
+      color: isDarkTheme ? 0x7dd3fc : 0x6366f1,
+      size: isDarkTheme ? 0.09 : 0.07,
+      transparent: true,
+      opacity: isDarkTheme ? 0.55 : 0.32,
+      depthWrite: false,
+    })
+  );
+  const dustPoints = new THREE.Points(dustGeo, dustMat);
+  rootGroup.add(dustPoints);
+
+  return {
+    rootGroup,
+    floorLayers,
+    volumetricCones,
+    dataPackets,
+    colosseumHaloRing,
+    dustPoints,
+    disposeResources: () => {
+      disposables.forEach((d) => d.dispose());
+    },
+  };
 }
 
 export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
@@ -200,19 +406,22 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
   activeChapter,
   selectedFloorPreview,
   isDark,
+  isCinematicAutoFly = false,
+  isPaused = false,
 }) => {
-  const mountContainerRef = useRef<HTMLDivElement | null>(null);
-  const scrollTargetRef = useRef<number>(scrollProgress);
-  const activeChapterRef = useRef<1 | 2 | 3 | 4>(activeChapter);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<number>(scrollProgress);
+  const chapterRef = useRef<1 | 2 | 3 | 4>(activeChapter);
   const selectedFloorRef = useRef<number | null>(selectedFloorPreview);
-  const isDarkRef = useRef<boolean>(isDark);
+  const autoFlyRef = useRef<boolean>(isCinematicAutoFly);
+  const pausedRef = useRef<boolean>(isPaused);
 
   useEffect(() => {
-    scrollTargetRef.current = Math.max(0, Math.min(1, scrollProgress));
+    scrollRef.current = scrollProgress;
   }, [scrollProgress]);
 
   useEffect(() => {
-    activeChapterRef.current = activeChapter;
+    chapterRef.current = activeChapter;
   }, [activeChapter]);
 
   useEffect(() => {
@@ -220,924 +429,226 @@ export const SpotMatrixHeroCanvas3D: React.FC<SpotMatrixHeroCanvas3DProps> = ({
   }, [selectedFloorPreview]);
 
   useEffect(() => {
-    isDarkRef.current = isDark;
-  }, [isDark]);
+    autoFlyRef.current = isCinematicAutoFly;
+  }, [isCinematicAutoFly]);
 
   useEffect(() => {
-    const containerEl = mountContainerRef.current;
-    if (!containerEl) {
-      return;
-    }
+    pausedRef.current = isPaused;
+  }, [isPaused]);
 
-    const initialWidth = Math.max(containerEl.clientWidth, window.innerWidth, 320);
-    const initialHeight = Math.max(containerEl.clientHeight, window.innerHeight, 480);
+  useEffect(() => {
+    const container = mountRef.current;
+    if (!container) return;
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const width = container.clientWidth || window.innerWidth;
+    const height = container.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(isDarkRef.current ? 0x040711 : 0xeef4ff, 0.018);
+    const bgHex = isDark ? 0x050814 : 0xf4f7fb;
+    scene.background = new THREE.Color(bgHex);
+    scene.fog = new THREE.FogExp2(bgHex, isDark ? 0.022 : 0.015);
 
-    const camera = new THREE.PerspectiveCamera(40, initialWidth / initialHeight, 0.1, 180);
-    camera.position.set(11.8, 8.4, 13.8);
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 140);
+    camera.position.set(13.5, 4.8, 16.5);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
-      alpha: true,
       powerPreference: 'high-performance',
     });
-    renderer.setSize(initialWidth, initialHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.32;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMappingExposure = isDark ? 1.18 : 1.06;
 
-    containerEl.innerHTML = '';
-    containerEl.appendChild(renderer.domElement);
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
 
-    const studioEnvTexture = buildStudioEnvironmentTexture(renderer, isDarkRef.current);
-    scene.environment = studioEnvTexture;
-
-    const ambientLight = new THREE.AmbientLight(
-      isDarkRef.current ? 0x94a3b8 : 0xffffff,
-      isDarkRef.current ? 0.95 : 1.4
+    // Hậu kỳ điện ảnh (EffectComposer + UnrealBloomPass chỉ kích hoạt dịu nhẹ để có hào quang phim)
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      isDark ? 0.42 : 0.14,
+      0.55,
+      isDark ? 0.72 : 0.9
     );
+    composer.addPass(bloomPass);
+
+    // Hệ thống chiếu sáng Studio 3 điểm
+    const ambientLight = new THREE.AmbientLight(0xffffff, isDark ? 0.85 : 1.35);
     scene.add(ambientLight);
 
-    const mainDirLight = new THREE.DirectionalLight(0xffffff, isDarkRef.current ? 2.4 : 2.8);
-    mainDirLight.position.set(15, 28, 20);
-    mainDirLight.castShadow = true;
-    mainDirLight.shadow.mapSize.width = 2048;
-    mainDirLight.shadow.mapSize.height = 2048;
-    mainDirLight.shadow.camera.near = 2;
-    mainDirLight.shadow.camera.far = 65;
-    const d = 14;
-    mainDirLight.shadow.camera.left = -d;
-    mainDirLight.shadow.camera.right = d;
-    mainDirLight.shadow.camera.top = d;
-    mainDirLight.shadow.camera.bottom = -d;
-    mainDirLight.shadow.bias = -0.0005;
-    scene.add(mainDirLight);
+    const keyLight = new THREE.DirectionalLight(0xffffff, isDark ? 1.85 : 2.1);
+    keyLight.position.set(12, 18, 14);
+    scene.add(keyLight);
 
-    const indigoRimLight = new THREE.PointLight(0x6366f1, 6.5, 38);
-    indigoRimLight.position.set(-11, 8, -9);
-    scene.add(indigoRimLight);
-
-    const cyanAccentLight = new THREE.PointLight(0x38bdf8, 6.0, 36);
-    cyanAccentLight.position.set(11, 6, 10);
-    scene.add(cyanAccentLight);
-
-    const colosseumCrownLight = new THREE.PointLight(0x10b981, 6.2, 30);
-    colosseumCrownLight.position.set(2.2, 12.5, 0);
-    scene.add(colosseumCrownLight);
-
-    const waveGeometry = new THREE.PlaneGeometry(48, 30, 96, 64);
-    waveGeometry.rotateX(-Math.PI / 2);
-    const waveBasePositions = new Float32Array(
-      (waveGeometry.attributes.position as THREE.BufferAttribute).array
+    const rimCyanLight = new THREE.PointLight(
+      0x38bdf8,
+      isDark ? 4.2 : 1.6,
+      36
     );
+    rimCyanLight.position.set(-10, 7, 9);
+    scene.add(rimCyanLight);
 
-    const waveMaterial = new THREE.MeshPhysicalMaterial({
-      color: isDarkRef.current ? 0x0f172a : 0xdbeafe,
-      emissive: isDarkRef.current ? 0x1e1b4b : 0x6366f1,
-      emissiveIntensity: isDarkRef.current ? 0.45 : 0.16,
-      roughness: 0.08,
-      metalness: 0.65,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.06,
-      reflectivity: 1.0,
-      envMapIntensity: 2.2,
-      transparent: true,
-      opacity: 0.86,
-      side: THREE.DoubleSide,
-    });
-    const waveSurfaceMesh = new THREE.Mesh(waveGeometry, waveMaterial);
-    waveSurfaceMesh.position.set(1.8, -3.55, 0);
-    waveSurfaceMesh.receiveShadow = true;
-    scene.add(waveSurfaceMesh);
+    const rimIndigoLight = new THREE.PointLight(
+      0x6366f1,
+      isDark ? 3.8 : 1.4,
+      36
+    );
+    rimIndigoLight.position.set(10, 5, -9);
+    scene.add(rimIndigoLight);
 
-    const waveWireMaterial = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      wireframe: true,
-      transparent: true,
-      opacity: isDarkRef.current ? 0.16 : 0.1,
-    });
-    const waveWireMesh = new THREE.Mesh(waveGeometry, waveWireMaterial);
-    waveWireMesh.position.set(1.8, -3.53, 0);
-    scene.add(waveWireMesh);
+    // Khởi tạo mô hình 5 tầng từ Procedural Factory
+    const buildingRig = createSpotMatrixBuildingModel(isDark);
+    scene.add(buildingRig.rootGroup);
 
-    // Đặt Tòa nhà 5 tầng lệch sang bên phải (x = +2.35) để cột chữ bên trái hoàn toàn thoáng, không bị đè
-    const towerRootGroup = new THREE.Group();
-    towerRootGroup.position.set(2.35, 0, 0);
-    scene.add(towerRootGroup);
+    // Đường bay Camera điện ảnh 5 điểm (CatmullRomCurve3)
+    const cameraPathCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(13.5, 4.6, 16.5), // Cảnh 1: Toàn cảnh góc 3/4 mở màn
+      new THREE.Vector3(9.8, 0.8, 13.8), // Cảnh 2: Trượt thấp sát sảnh kính Tầng 1-2
+      new THREE.Vector3(-11.5, 4.2, 12.2), // Cảnh 3: Quay ngang ngắm 5 tầng tách lớp
+      new THREE.Vector3(5.8, 9.2, 8.8), // Cảnh 4: Bay vút qua vòm Đấu trường La Mã Tầng 5
+      new THREE.Vector3(14.5, 6.4, -12.5), // Cảnh 5: Kéo góc rộng toàn cảnh sau lưng
+    ]);
+    const lookTargetCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0.6, 0),
+      new THREE.Vector3(0, -1.6, 0),
+      new THREE.Vector3(0, 1.4, 0),
+      new THREE.Vector3(0, 4.4, 0),
+      new THREE.Vector3(0, 1.8, 0),
+    ]);
 
-    const floatingCrystals: FloatingCrystalEntry[] = [];
-    const crystalConfigs = [
-      { radius: 0.65, orbit: 7.4, speed: 0.44, y: 1.4, phase: 0.2, color: 0x38bdf8 },
-      { radius: 0.5, orbit: 8.5, speed: -0.35, y: 4.1, phase: 2.1, color: 0xa855f7 },
-      { radius: 0.55, orbit: 6.9, speed: 0.52, y: 6.2, phase: 4.0, color: 0x10b981 },
-      { radius: 0.42, orbit: 9.0, speed: -0.4, y: -0.2, phase: 5.1, color: 0xf59e0b },
-    ];
+    const currentCamPos = camera.position.clone();
+    const currentLookAt = new THREE.Vector3(0, 0.6, 0);
+    const desiredCamPos = new THREE.Vector3();
+    const desiredLookAt = new THREE.Vector3();
 
-    crystalConfigs.forEach((cfg) => {
-      const crystalGroup = new THREE.Group();
-
-      const outerSphereGeo = new THREE.SphereGeometry(cfg.radius, 48, 48);
-      const outerSphereMat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
-        emissive: cfg.color,
-        emissiveIntensity: 0.15,
-        roughness: 0.02,
-        metalness: 0.08,
-        transmission: 0.92,
-        ior: 1.52,
-        thickness: 1.8,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.02,
-        envMapIntensity: 2.8,
-        transparent: true,
-        opacity: 0.95,
-      });
-      const outerSphereMesh = new THREE.Mesh(outerSphereGeo, outerSphereMat);
-      crystalGroup.add(outerSphereMesh);
-
-      const innerCoreGeo = new THREE.OctahedronGeometry(cfg.radius * 0.48, 0);
-      const innerCoreMat = new THREE.MeshStandardMaterial({
-        color: cfg.color,
-        emissive: cfg.color,
-        emissiveIntensity: 0.85,
-        roughness: 0.12,
-        metalness: 0.85,
-        flatShading: true,
-      });
-      const innerCoreMesh = new THREE.Mesh(innerCoreGeo, innerCoreMat);
-      crystalGroup.add(innerCoreMesh);
-
-      const ringGeo = new THREE.TorusGeometry(cfg.radius * 1.28, 0.018, 16, 64);
-      const ringMat = new THREE.MeshStandardMaterial({
-        color: cfg.color,
-        emissive: cfg.color,
-        emissiveIntensity: 0.6,
-        roughness: 0.1,
-        metalness: 0.9,
-      });
-      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.rotation.x = Math.PI / 3;
-      crystalGroup.add(ringMesh);
-
-      towerRootGroup.add(crystalGroup);
-      floatingCrystals.push({
-        group: crystalGroup,
-        coreMesh: innerCoreMesh,
-        ringMesh,
-        orbitRadius: cfg.orbit,
-        orbitSpeed: cfg.speed,
-        baseY: cfg.y,
-        phaseOffset: cfg.phase,
-      });
-    });
-
-    const floorGroups: THREE.Group[] = [];
-    const floorEdgeMaterials: THREE.LineBasicMaterial[] = [];
-    const roomBeacons: RoomBeaconEntry[] = [];
-    const colosseumSeats: ColosseumSeatEntry[] = [];
-
-    const sharedSlabBevelGeo = createBeveledBoxGeometry(8.2, 0.24, 5.6, 0.38, 0.045);
-    const sharedSlabSubFrameGeo = createBeveledBoxGeometry(7.95, 0.08, 5.35, 0.34, 0.02);
-    const sharedGlassRoomShellGeo = createBeveledBoxGeometry(2.18, 0.62, 1.86, 0.16, 0.022);
-    const sharedRectTableGeo = createBeveledBoxGeometry(1.16, 0.07, 0.56, 0.08, 0.015);
-    const sharedChairSeatGeo = createBeveledBoxGeometry(0.18, 0.05, 0.18, 0.04, 0.01);
-    const sharedChairBackGeo = createBeveledBoxGeometry(0.18, 0.16, 0.04, 0.03, 0.008);
-
-    const chromeFrameMaterial = new THREE.MeshPhysicalMaterial({
-      color: isDarkRef.current ? 0x94a3b8 : 0x475569,
-      roughness: 0.14,
-      metalness: 0.92,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.08,
-      envMapIntensity: 2.4,
-    });
-
-    const roomOffsets: Array<{
-      x: number;
-      z: number;
-      statusColor: number;
-      cap: number;
-    }> = [
-      { x: -2.55, z: -1.55, statusColor: 0x10b981, cap: 6 },
-      { x: 0.0, z: -1.55, statusColor: 0x38bdf8, cap: 8 },
-      { x: 2.55, z: -1.55, statusColor: 0x10b981, cap: 4 },
-      { x: -2.55, z: 1.55, statusColor: 0xf59e0b, cap: 6 },
-      { x: 0.0, z: 1.55, statusColor: 0x10b981, cap: 8 },
-      { x: 2.55, z: 1.55, statusColor: 0xf43f5e, cap: 10 },
-    ];
-
-    for (let floorIdx = 0; floorIdx < 5; floorIdx++) {
-      const floorGroup = new THREE.Group();
-      floorGroup.position.y = floorIdx * 1.18 - 1.25;
-
-      if (floorIdx < 4) {
-        const slabMat = new THREE.MeshPhysicalMaterial({
-          color: isDarkRef.current ? 0x0f172a : 0xf8fafc,
-          emissive: isDarkRef.current ? 0x1e293b : 0xe2e8f0,
-          emissiveIntensity: 0.18,
-          roughness: 0.1,
-          metalness: 0.55,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.05,
-          envMapIntensity: 2.2,
-          transparent: true,
-          opacity: 0.94,
-        });
-        const slabMesh = new THREE.Mesh(sharedSlabBevelGeo, slabMat);
-        slabMesh.castShadow = true;
-        slabMesh.receiveShadow = true;
-        floorGroup.add(slabMesh);
-
-        const subFrameMesh = new THREE.Mesh(sharedSlabSubFrameGeo, chromeFrameMaterial);
-        subFrameMesh.position.y = -0.14;
-        floorGroup.add(subFrameMesh);
-
-        const edgesGeo = new THREE.EdgesGeometry(sharedSlabBevelGeo, 22);
-        const edgeMat = new THREE.LineBasicMaterial({
-          color: floorIdx % 2 === 0 ? 0x38bdf8 : 0x818cf8,
-          transparent: true,
-          opacity: 0.85,
-        });
-        floorEdgeMaterials.push(edgeMat);
-        const edgeLines = new THREE.LineSegments(edgesGeo, edgeMat);
-        floorGroup.add(edgeLines);
-
-        const corridorGeo = new THREE.PlaneGeometry(7.6, 0.82);
-        corridorGeo.rotateX(-Math.PI / 2);
-        const corridorMat = new THREE.MeshPhysicalMaterial({
-          color: isDarkRef.current ? 0x1e1b4b : 0xe0e7ff,
-          emissive: 0x38bdf8,
-          emissiveIntensity: 0.22,
-          roughness: 0.12,
-          metalness: 0.4,
-          clearcoat: 1.0,
-        });
-        const corridorMesh = new THREE.Mesh(corridorGeo, corridorMat);
-        corridorMesh.position.y = 0.125;
-        floorGroup.add(corridorMesh);
-
-        roomOffsets.forEach((rm, rmIdx) => {
-          const roomPodGroup = new THREE.Group();
-          roomPodGroup.position.set(rm.x, 0.42, rm.z);
-
-          const dynamicStatusColor =
-            (floorIdx + rmIdx) % 5 === 0
-              ? 0xf43f5e
-              : (floorIdx + rmIdx) % 3 === 0
-              ? 0xf59e0b
-              : rm.statusColor;
-
-          const podBaseGeo = createBeveledBoxGeometry(2.14, 0.05, 1.82, 0.14, 0.01);
-          const podBaseMat = new THREE.MeshStandardMaterial({
-            color: isDarkRef.current ? 0x1e293b : 0xffffff,
-            emissive: dynamicStatusColor,
-            emissiveIntensity: 0.25,
-            roughness: 0.25,
-            metalness: 0.5,
-          });
-          const podBaseMesh = new THREE.Mesh(podBaseGeo, podBaseMat);
-          podBaseMesh.position.y = -0.28;
-          roomPodGroup.add(podBaseMesh);
-
-          const glassBoxMat = new THREE.MeshPhysicalMaterial({
-            color: isDarkRef.current ? 0xbae6fd : 0xe0f2fe,
-            emissive: dynamicStatusColor,
-            emissiveIntensity: 0.08,
-            roughness: 0.04,
-            metalness: 0.12,
-            transmission: 0.86,
-            ior: 1.5,
-            thickness: 0.6,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.04,
-            envMapIntensity: 2.6,
-            transparent: true,
-            opacity: 0.52,
-          });
-          const glassBoxMesh = new THREE.Mesh(sharedGlassRoomShellGeo, glassBoxMat);
-          glassBoxMesh.castShadow = true;
-          roomPodGroup.add(glassBoxMesh);
-
-          // 4 Trụ góc nhôm Anodized sắc nét (Không dùng mái đậy để nhìn rõ bàn ghế bên trong)
-          [
-            [-1.02, -0.86],
-            [1.02, -0.86],
-            [-1.02, 0.86],
-            [1.02, 0.86],
-          ].forEach(([px, pz]) => {
-            const cornerPost = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.032, 0.032, 0.62, 12),
-              chromeFrameMaterial
-            );
-            cornerPost.position.set(px, 0, pz);
-            roomPodGroup.add(cornerPost);
-          });
-
-          const isRoundTable = rmIdx === 3 || rmIdx === 4;
-          const tableMat = new THREE.MeshPhysicalMaterial({
-            color: isDarkRef.current ? 0xe2e8f0 : 0xffffff,
-            roughness: 0.12,
-            metalness: 0.35,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.08,
-          });
-
-          if (isRoundTable) {
-            const roundTableGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.06, 28);
-            const roundTableMesh = new THREE.Mesh(roundTableGeo, tableMat);
-            roundTableMesh.position.y = -0.06;
-            roundTableMesh.castShadow = true;
-            roomPodGroup.add(roundTableMesh);
-
-            const centerInlay = new THREE.Mesh(
-              new THREE.CylinderGeometry(0.2, 0.2, 0.068, 24),
-              new THREE.MeshStandardMaterial({
-                color: dynamicStatusColor,
-                emissive: dynamicStatusColor,
-                emissiveIntensity: 0.6,
-              })
-            );
-            centerInlay.position.y = -0.058;
-            roomPodGroup.add(centerInlay);
-          } else {
-            const rectTableMesh = new THREE.Mesh(sharedRectTableGeo, tableMat);
-            rectTableMesh.position.y = -0.06;
-            rectTableMesh.castShadow = true;
-            roomPodGroup.add(rectTableMesh);
-
-            const runnerInlay = new THREE.Mesh(
-              new THREE.BoxGeometry(0.76, 0.075, 0.16),
-              new THREE.MeshStandardMaterial({
-                color: dynamicStatusColor,
-                emissive: dynamicStatusColor,
-                emissiveIntensity: 0.6,
-              })
-            );
-            runnerInlay.position.y = -0.058;
-            roomPodGroup.add(runnerInlay);
-          }
-
-          const chairMat = new THREE.MeshStandardMaterial({
-            color: dynamicStatusColor,
-            roughness: 0.25,
-            metalness: 0.4,
-          });
-          const chairCount = Math.min(6, rm.cap);
-          for (let c = 0; c < chairCount; c++) {
-            const miniChair = new THREE.Group();
-            const seatPad = new THREE.Mesh(sharedChairSeatGeo, chairMat);
-            const backPad = new THREE.Mesh(sharedChairBackGeo, chairMat);
-            backPad.position.set(0, 0.09, -0.07);
-            miniChair.add(seatPad);
-            miniChair.add(backPad);
-
-            const angle = (c / chairCount) * Math.PI * 2;
-            const rad = isRoundTable ? 0.64 : 0.68;
-            const cx = Math.cos(angle) * rad;
-            const cz = Math.sin(angle) * (isRoundTable ? 0.62 : 0.48);
-            miniChair.position.set(cx, -0.14, cz);
-            miniChair.lookAt(0, -0.14, 0);
-            roomPodGroup.add(miniChair);
-          }
-
-          const tvFrameMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.78, 0.34, 0.04),
-            chromeFrameMaterial
-          );
-          tvFrameMesh.position.set(0, 0.05, rm.z < 0 ? -0.86 : 0.86);
-          roomPodGroup.add(tvFrameMesh);
-
-          const tvGlowMat = new THREE.MeshStandardMaterial({
-            color: 0x0f172a,
-            emissive: dynamicStatusColor,
-            emissiveIntensity: 0.95,
-            roughness: 0.1,
-          });
-          const tvGlowMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(0.7, 0.27, 0.048),
-            tvGlowMat
-          );
-          tvGlowMesh.position.copy(tvFrameMesh.position);
-          roomPodGroup.add(tvGlowMesh);
-
-          const beaconGeo = new THREE.OctahedronGeometry(0.095, 0);
-          const beaconMat = new THREE.MeshStandardMaterial({
-            color: dynamicStatusColor,
-            emissive: dynamicStatusColor,
-            emissiveIntensity: 1.2,
-            roughness: 0.1,
-            metalness: 0.8,
-            flatShading: true,
-          });
-          const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
-          beaconMesh.position.set(0, 0.44, 0);
-          roomPodGroup.add(beaconMesh);
-
-          const haloGeo = new THREE.SphereGeometry(0.14, 16, 16);
-          const haloMat = new THREE.MeshBasicMaterial({
-            color: dynamicStatusColor,
-            transparent: true,
-            opacity: 0.28,
-          });
-          const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-          haloMesh.position.set(0, 0.44, 0);
-          roomPodGroup.add(haloMesh);
-
-          const pulseRingGeo = new THREE.RingGeometry(0.13, 0.21, 32);
-          pulseRingGeo.rotateX(-Math.PI / 2);
-          const pulseRingMat = new THREE.MeshBasicMaterial({
-            color: dynamicStatusColor,
-            transparent: true,
-            opacity: 0.72,
-            side: THREE.DoubleSide,
-          });
-          const pulseRingMesh = new THREE.Mesh(pulseRingGeo, pulseRingMat);
-          pulseRingMesh.position.set(0, 0.34, 0);
-          roomPodGroup.add(pulseRingMesh);
-
-          roomBeacons.push({
-            coreMesh: beaconMesh,
-            haloMesh,
-            pulseRingMesh,
-            tvGlowMesh,
-            floorIndex: floorIdx,
-            roomIndex: rmIdx,
-            baseStatusColor: dynamicStatusColor,
-          });
-
-          floorGroup.add(roomPodGroup);
-        });
-      } else {
-        const arenaBaseGeo = new THREE.CylinderGeometry(4.35, 4.65, 0.3, 64);
-        const arenaBaseMat = new THREE.MeshPhysicalMaterial({
-          color: isDarkRef.current ? 0x0f172a : 0xf1f5f9,
-          emissive: 0x065f46,
-          emissiveIntensity: 0.25,
-          roughness: 0.1,
-          metalness: 0.65,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.05,
-          envMapIntensity: 2.5,
-        });
-        const arenaBaseMesh = new THREE.Mesh(arenaBaseGeo, arenaBaseMat);
-        arenaBaseMesh.castShadow = true;
-        arenaBaseMesh.receiveShadow = true;
-        floorGroup.add(arenaBaseMesh);
-
-        const crownTorusGeo = new THREE.TorusGeometry(4.42, 0.06, 20, 96);
-        crownTorusGeo.rotateX(Math.PI / 2);
-        const crownTorusMat = new THREE.MeshStandardMaterial({
-          color: 0x10b981,
-          emissive: 0x10b981,
-          emissiveIntensity: 0.9,
-          roughness: 0.15,
-          metalness: 0.85,
-        });
-        const crownTorusMesh = new THREE.Mesh(crownTorusGeo, crownTorusMat);
-        crownTorusMesh.position.y = 0.15;
-        floorGroup.add(crownTorusMesh);
-
-        const colonnadeCount = 16;
-        for (let c = 0; c < colonnadeCount; c++) {
-          const colAngle = (c / colonnadeCount) * Math.PI * 2;
-          const colRadius = 4.22;
-          const colPillar = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.065, 0.08, 0.95, 16),
-            chromeFrameMaterial
-          );
-          colPillar.position.set(
-            Math.cos(colAngle) * colRadius,
-            0.58,
-            Math.sin(colAngle) * colRadius
-          );
-          floorGroup.add(colPillar);
-        }
-
-        const upperArchGeo = new THREE.TorusGeometry(4.22, 0.055, 16, 96);
-        upperArchGeo.rotateX(Math.PI / 2);
-        const upperArchMesh = new THREE.Mesh(upperArchGeo, chromeFrameMaterial);
-        upperArchMesh.position.y = 1.06;
-        floorGroup.add(upperArchMesh);
-
-        const stageCenterZ = -0.58;
-        const stageOuterGeo = new THREE.CylinderGeometry(1.32, 1.46, 0.24, 48);
-        const stageOuterMat = new THREE.MeshPhysicalMaterial({
-          color: 0x0f172a,
-          emissive: 0x0284c7,
-          emissiveIntensity: 0.45,
-          roughness: 0.08,
-          metalness: 0.75,
-          clearcoat: 1.0,
-        });
-        const stageOuterMesh = new THREE.Mesh(stageOuterGeo, stageOuterMat);
-        stageOuterMesh.position.set(0, 0.24, stageCenterZ);
-        floorGroup.add(stageOuterMesh);
-
-        const stageNeonRing = new THREE.Mesh(
-          new THREE.TorusGeometry(1.34, 0.035, 16, 64),
-          new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-        );
-        stageNeonRing.rotation.x = Math.PI / 2;
-        stageNeonRing.position.set(0, 0.36, stageCenterZ);
-        floorGroup.add(stageNeonRing);
-
-        const lecternGeo = createBeveledBoxGeometry(0.42, 0.42, 0.28, 0.06, 0.015);
-        const lecternMesh = new THREE.Mesh(lecternGeo, chromeFrameMaterial);
-        lecternMesh.position.set(0, 0.52, stageCenterZ);
-        floorGroup.add(lecternMesh);
-
-        const panoramaTex = createPanoramaScreenTexture();
-        const panoramaGeo = new THREE.CylinderGeometry(
-          3.78,
-          3.78,
-          1.12,
-          64,
-          1,
-          true,
-          Math.PI * 0.66,
-          Math.PI * 0.68
-        );
-        const panoramaMat = new THREE.MeshStandardMaterial({
-          map: panoramaTex,
-          emissive: 0x38bdf8,
-          emissiveMap: panoramaTex,
-          emissiveIntensity: 0.85,
-          roughness: 0.12,
-          metalness: 0.3,
-          side: THREE.DoubleSide,
-        });
-        const panoramaMesh = new THREE.Mesh(panoramaGeo, panoramaMat);
-        panoramaMesh.position.set(0, 0.76, -0.22);
-        floorGroup.add(panoramaMesh);
-
-        const rowDefinitions = [
-          { rowIndex: 0, count: 7, radius: 1.98, yOffset: 0.26, color: 0x10b981 },
-          { rowIndex: 1, count: 9, radius: 2.74, yOffset: 0.44, color: 0x38bdf8 },
-          { rowIndex: 2, count: 12, radius: 3.52, yOffset: 0.64, color: 0xa855f7 },
-        ];
-
-        rowDefinitions.forEach((rowDef) => {
-          const tierStepGeo = new THREE.RingGeometry(
-            rowDef.radius - 0.3,
-            rowDef.radius + 0.3,
-            56,
-            1,
-            -Math.PI * 0.1,
-            Math.PI * 1.2
-          );
-          tierStepGeo.rotateX(-Math.PI / 2);
-          const tierStepMat = new THREE.MeshPhysicalMaterial({
-            color: isDarkRef.current ? 0x1e293b : 0xe2e8f0,
-            emissive: rowDef.color,
-            emissiveIntensity: 0.22,
-            roughness: 0.2,
-            metalness: 0.5,
-            side: THREE.DoubleSide,
-          });
-          const tierStepMesh = new THREE.Mesh(tierStepGeo, tierStepMat);
-          tierStepMesh.position.set(0, rowDef.yOffset - 0.1, -0.25);
-          floorGroup.add(tierStepMesh);
-
-          for (let s = 0; s < rowDef.count; s++) {
-            const ratio = rowDef.count > 1 ? s / (rowDef.count - 1) : 0.5;
-            const angle = -Math.PI * 0.06 + ratio * Math.PI * 1.12;
-            const seatX = Math.cos(angle) * rowDef.radius;
-            const seatZ = Math.sin(angle) * rowDef.radius - 0.25;
-
-            const seatUnitGroup = new THREE.Group();
-            seatUnitGroup.position.set(seatX, rowDef.yOffset, seatZ);
-
-            const cushionMat = new THREE.MeshPhysicalMaterial({
-              color: rowDef.color,
-              emissive: rowDef.color,
-              emissiveIntensity: 0.5,
-              roughness: 0.18,
-              metalness: 0.45,
-              clearcoat: 0.8,
-            });
-            const cushionMesh = new THREE.Mesh(sharedChairSeatGeo, cushionMat);
-            seatUnitGroup.add(cushionMesh);
-
-            const backrestMesh = new THREE.Mesh(sharedChairBackGeo, cushionMat);
-            backrestMesh.position.set(0, 0.11, -0.08);
-            seatUnitGroup.add(backrestMesh);
-
-            seatUnitGroup.lookAt(0, rowDef.yOffset, stageCenterZ);
-            floorGroup.add(seatUnitGroup);
-
-            colosseumSeats.push({
-              cushionMesh,
-              backrestMesh,
-              rowIdx: rowDef.rowIndex,
-              seatIdx: s,
-              baseColor: rowDef.color,
-            });
-          }
-        });
-      }
-
-      floorGroups.push(floorGroup);
-      towerRootGroup.add(floorGroup);
-    }
-
-    const pillarCorners = [
-      { x: -3.95, z: -2.65 },
-      { x: 3.95, z: -2.65 },
-      { x: -3.95, z: 2.65 },
-      { x: 3.95, z: 2.65 },
-    ];
-    const verticalPillars: THREE.Mesh[] = [];
-    const dataPulsePackets: DataPulsePacketEntry[] = [];
-
-    pillarCorners.forEach((corner, cIdx) => {
-      const pillarGeo = new THREE.CylinderGeometry(0.035, 0.035, 12.5, 16);
-      const pillarMat = new THREE.MeshPhysicalMaterial({
-        color: 0x38bdf8,
-        emissive: 0x0284c7,
-        emissiveIntensity: 0.4,
-        roughness: 0.1,
-        metalness: 0.8,
-        transparent: true,
-        opacity: 0.38,
-      });
-      const pillarMesh = new THREE.Mesh(pillarGeo, pillarMat);
-      pillarMesh.position.set(corner.x, 3.6, corner.z);
-      towerRootGroup.add(pillarMesh);
-      verticalPillars.push(pillarMesh);
-
-      const packetGeo = new THREE.CapsuleGeometry(0.065, 0.35, 8, 16);
-      const packetMat = new THREE.MeshBasicMaterial({
-        color: cIdx % 2 === 0 ? 0x38bdf8 : 0x10b981,
-      });
-      const packetMesh = new THREE.Mesh(packetGeo, packetMat);
-      packetMesh.position.set(corner.x, 0, corner.z);
-      towerRootGroup.add(packetMesh);
-      dataPulsePackets.push({
-        mesh: packetMesh,
-        cornerIndex: cIdx,
-        speed: 2.4 + cIdx * 0.35,
-        offset: cIdx * 1.7,
-      });
-    });
-
-    const orbitalShieldGroup = new THREE.Group();
-    const outerRingGeo = new THREE.TorusGeometry(5.85, 0.042, 20, 120);
-    const outerRingMat = new THREE.MeshStandardMaterial({
-      color: 0x10b981,
-      emissive: 0x10b981,
-      emissiveIntensity: 0.75,
-      roughness: 0.15,
-      metalness: 0.85,
-      transparent: true,
-      opacity: 0.65,
-    });
-    const outerRingMesh = new THREE.Mesh(outerRingGeo, outerRingMat);
-    outerRingMesh.rotation.x = Math.PI / 2.25;
-    orbitalShieldGroup.add(outerRingMesh);
-
-    const innerRingGeo = new THREE.TorusGeometry(5.1, 0.036, 20, 120);
-    const innerRingMat = new THREE.MeshStandardMaterial({
-      color: 0x6366f1,
-      emissive: 0x6366f1,
-      emissiveIntensity: 0.75,
-      roughness: 0.15,
-      metalness: 0.85,
-      transparent: true,
-      opacity: 0.6,
-    });
-    const innerRingMesh = new THREE.Mesh(innerRingGeo, innerRingMat);
-    innerRingMesh.rotation.x = -Math.PI / 2.55;
-    orbitalShieldGroup.add(innerRingMesh);
-
-    orbitalShieldGroup.position.y = 2.45;
-    towerRootGroup.add(orbitalShieldGroup);
-
-    const particleCount = 460;
-    const particlePositions = new Float32Array(particleCount * 3);
-    for (let i = 0; i < particleCount; i++) {
-      particlePositions[i * 3] = (Math.random() - 0.5) * 42;
-      particlePositions[i * 3 + 1] = (Math.random() - 0.2) * 26;
-      particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 38;
-    }
-    const particleGeo = new THREE.BufferGeometry();
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    const particleMat = new THREE.PointsMaterial({
-      color: 0x38bdf8,
-      size: 0.11,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const particleSystem = new THREE.Points(particleGeo, particleMat);
-    scene.add(particleSystem);
-
-    let pointerNormX = 0;
-    let pointerNormY = 0;
-
-    const handlePointerMove = (evt: MouseEvent) => {
-      pointerNormX = (evt.clientX / Math.max(window.innerWidth, 1) - 0.5) * 2;
-      pointerNormY = (evt.clientY / Math.max(window.innerHeight, 1) - 0.5) * 2;
+    let pointerOffsetX = 0;
+    let pointerOffsetY = 0;
+    const onPointerMove = (e: MouseEvent) => {
+      pointerOffsetX = (e.clientX / Math.max(window.innerWidth, 1) - 0.5) * 1.6;
+      pointerOffsetY =
+        (e.clientY / Math.max(window.innerHeight, 1) - 0.5) * 0.9;
     };
-    window.addEventListener('mousemove', handlePointerMove, { passive: true });
+    window.addEventListener('mousemove', onPointerMove, { passive: true });
 
-    const handleWindowResize = () => {
-      if (!mountContainerRef.current) {
+    const onResize = () => {
+      if (!container) return;
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
+    };
+    window.addEventListener('resize', onResize);
+
+    let rafId = 0;
+    let cinemaClock = 0;
+    let lastTs = performance.now();
+
+    const animateFrame = (nowTs: number) => {
+      rafId = requestAnimationFrame(animateFrame);
+      if (document.hidden) {
+        lastTs = nowTs;
         return;
       }
-      const nextW = Math.max(mountContainerRef.current.clientWidth, window.innerWidth, 320);
-      const nextH = Math.max(mountContainerRef.current.clientHeight, window.innerHeight, 480);
-      camera.aspect = nextW / nextH;
-      camera.updateProjectionMatrix();
-      renderer.setSize(nextW, nextH);
-    };
-    window.addEventListener('resize', handleWindowResize);
 
-    let smoothedScroll = scrollTargetRef.current;
-    const currentCamPos = new THREE.Vector3(11.8, 8.4, 14.2);
-    const currentLookTarget = new THREE.Vector3(0.4, 1.8, 0);
-    const desiredCamPos = new THREE.Vector3(11.8, 8.4, 14.2);
-    const desiredLookTarget = new THREE.Vector3(0.4, 1.8, 0);
+      const dt = Math.min(0.05, (nowTs - lastTs) / 1000);
+      lastTs = nowTs;
 
-    let currentFloorGap = 1.18;
-    let animationFrameId = 0;
-    const clock = new THREE.Clock();
-
-    const animateLoop = () => {
-      animationFrameId = window.requestAnimationFrame(animateLoop);
-      const elapsed = clock.getElapsedTime();
-
-      scene.fog = new THREE.FogExp2(isDarkRef.current ? 0x040711 : 0xeef4ff, 0.018);
-      ambientLight.intensity = isDarkRef.current ? 0.95 : 1.45;
-      waveMaterial.color.setHex(isDarkRef.current ? 0x0f172a : 0xdbeafe);
-      waveMaterial.emissiveIntensity = isDarkRef.current ? 0.45 : 0.16;
-
-      smoothedScroll += (scrollTargetRef.current - smoothedScroll) * 0.065;
-
-      const manualFloor = selectedFloorRef.current;
-      let targetFloorGap = 1.18;
-
-      if (manualFloor !== null && manualFloor >= 1 && manualFloor <= 5) {
-        targetFloorGap = 2.55;
-        const focusFloorY = (manualFloor - 1) * targetFloorGap - 1.25;
-        if (manualFloor === 5) {
-          desiredCamPos.set(2.35, focusFloorY + 5.2, 6.4);
-          desiredLookTarget.set(2.35, focusFloorY + 0.35, -0.15);
-        } else {
-          desiredCamPos.set(8.8, focusFloorY + 2.65, 7.8);
-          desiredLookTarget.set(1.8, focusFloorY + 0.2, 0.0);
-        }
-      } else if (smoothedScroll < 0.28) {
-        const t = smoothedScroll / 0.28;
-        targetFloorGap = 1.18 + t * 0.45;
-        desiredCamPos.set(11.8 - t * 2.1, 8.4 - t * 1.2, 14.2 - t * 2.5);
-        desiredLookTarget.set(0.4, 1.8, 0.0);
-      } else if (smoothedScroll < 0.58) {
-        const t = (smoothedScroll - 0.28) / 0.3;
-        targetFloorGap = 2.65 + Math.sin(t * Math.PI) * 0.25;
-        desiredCamPos.set(8.8 - t * 2.0, 5.8 + t * 3.2, 9.8 - t * 1.6);
-        desiredLookTarget.set(0.6, 2.2 + t * 1.2, 0.0);
-      } else if (smoothedScroll < 0.82) {
-        const t = (smoothedScroll - 0.58) / 0.24;
-        targetFloorGap = 1.85;
-        const topFloorY = 4 * targetFloorGap - 1.25;
-        desiredCamPos.set(2.35 + Math.sin(t * 1.2) * 2.0, topFloorY + 5.3, 6.5 - t * 0.8);
-        desiredLookTarget.set(1.6, topFloorY + 0.3, -0.2);
-      } else {
-        const t = (smoothedScroll - 0.82) / 0.18;
-        targetFloorGap = 1.32 - t * 0.14;
-        desiredCamPos.set(10.2, 6.8, 11.2);
-        desiredLookTarget.set(0.5, 2.0, 0.0);
+      const freezeMotion = pausedRef.current || prefersReducedMotion;
+      if (!freezeMotion) {
+        cinemaClock += dt;
       }
 
-      desiredCamPos.x += pointerNormX * 1.3;
-      desiredCamPos.y += -pointerNormY * 0.85;
+      const selFloor = selectedFloorRef.current;
+      const rawScroll = Math.max(0, Math.min(1, scrollRef.current));
 
-      currentCamPos.lerp(desiredCamPos, 0.065);
-      currentLookTarget.lerp(desiredLookTarget, 0.075);
-      camera.position.copy(currentCamPos);
-      camera.lookAt(currentLookTarget);
+      // Tính vị trí Camera trên đường cong Spline (Auto-Fly hoặc Scroll-Driven)
+      const curveT = autoFlyRef.current
+        ? (cinemaClock * 0.045) % 1
+        : rawScroll;
 
-      currentFloorGap += (targetFloorGap - currentFloorGap) * 0.075;
-
-      floorGroups.forEach((fGroup, idx) => {
-        const baseFloorY = idx * currentFloorGap - 1.25;
-        const floatWave = Math.sin(elapsed * 1.6 + idx * 0.7) * 0.04;
-        fGroup.position.y = baseFloorY + floatWave;
-
-        const isSelectedFloor = manualFloor === idx + 1;
-        const targetScale = isSelectedFloor ? 1.07 : 1.0;
-        fGroup.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.08);
-      });
-
-      floorEdgeMaterials.forEach((edgeMat, idx) => {
-        edgeMat.opacity = manualFloor === idx + 1 ? 1.0 : 0.78;
-      });
-
-      verticalPillars.forEach((pillarMesh) => {
-        const pMat = pillarMesh.material as THREE.MeshPhysicalMaterial;
-        pMat.opacity = currentFloorGap > 1.7 ? 0.58 : 0.28;
-      });
-
-      dataPulsePackets.forEach((pkt) => {
-        const corner = pillarCorners[pkt.cornerIndex];
-        const cycleY = ((elapsed * pkt.speed + pkt.offset) % 10.5) - 1.5;
-        pkt.mesh.position.set(corner.x, cycleY, corner.z);
-      });
-
-      towerRootGroup.rotation.y = elapsed * 0.15 + smoothedScroll * Math.PI * 1.18;
-
-      const posAttr = waveGeometry.attributes.position as THREE.BufferAttribute;
-      for (let i = 0; i < posAttr.count; i++) {
-        const bx = waveBasePositions[i * 3];
-        const bz = waveBasePositions[i * 3 + 2];
-        const waveY =
-          Math.sin(bx * 0.26 + elapsed * 1.65) * 0.62 +
-          Math.cos(bz * 0.3 + elapsed * 1.25) * 0.48 +
-          Math.sin((bx + bz) * 0.18 - elapsed * 1.1) * 0.22;
-        posAttr.setY(i, waveY);
-      }
-      posAttr.needsUpdate = true;
-      waveGeometry.computeVertexNormals();
-
-      floatingCrystals.forEach((item) => {
-        const angle = elapsed * item.orbitSpeed + item.phaseOffset;
-        item.group.position.set(
-          Math.cos(angle) * item.orbitRadius,
-          item.baseY + Math.sin(elapsed * 1.8 + item.phaseOffset) * 0.58,
-          Math.sin(angle) * item.orbitRadius
+      if (selFloor !== null && selFloor >= 1 && selFloor <= 5) {
+        const targetY = -3.4 + (selFloor - 1) * 1.9 + 1.1;
+        desiredCamPos.set(
+          9.4 + pointerOffsetX * 0.8,
+          targetY + 2.2 - pointerOffsetY * 0.6,
+          10.8
         );
-        item.coreMesh.rotation.x = elapsed * 1.4;
-        item.coreMesh.rotation.y = elapsed * 1.9;
-        item.ringMesh.rotation.z = elapsed * 1.2;
+        desiredLookAt.set(0, targetY, 0);
+      } else {
+        cameraPathCurve.getPointAt(curveT, desiredCamPos);
+        lookTargetCurve.getPointAt(curveT, desiredLookAt);
+        desiredCamPos.x += pointerOffsetX;
+        desiredCamPos.y -= pointerOffsetY;
+      }
+
+      currentCamPos.lerp(desiredCamPos, freezeMotion ? 0.16 : 0.06);
+      currentLookAt.lerp(desiredLookAt, freezeMotion ? 0.16 : 0.07);
+      camera.position.copy(currentCamPos);
+      camera.lookAt(currentLookAt);
+
+      // Hiệu ứng tách lớp kiến trúc (Exploded-View) mượt theo Chương 2 / Thanh cuộn
+      const explodeStrength =
+        selFloor !== null
+          ? 0.45
+          : chapterRef.current === 2
+          ? 0.72
+          : rawScroll * 0.45;
+
+      buildingRig.floorLayers.forEach((layer) => {
+        const targetY = layer.baseY + (layer.floorNumber - 1) * explodeStrength;
+        layer.group.position.y += (targetY - layer.group.position.y) * 0.08;
+
+        const isHighlighted =
+          selFloor === layer.floorNumber ||
+          (selFloor === null &&
+            chapterRef.current === 3 &&
+            layer.floorNumber === 5);
+        layer.edgeStripMat.emissiveIntensity +=
+          ((isHighlighted ? 2.2 : isDark ? 1.0 : 0.4) -
+            layer.edgeStripMat.emissiveIntensity) *
+          0.1;
       });
 
-      roomBeacons.forEach((beacon) => {
-        const pulseScale =
-          1 + Math.sin(elapsed * 3.4 + beacon.floorIndex * 0.7 + beacon.roomIndex * 0.5) * 0.36;
-        beacon.pulseRingMesh.scale.set(pulseScale, pulseScale, 1);
-        beacon.coreMesh.rotation.y = elapsed * 2.2;
-        const tvMat = beacon.tvGlowMesh.material as THREE.MeshStandardMaterial;
-        tvMat.emissiveIntensity =
-          0.75 + Math.sin(elapsed * 2.6 + beacon.roomIndex) * 0.35;
-      });
+      // Chuyển động hạt ánh sáng & luồng dữ liệu dọc trục tòa nhà
+      if (!freezeMotion) {
+        buildingRig.colosseumHaloRing.rotation.z = cinemaClock * 0.35;
+        buildingRig.dustPoints.rotation.y = cinemaClock * 0.03;
 
-      colosseumSeats.forEach((seat) => {
-        const waveBoost =
-          0.45 +
-          Math.max(0, Math.sin(elapsed * 3.2 - seat.seatIdx * 0.35 - seat.rowIdx * 0.6)) * 0.85;
-        const mat = seat.cushionMesh.material as THREE.MeshPhysicalMaterial;
-        mat.emissiveIntensity = activeChapterRef.current === 3 ? waveBoost * 1.45 : waveBoost;
-      });
+        buildingRig.dataPackets.forEach((pkt) => {
+          const progress = (cinemaClock * pkt.speed + pkt.offset) % 1;
+          pkt.mesh.position.set(pkt.laneX, -3.5 + progress * 9.5, pkt.laneZ);
+        });
+      }
 
-      outerRingMesh.rotation.z = elapsed * 0.44;
-      innerRingMesh.rotation.z = -elapsed * 0.58;
-      const shieldScale = activeChapterRef.current === 4 ? 1.14 : 0.96;
-      orbitalShieldGroup.scale.lerp(
-        new THREE.Vector3(shieldScale, shieldScale, shieldScale),
-        0.06
-      );
-
-      particleSystem.rotation.y = elapsed * 0.035;
-
-      renderer.render(scene, camera);
+      composer.render();
     };
 
-    animateLoop();
+    rafId = requestAnimationFrame(animateFrame);
 
     return () => {
-      window.cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('mousemove', handlePointerMove);
-      window.removeEventListener('resize', handleWindowResize);
-
-      studioEnvTexture.dispose();
-      scene.traverse((obj) => {
-        if (
-          obj instanceof THREE.Mesh ||
-          obj instanceof THREE.LineSegments ||
-          obj instanceof THREE.Points
-        ) {
-          if (obj.geometry) {
-            obj.geometry.dispose();
-          }
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach((m) => m.dispose());
-          } else if (obj.material) {
-            obj.material.dispose();
-          }
-        }
-      });
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('resize', onResize);
+      buildingRig.disposeResources();
+      composer.dispose();
       renderer.dispose();
     };
-  }, []);
+  }, [isDark]);
 
   return (
     <div
-      ref={mountContainerRef}
-      className="fixed inset-0 w-full h-full pointer-events-none z-0 overflow-hidden"
-      aria-hidden="true"
+      ref={mountRef}
+      className="w-full h-full select-none"
+      aria-label="SpotMatrix 5-Floor Cinematic 3D Architecture"
     />
   );
 };

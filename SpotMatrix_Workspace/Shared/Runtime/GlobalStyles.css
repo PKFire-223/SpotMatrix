@@ -2,60 +2,118 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   SPOTMATRIX DESIGN ENGINEERING TOKENS
+   Tổng hợp chuẩn mực từ:
+   - Leonxlnx/taste-skill (121.8k★): Quiet chrome, tap-size >= 44px, reduced motion
+   - Nutlope/hallmark: overflow-x: clip, :focus-visible tức thì, không transition: all
+   - heydamir/unslop: Thang màu trung tính, viền hairline 6-10%, bỏ neon/gradient thừa
+   - emilkowalski/skills (58.1k★): ease-out < 240ms, 100dvh, chống zoom iOS
+   ============================================================================ */
+:root {
+  --smx-surface-light: #ffffff;
+  --smx-bg-light: #f8fafc;
+  --smx-surface-dark: #0f172a;
+  --smx-bg-dark: #090d16;
+  --smx-accent: #4f46e5;
+  --smx-hairline-light: 0 0 0 1px rgba(15, 23, 42, 0.07),
+    0 2px 6px -1px rgba(15, 23, 42, 0.04),
+    0 8px 20px -6px rgba(15, 23, 42, 0.06);
+  --smx-hairline-hover-light: 0 0 0 1px rgba(79, 70, 229, 0.24),
+    0 10px 24px -8px rgba(79, 70, 229, 0.12);
+  --smx-hairline-dark: 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 4px 16px -4px rgba(0, 0, 0, 0.45);
+  --smx-hairline-hover-dark: 0 0 0 1px rgba(129, 140, 248, 0.34),
+    0 12px 26px -8px rgba(79, 70, 229, 0.24);
+  --smx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html,
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
+  min-height: 100dvh;
+  /* Chuẩn Hallmark Rule 34: overflow-x: clip giữ nguyên hoạt động của position: sticky */
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Chuẩn Hallmark Rule 26a: Focus ring tức thì cho người dùng bàn phím */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--smx-accent);
+  outline-offset: 2px;
+}
+
+/* Chống iOS Safari tự phóng to khi chạm vào input trên điện thoại */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+.smx-hairline-card-light {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--smx-hairline-light);
+  transition: transform 220ms var(--smx-ease-out),
+    box-shadow 220ms var(--smx-ease-out);
+}
+
+.smx-hairline-card-light:hover {
+  box-shadow: var(--smx-hairline-hover-light);
+}
+
+.smx-hairline-card-dark {
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: var(--smx-hairline-dark);
+  transition: transform 220ms var(--smx-ease-out),
+    box-shadow 220ms var(--smx-ease-out);
+}
+
+.smx-hairline-card-dark:hover {
+  box-shadow: var(--smx-hairline-hover-dark);
+}
+
+/* Spotlight Glass Card (Học từ DavidHDev/react-bits — 0 re-render React) */
+.smx-spotlight-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 220ms var(--smx-ease-out);
+  background: radial-gradient(
+    240px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    var(--spotlight-color, rgba(79, 70, 229, 0.12)),
+    transparent 75%
+  );
+}
+
+.smx-spotlight-host:hover .smx-spotlight-overlay {
+  opacity: 1;
+}
+
+/* Ẩn thanh cuộn nhưng vẫn cho phép vuốt mượt trên di động & iPad */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @keyframes floatSlow {
-  0%, 100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(0.5deg);
-  }
-}
-
-@keyframes floatReverse {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(8px);
-  }
-}
-
-@keyframes radarSweep {
-  0% {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.75;
-  }
-  80% {
-    opacity: 0.75;
-  }
-  100% {
-    transform: translateY(420%);
-    opacity: 0;
-  }
-}
-
-@keyframes pulseRing {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.8;
-  }
-  70% {
-    transform: scale(1.65);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.65);
-    opacity: 0;
+    transform: translateY(-6px);
   }
 }
 
@@ -63,14 +121,14 @@ body {
   animation: floatSlow 5s ease-in-out infinite;
 }
 
-.animate-float-reverse {
-  animation: floatReverse 6s ease-in-out infinite;
-}
-
-.animate-radar-sweep {
-  animation: radarSweep 4.5s linear infinite;
-}
-
-.animate-pulse-ring {
-  animation: pulseRing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+/* Chuẩn Hallmark Rule 27 & Taste Skill: Tôn trọng giảm chuyển động của hệ điều hành */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
